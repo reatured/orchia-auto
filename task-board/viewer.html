@@ -1,0 +1,3416 @@
+﻿<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Project Task Board</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23191816'/%3E%3Crect x='13' y='14' width='8' height='36' rx='4' fill='%233f6f8f'/%3E%3Crect x='25' y='10' width='8' height='44' rx='4' fill='%239b5b25'/%3E%3Crect x='37' y='16' width='8' height='32' rx='4' fill='%236f5aa8'/%3E%3Crect x='49' y='20' width='8' height='28' rx='4' fill='%2334785d'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --page: #f6f4ef;
+      --ink: #191816;
+      --muted: #69645d;
+      --line: #d8d2c7;
+      --panel: #ffffff;
+      --todo: #3f6f8f;
+      --claimed: #9b5b25;
+      --review: #6f5aa8;
+      --done: #34785d;
+      --archived: #5f6872;
+      --workflow: #2f6f79;
+      --archive-tab-height: 132px;
+      --archive-tab-width: 40px;
+      --workflow-tab-height: 132px;
+      --workflow-tab-width: 40px;
+      --shadow: 0 14px 34px rgba(25, 24, 22, 0.08);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--page);
+      color: var(--ink);
+      font: 14px/1.45 Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    button,
+    input,
+    textarea {
+      font: inherit;
+    }
+
+    .shell {
+      width: min(1480px, calc(100vw - 32px));
+      margin: 0 auto;
+      padding: 24px 0 84px;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 18px;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.1;
+      letter-spacing: 0;
+    }
+
+    .meta {
+      margin-top: 8px;
+      color: var(--muted);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .button,
+    .file-label {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 8px 12px;
+      cursor: pointer;
+      box-shadow: 0 1px 0 rgba(25, 24, 22, 0.04);
+    }
+
+    .button:hover,
+    .file-label:hover {
+      border-color: #aaa197;
+    }
+
+    .file-label input {
+      display: none;
+    }
+
+    .status {
+      width: 100%;
+      min-height: 28px;
+      margin: 0 0 14px;
+      color: var(--muted);
+    }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(260px, 1fr));
+      gap: 14px;
+      align-items: start;
+    }
+
+    .board.is-done-focus {
+      display: flex;
+      gap: 10px;
+      align-items: start;
+    }
+
+    .board.is-done-focus .folded-stack {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
+      flex: 0 0 64px;
+      width: 64px;
+      min-width: 0;
+    }
+
+    .archive-board {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 6;
+      pointer-events: none;
+      isolation: isolate;
+    }
+
+    .archive-tab {
+      pointer-events: auto;
+      position: fixed;
+      left: 0;
+      top: 50%;
+      width: var(--archive-tab-width);
+      min-height: var(--archive-tab-height);
+      border: 1px solid var(--line);
+      border-left: 0;
+      border-radius: 0 8px 8px 0;
+      background: var(--panel);
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 6px;
+      font-size: 13px;
+      font-weight: 760;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      transform: translateY(-50%);
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      z-index: 9;
+    }
+
+    .archive-tab:hover {
+      border-color: #aaa197;
+      background: #fbfaf7;
+    }
+
+    .archive-tab .count {
+      color: #ffffff;
+      writing-mode: horizontal-tb;
+    }
+
+    .archive-tab .dot {
+      --lane-color: var(--archived);
+    }
+
+    .archive-tray {
+      pointer-events: auto;
+      position: fixed;
+      left: 0;
+      top: 0;
+      height: 100vh;
+      width: min(980px, calc(100vw - var(--archive-tab-width)));
+      background: rgba(246, 244, 239, 0.96);
+      transform: translateX(calc(-100% - 8px));
+      transition: transform 220ms ease;
+      z-index: 7;
+      overflow: hidden;
+      display: block;
+      align-items: stretch;
+      padding: 16px 16px 16px calc(var(--archive-tab-width) + 12px);
+      box-sizing: border-box;
+      box-shadow: 18px 0 42px rgba(25, 24, 22, 0.16);
+    }
+
+    .archive-tray > .lane {
+      height: calc(100vh - 32px);
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .archive-tray .lane-body {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: auto;
+      padding-right: 6px;
+    }
+
+    .archive-tray .lane-body .field,
+    .archive-tray .lane-body .summary,
+    .archive-tray .lane-body .chips {
+      max-width: 100%;
+      overflow-wrap: anywhere;
+    }
+
+    .archive-tray .lane-body .ticket {
+      min-width: 0;
+    }
+
+    .archive-tray .lane-actions {
+      justify-content: flex-end;
+      gap: 6px;
+      flex-wrap: nowrap;
+    }
+
+    .archive-close {
+      margin-left: auto;
+    }
+
+    .archive-board.is-open .archive-tray {
+      transform: translateX(0);
+    }
+
+    .workflow-board {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 8;
+      pointer-events: none;
+      isolation: isolate;
+    }
+
+    .workflow-tab {
+      pointer-events: auto;
+      position: fixed;
+      left: 0;
+      top: calc(50% - 158px);
+      width: var(--workflow-tab-width);
+      min-height: var(--workflow-tab-height);
+      border: 1px solid var(--line);
+      border-left: 0;
+      border-radius: 0 8px 8px 0;
+      background: var(--panel);
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 6px;
+      font-size: 13px;
+      font-weight: 760;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      transform: translateY(-50%);
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      z-index: 11;
+    }
+
+    .workflow-tab:hover {
+      border-color: #aaa197;
+      background: #fbfaf7;
+    }
+
+    .workflow-tab .dot {
+      --lane-color: var(--workflow);
+    }
+
+    .workflow-tray {
+      pointer-events: auto;
+      position: fixed;
+      left: 0;
+      top: 0;
+      height: 100vh;
+      width: min(1040px, calc(100vw - var(--workflow-tab-width)));
+      background: rgba(246, 244, 239, 0.98);
+      transform: translateX(calc(-100% - 8px));
+      transition: transform 220ms ease;
+      z-index: 10;
+      overflow: auto;
+      padding: 18px 18px 18px calc(var(--workflow-tab-width) + 14px);
+      box-sizing: border-box;
+      box-shadow: 18px 0 42px rgba(25, 24, 22, 0.16);
+    }
+
+    .workflow-board.is-open .workflow-tray {
+      transform: translateX(0);
+    }
+
+    .workflow-panel {
+      min-height: calc(100vh - 36px);
+      border: 1px solid var(--line);
+      border-top: 5px solid var(--workflow);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.86);
+      box-shadow: var(--shadow);
+      padding: 16px;
+    }
+
+    .workflow-panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .workflow-panel h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .workflow-panel p {
+      margin: 6px 0 0;
+      color: var(--muted);
+    }
+
+    .workflow-graph {
+      display: grid;
+      gap: 14px;
+      margin-top: 12px;
+    }
+
+    .workflow-state-line {
+      display: grid;
+      grid-template-columns: minmax(220px, 300px) minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .workflow-state-stack {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 0;
+    }
+
+    .workflow-state {
+      border: 1px solid var(--line);
+      border-left: 5px solid var(--node-color);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 11px 12px;
+      min-width: 0;
+      min-height: 98px;
+      display: grid;
+      align-content: space-between;
+      gap: 10px;
+      color: var(--ink);
+      text-align: left;
+      cursor: pointer;
+      appearance: none;
+      font: inherit;
+      width: 100%;
+      box-shadow: 0 1px 0 rgba(25, 24, 22, 0.04);
+      transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+    }
+
+    .workflow-state:hover,
+    .workflow-state:focus-visible,
+    .workflow-branch:hover,
+    .workflow-branch:focus-visible {
+      border-color: #aaa197;
+      box-shadow: 0 10px 22px rgba(25, 24, 22, 0.1);
+      outline: none;
+      transform: translateY(-1px);
+    }
+
+    .workflow-state-kicker {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+
+    .workflow-state-link {
+      width: 2px;
+      height: 28px;
+      background: var(--line);
+      margin: 0 auto;
+      position: relative;
+    }
+
+    .workflow-state-link::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: -1px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--line);
+      border-bottom: 2px solid var(--line);
+      transform: translateX(-50%) rotate(45deg);
+      background: var(--page);
+    }
+
+    .workflow-state-title {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      font-weight: 760;
+    }
+
+    .workflow-state-title span:first-child {
+      overflow-wrap: anywhere;
+    }
+
+    .workflow-state-count {
+      flex: 0 0 auto;
+    }
+
+    .workflow-state-meta {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .workflow-parallel-start {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      align-items: stretch;
+    }
+
+    .workflow-parallel-start + .workflow-state-link {
+      height: 32px;
+    }
+
+    .workflow-agent-flow {
+      display: grid;
+      gap: 0;
+      max-width: 760px;
+      margin: 0 auto;
+    }
+
+    .workflow-agent-row {
+      display: grid;
+      grid-template-columns: minmax(240px, 420px);
+      justify-content: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .workflow-agent-row-upstream {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .workflow-agent-edge {
+      display: grid;
+      justify-items: center;
+      min-height: 44px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+      text-align: center;
+      text-transform: uppercase;
+      position: relative;
+    }
+
+    .workflow-agent-edge::before {
+      content: "";
+      width: 2px;
+      height: 100%;
+      background: var(--line);
+      display: block;
+    }
+
+    .workflow-agent-edge::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      bottom: 6px;
+      width: 8px;
+      height: 8px;
+      border-right: 2px solid var(--line);
+      border-bottom: 2px solid var(--line);
+      transform: translateX(-50%) rotate(45deg);
+      background: var(--page);
+    }
+
+    .workflow-agent-edge span {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      max-width: min(260px, calc(100vw - 96px));
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fbfaf7;
+      padding: 3px 9px;
+      line-height: 1.25;
+    }
+
+    .workflow-agent-edge-merge {
+      min-height: 64px;
+    }
+
+    .workflow-agent-edge-merge::before {
+      margin-top: 10px;
+      height: calc(100% - 10px);
+    }
+
+    .workflow-agent-edge-merge span {
+      top: 34px;
+    }
+
+    .workflow-agent-edge-merge i {
+      position: absolute;
+      top: 10px;
+      left: 25%;
+      right: 25%;
+      height: 2px;
+      background: var(--line);
+      display: block;
+    }
+
+    .workflow-agent-edge-merge i::before,
+    .workflow-agent-edge-merge i::after {
+      content: "";
+      position: absolute;
+      top: -12px;
+      width: 2px;
+      height: 12px;
+      background: var(--line);
+    }
+
+    .workflow-agent-edge-merge i::before {
+      left: 0;
+    }
+
+    .workflow-agent-edge-merge i::after {
+      right: 0;
+    }
+
+    .workflow-edge-block {
+      min-height: 98px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      text-align: center;
+      min-width: 0;
+    }
+
+    .workflow-edge-block::before {
+      content: attr(data-arrow);
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #fbfaf7;
+      color: var(--ink);
+      font-weight: 760;
+    }
+
+    .workflow-edge-label {
+      max-width: 70px;
+      overflow-wrap: anywhere;
+    }
+
+    .workflow-branch-column {
+      display: grid;
+      gap: 10px;
+      padding-top: 2px;
+    }
+
+    .workflow-branch-group {
+      display: grid;
+      gap: 10px;
+    }
+
+    .workflow-branch-group + .workflow-branch-group {
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+
+    .workflow-branch-label {
+      font-size: 12px;
+      font-weight: 760;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .workflow-branch {
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      background: #fbfaf7;
+      padding: 10px 12px;
+      color: #37332e;
+      min-width: 0;
+      width: 100%;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+      appearance: none;
+      transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+    }
+
+    .workflow-branch strong {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--ink);
+      font-weight: 760;
+    }
+
+    .workflow-branch code {
+      color: #245f89;
+      font-weight: 700;
+    }
+
+    .workflow-stats {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .workflow-stat {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfaf7;
+      padding: 9px 10px;
+    }
+
+    .workflow-stat strong {
+      display: block;
+      font-size: 18px;
+      line-height: 1.1;
+    }
+
+    .workflow-stat span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .workflow-detail-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 24;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      background: rgba(25, 24, 22, 0.36);
+      pointer-events: auto;
+    }
+
+    .workflow-detail-modal {
+      width: min(760px, calc(100vw - 32px));
+      max-height: calc(100vh - 48px);
+      overflow: auto;
+      border: 1px solid var(--line);
+      border-top: 5px solid var(--modal-color, var(--workflow));
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 24px 64px rgba(25, 24, 22, 0.22);
+      padding: 18px;
+    }
+
+    .workflow-detail-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+
+    .workflow-detail-header h3 {
+      margin: 0;
+      font-size: 20px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .workflow-detail-kicker {
+      display: block;
+      margin-bottom: 5px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+
+    .workflow-detail-summary {
+      margin: 0 0 14px;
+      color: #37332e;
+    }
+
+    .workflow-detail-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .workflow-detail-section {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfaf7;
+      padding: 10px 12px;
+      min-width: 0;
+    }
+
+    .workflow-detail-section h4 {
+      margin: 0 0 8px;
+      font-size: 12px;
+      line-height: 1.2;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .workflow-detail-section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 8px;
+    }
+
+    .workflow-detail-section-header h4 {
+      margin: 0;
+    }
+
+    .copy-start-phrase {
+      min-height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 4px 10px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 760;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .copy-start-phrase:hover,
+    .copy-start-phrase:focus-visible {
+      border-color: #aaa197;
+      outline: none;
+    }
+
+    .copy-start-phrase.is-copied {
+      border-color: #2f7d62;
+      color: #2f7d62;
+    }
+
+    .workflow-detail-section .start-phrase-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding-left: 0;
+      list-style: none;
+    }
+
+    .workflow-detail-section .start-phrase-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      margin: 0;
+      min-width: 0;
+    }
+
+    .workflow-detail-section .start-phrase-text {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .workflow-detail-section ul {
+      margin: 0;
+      padding-left: 18px;
+    }
+
+    .workflow-detail-section li {
+      margin: 4px 0;
+    }
+
+    .workflow-detail-section code {
+      color: #245f89;
+      font-weight: 700;
+    }
+
+    .board.is-done-focus .lane:not(.done) {
+      flex: 0 0 64px;
+      width: 64px;
+      min-height: 148px;
+      cursor: default;
+    }
+
+    .board.is-done-focus .lane:not(.done) .lane-header {
+      height: 148px;
+      min-height: 148px;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 6px 12px;
+    }
+
+    .board.is-done-focus .lane:not(.done) .lane-title {
+      flex: 1 1 auto;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      overflow: hidden;
+    }
+
+    .board.is-done-focus .lane:not(.done) .lane-title span:last-child {
+      max-height: 72px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .board.is-done-focus .lane:not(.done) .lane-actions {
+      flex-direction: column;
+      justify-content: flex-end;
+      gap: 0;
+      width: 100%;
+    }
+
+    .board.is-done-focus .lane:not(.done) .agent-summary,
+    .board.is-done-focus .lane:not(.done) .spawn-group,
+    .board.is-done-focus .lane:not(.done) .dispatch-controls {
+      display: none;
+    }
+
+    .board.is-done-focus .lane:not(.done) .count {
+      min-width: 32px;
+      margin-left: 0;
+      padding: 4px 8px;
+      box-shadow: 0 6px 14px rgba(25, 24, 22, 0.08);
+    }
+
+    .board.is-done-focus .lane:not(.done) .lane-toggle,
+    .board.is-done-focus .lane:not(.done) .lane-body {
+      display: none;
+    }
+
+    .board.is-done-focus .done {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .board.is-done-focus .done .lane-body {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .lane {
+      position: relative;
+      min-width: 0;
+      background: rgba(255, 255, 255, 0.62);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+      overflow: visible;
+    }
+
+    .lane:has(.agent-summary:hover),
+    .lane:has(.agent-summary:focus-within) {
+      z-index: 20;
+    }
+
+    .lane-header {
+      position: relative;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 12px 10px;
+      border-top: 5px solid var(--lane-color);
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.8);
+    }
+
+    .lane-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      font-weight: 760;
+    }
+
+    .lane-title span:last-child {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      line-height: 1.12;
+    }
+
+    .lane-actions {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 8px;
+      flex: 0 0 auto;
+    }
+
+    .lane.has-agent-controls .lane-header {
+      align-items: flex-start;
+      flex-wrap: wrap;
+      gap: 8px 10px;
+    }
+
+    .lane.has-agent-controls .lane-title {
+      flex: 1 1 100%;
+    }
+
+    .lane.has-agent-controls .lane-actions {
+      flex: 1 1 100%;
+      width: 100%;
+      justify-content: flex-start;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .lane.has-agent-controls .lane-actions > .count {
+      margin-left: auto;
+    }
+
+    .agent-summary {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .agent-pill {
+      min-height: 28px;
+      border: 1px solid color-mix(in srgb, var(--lane-color) 36%, var(--line));
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--lane-color) 9%, #ffffff);
+      color: color-mix(in srgb, var(--lane-color) 82%, #191816);
+      padding: 3px 9px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .agent-pill:hover,
+    .agent-pill:focus-visible {
+      border-color: color-mix(in srgb, var(--lane-color) 58%, var(--line));
+      outline: none;
+    }
+
+    .spawn-group {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      margin-left: 2px;
+    }
+
+    .dispatch-controls {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .lane.has-agent-controls .dispatch-controls {
+      flex: 1 1 252px;
+      flex-wrap: wrap;
+    }
+
+    .dispatch-select,
+    .dispatch-max {
+      min-height: 28px;
+      border: 1px solid color-mix(in srgb, var(--lane-color) 32%, var(--line));
+      border-radius: 999px;
+      background: #ffffff;
+      color: color-mix(in srgb, var(--lane-color) 82%, #191816);
+      font-size: 11px;
+      font-weight: 760;
+    }
+
+    .dispatch-select {
+      max-width: 78px;
+      padding: 3px 6px;
+    }
+
+    .dispatch-max {
+      width: 46px;
+      padding: 3px 4px 3px 8px;
+    }
+
+    .auto-dispatch-toggle[aria-pressed="true"] {
+      border-color: color-mix(in srgb, var(--lane-color) 68%, var(--line));
+      background: color-mix(in srgb, var(--lane-color) 20%, #ffffff);
+    }
+
+    .spawn-button {
+      min-height: 28px;
+      border: 1px solid color-mix(in srgb, var(--lane-color) 36%, var(--line));
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--lane-color) 9%, #ffffff);
+      color: color-mix(in srgb, var(--lane-color) 82%, #191816);
+      padding: 3px 9px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+      line-height: 1;
+    }
+
+    .spawn-button:hover,
+    .spawn-button:focus-visible {
+      border-color: color-mix(in srgb, var(--lane-color) 58%, var(--line));
+      background: color-mix(in srgb, var(--lane-color) 18%, #ffffff);
+      outline: none;
+    }
+
+    .spawn-button:disabled {
+      cursor: progress;
+      opacity: 0.6;
+    }
+
+    .agent-popover {
+      position: absolute;
+      left: 50%;
+      top: calc(100% + 8px);
+      z-index: 30;
+      width: min(320px, calc(100vw - 32px));
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 16px 34px rgba(25, 24, 22, 0.16);
+      padding: 10px;
+      display: none;
+      transform: translateX(-50%);
+    }
+
+    .agent-summary:hover .agent-popover,
+    .agent-summary:focus-within .agent-popover {
+      display: block;
+    }
+
+    .agent-popover-title {
+      margin: 0 0 8px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+
+    .agent-list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .agent-list li {
+      margin: 0;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfaf7;
+    }
+
+    .agent-name {
+      display: block;
+      font-weight: 760;
+      overflow-wrap: anywhere;
+    }
+
+    .agent-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      border: 2px solid var(--chip-border, var(--line));
+      background: var(--chip-bg, #ffffff);
+      color: var(--chip-text, var(--ink));
+      font-size: 11px;
+      font-weight: 760;
+      line-height: 1;
+      white-space: nowrap;
+      vertical-align: middle;
+    }
+
+    .agent-chip.agent-chip-unknown {
+      border-style: dashed;
+    }
+
+    .agent-chip-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+    }
+
+    .agent-meta {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      overflow-wrap: anywhere;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--lane-color);
+      flex: 0 0 auto;
+    }
+
+    .count {
+      min-width: 28px;
+      text-align: center;
+      border-radius: 999px;
+      padding: 2px 8px;
+      color: #ffffff;
+      background: var(--lane-color);
+      font-weight: 720;
+      font-size: 12px;
+    }
+
+    .icon-button {
+      width: 30px;
+      height: 30px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+      font-weight: 760;
+      line-height: 1;
+      box-shadow: 0 1px 0 rgba(25, 24, 22, 0.04);
+    }
+
+    .icon-button:hover {
+      border-color: #aaa197;
+      background: #fbfaf7;
+    }
+
+    .icon-button:disabled {
+      cursor: default;
+      opacity: 0.45;
+    }
+
+    .lane-body {
+      display: grid;
+      gap: 10px;
+      padding: 12px;
+      min-width: 0;
+    }
+
+    .empty {
+      min-height: 78px;
+      display: grid;
+      place-items: center;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      background: rgba(255, 255, 255, 0.54);
+      text-align: center;
+      padding: 12px;
+    }
+
+    .ticket {
+      width: 100%;
+      min-width: 0;
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      box-shadow: 0 8px 22px rgba(25, 24, 22, 0.06);
+    }
+
+    .ticket.is-active-task {
+      border-left: 5px solid var(--ticket-accent);
+      background: color-mix(in srgb, var(--ticket-accent) 7%, #ffffff);
+    }
+
+    .ticket-claimed-active {
+      --ticket-accent: var(--claimed);
+    }
+
+    .ticket-reviewing-active {
+      --ticket-accent: #7f6cae;
+    }
+
+    .ticket.is-collapsed {
+      padding: 10px 12px;
+    }
+
+    .ticket-title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .ticket-main {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 6px;
+    }
+
+    .ticket-title-actions {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      flex: 0 0 auto;
+      max-width: 100%;
+    }
+
+    .ticket-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 10px;
+      margin-bottom: 8px;
+      min-width: 0;
+    }
+
+    .ticket-id {
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .priority {
+      flex: 0 0 auto;
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 760;
+      text-transform: uppercase;
+      color: #ffffff;
+      background: #5f6872;
+    }
+
+    .priority.high {
+      background: #a43f37;
+    }
+
+    .priority.low {
+      background: #58736b;
+    }
+
+    .ticket h2 {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.25;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+      min-width: 0;
+      flex: 1 1 auto;
+      word-break: break-word;
+    }
+
+    .ticket-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .redo-badge {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: #f5f5f1;
+      color: #444038;
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .status-badge {
+      border: 1px solid color-mix(in srgb, var(--ticket-accent, var(--lane-color)) 46%, var(--line));
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: color-mix(in srgb, var(--ticket-accent, var(--lane-color)) 12%, #ffffff);
+      color: color-mix(in srgb, var(--ticket-accent, var(--lane-color)) 84%, #191816);
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .owner-badge {
+      border: 1px solid color-mix(in srgb, var(--lane-color) 46%, var(--line));
+      border-radius: 999px;
+      padding: 2px 8px;
+      background: color-mix(in srgb, var(--lane-color) 10%, #ffffff);
+      color: color-mix(in srgb, var(--lane-color) 82%, #191816);
+      font-size: 11px;
+      font-weight: 760;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .done-status-badge {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 2px 8px;
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .done-status-badge.success {
+      border-color: #b8d1c3;
+      background: #edf8f1;
+      color: #276044;
+    }
+
+    .done-status-badge.failed {
+      border-color: #e1b4ad;
+      background: #fff0ed;
+      color: #94382f;
+    }
+
+    .ticket-details {
+      margin-top: 8px;
+      min-width: 0;
+    }
+
+    .ticket-details[hidden] {
+      display: none;
+    }
+
+    .done-feedback {
+      display: grid;
+      gap: 8px;
+      margin: 0 0 10px;
+      padding: 10px;
+      border: 1px solid #d7c7ab;
+      border-radius: 8px;
+      background: #fff9ed;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .done-feedback label {
+      font-size: 12px;
+      font-weight: 760;
+      color: #665333;
+      text-transform: uppercase;
+    }
+
+    .done-feedback textarea {
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      min-height: 72px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 10px;
+      background: #ffffff;
+      color: var(--ink);
+    }
+
+    .done-feedback-actions {
+      display: flex;
+      justify-content: flex-end;
+    }
+
+    .owner-feedback {
+      display: grid;
+      gap: 6px;
+      margin: 0 0 10px;
+      padding: 10px;
+      border: 1px solid #d7c7ab;
+      border-radius: 8px;
+      background: #fff9ed;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .owner-feedback-label {
+      font-size: 12px;
+      font-weight: 760;
+      color: #665333;
+      text-transform: uppercase;
+    }
+
+    .owner-feedback p {
+      margin: 0;
+      color: #37332e;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .owner-feedback-meta {
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .failure-brief {
+      display: grid;
+      gap: 8px;
+      margin: 0 0 10px;
+      padding: 10px;
+      border: 1px solid #e1b4ad;
+      border-radius: 8px;
+      background: #fff4f1;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .failure-brief-label {
+      font-size: 12px;
+      font-weight: 760;
+      color: #94382f;
+      text-transform: uppercase;
+    }
+
+    .failure-brief-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .failure-brief-item strong {
+      display: block;
+      margin-bottom: 2px;
+      color: #6f302a;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+
+    .failure-brief-item p {
+      margin: 0;
+      color: #37332e;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .ticket-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 10px;
+      padding-top: 10px;
+      border-top: 1px solid var(--line);
+    }
+
+    .text-button {
+      min-height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfaf7;
+      color: var(--ink);
+      padding: 6px 10px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .text-button:hover {
+      border-color: #aaa197;
+    }
+
+    .summary {
+      margin: 0 0 10px;
+      color: #37332e;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-bottom: 10px;
+      min-width: 0;
+    }
+
+    .chip {
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 3px 8px;
+      background: #fbfaf7;
+      color: #3d3934;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .field {
+      margin-top: 9px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    .field strong {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 12px;
+      color: var(--muted);
+      text-transform: uppercase;
+    }
+
+    .inspection-targets a {
+      color: #245f89;
+      font-weight: 700;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 2px;
+      overflow-wrap: anywhere;
+    }
+
+    .inspection-target-meta {
+      display: block;
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    ul {
+      margin: 0;
+      padding-left: 18px;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    li {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+
+    li + li {
+      margin-top: 3px;
+    }
+
+    code {
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .todo {
+      --lane-color: var(--todo);
+    }
+
+    .claimed {
+      --lane-color: var(--claimed);
+    }
+
+    .review {
+      --lane-color: var(--review);
+    }
+
+    .reviewing {
+      --lane-color: #7f6cae;
+    }
+
+    .done {
+      --lane-color: var(--done);
+    }
+
+    .archived {
+      --lane-color: var(--archived);
+    }
+
+    @media (max-width: 1280px) {
+      .board {
+        grid-template-columns: repeat(3, minmax(240px, 1fr));
+      }
+    }
+
+    @media (max-width: 1120px) {
+      .board {
+        grid-template-columns: repeat(2, minmax(260px, 1fr));
+      }
+    }
+
+    @media (max-width: 680px) {
+      .shell {
+        width: min(100vw - 20px, 640px);
+        padding-top: 16px;
+        padding-bottom: 68px;
+      }
+
+      .topbar {
+        display: block;
+      }
+
+      .toolbar {
+        justify-content: flex-start;
+        margin-top: 14px;
+      }
+
+      .board {
+        grid-template-columns: 1fr;
+      }
+
+      .board.is-done-focus {
+        grid-template-columns: 1fr;
+      }
+
+      .board.is-done-focus .lane:not(.done) {
+        display: none;
+      }
+
+      .archive-tab {
+        left: 10px;
+        right: 10px;
+      }
+
+      .archive-tray {
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+
+      .workflow-tab {
+        top: calc(50% - 148px);
+      }
+
+      .workflow-tray {
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+
+      .workflow-state-line,
+      .workflow-state-stack,
+      .workflow-parallel-start,
+      .workflow-agent-row,
+      .workflow-agent-row-upstream,
+      .workflow-detail-grid {
+        grid-template-columns: 1fr;
+        width: 100%;
+      }
+
+      .workflow-agent-edge-merge {
+        min-height: 44px;
+      }
+
+      .workflow-agent-edge-merge i {
+        display: none;
+      }
+
+      .workflow-agent-edge-merge::before {
+        margin-top: 0;
+        height: 100%;
+      }
+
+      .workflow-agent-edge-merge span {
+        top: 50%;
+      }
+
+      .workflow-stats {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header class="topbar">
+      <div>
+        <h1 id="boardName">Project Task Board</h1>
+        <div class="meta">
+          <span id="updatedAt">Updated: unknown</span>
+          <span id="sourceName">Source: board.json</span>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="button" type="button" id="reloadButton">Reload JSON</button>
+        <button class="button" type="button" id="autoRefreshButton" aria-pressed="false">Auto refresh: Off</button>
+        <label class="file-label">
+          Load JSON file
+          <input type="file" id="fileInput" accept="application/json,.json">
+        </label>
+      </div>
+    </header>
+
+    <p class="status" id="status"></p>
+
+    <section class="board" id="board" aria-label="Agent task board"></section>
+    <section class="workflow-board" id="workflowBoard" aria-label="Workflow graph"></section>
+    <section class="archive-board" id="archiveBoard" aria-label="Archived task board"></section>
+  </main>
+
+  <script>
+    const visualColumns = [
+      { key: "todo", label: "To Do", sourceKeys: ["claimed", "todo"], agentRole: "worker", agentLabel: "Workers" },
+      { key: "review", label: "Review", sourceKeys: ["reviewing", "review"], agentRole: "review", agentLabel: "Reviewers" },
+      { key: "done", label: "Done", sourceKeys: ["done"] }
+    ];
+
+    const fallbackBoard = {
+      boardName: "Project Task Board",
+      updatedAt: "",
+      columns: {
+        todo: [],
+        claimed: [],
+        review: [],
+        reviewing: [],
+        done: [],
+        archived: []
+      }
+    };
+    const fallbackAgents = {
+      updatedAt: "",
+      agents: [],
+      activeAgents: []
+    };
+    const fallbackDispatchSettings = {
+      worker: {
+        enabled: false,
+        model: "codex",
+        maxAgents: 1
+      },
+      review: {
+        enabled: false,
+        model: "codex",
+        maxAgents: 1
+      },
+      pendingSpawns: []
+    };
+    const fallbackAgentSchema = {
+      modelBackground: {
+        claude: { label: "Claude", background: "#f4a86b", text: "#3b1f08" },
+        codex: { label: "Codex", background: "#7eb1d6", text: "#0d2538" },
+        unknown: { label: "Unknown model", background: "#e3ddd2", text: "#191816" }
+      },
+      roleBorder: {
+        planning: { label: "Planner", border: "#c98a3d" },
+        worker: { label: "Worker", border: "#3f6f8f" },
+        review: { label: "Reviewer", border: "#6f5aa8" },
+        unknown: { label: "Unknown role", border: "#69645d" }
+      },
+      personalNamePool: []
+    };
+    let currentAgentSchema = fallbackAgentSchema;
+
+    const boardEl = document.getElementById("board");
+    const workflowEl = document.getElementById("workflowBoard");
+    const archiveEl = document.getElementById("archiveBoard");
+    const statusEl = document.getElementById("status");
+    const boardNameEl = document.getElementById("boardName");
+    const updatedAtEl = document.getElementById("updatedAt");
+    const sourceNameEl = document.getElementById("sourceName");
+    const reloadButton = document.getElementById("reloadButton");
+    const autoRefreshButton = document.getElementById("autoRefreshButton");
+    const fileInput = document.getElementById("fileInput");
+    const collapsedTasks = new Set();
+    let workflowPanelOpen = false;
+    let workflowDetailKey = "";
+    let archiveTrayOpen = false;
+    let doneFocusOpen = false;
+    let currentBoard = fallbackBoard;
+    let currentSourceLabel = "fallback";
+    let currentAgents = fallbackAgents;
+    let currentDispatchSettings = fallbackDispatchSettings;
+    let autoRefreshTimer = null;
+    let autoRefreshInFlight = false;
+
+    function escapeText(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function listItems(items, formatter = escapeText) {
+      if (!Array.isArray(items) || items.length === 0) return "";
+      return `<ul>${items.map((item) => `<li>${formatter(item)}</li>`).join("")}</ul>`;
+    }
+
+    function renderFiles(files) {
+      return listItems(files, (file) => `<code>${escapeText(file)}</code>`);
+    }
+
+    function renderInspectionTargets(targets) {
+      if (!Array.isArray(targets) || targets.length === 0) return "";
+      const items = targets.map((target) => {
+        if (!target || typeof target !== "object") {
+          return `<li>${escapeText(target)}</li>`;
+        }
+
+        const url = String(target.url || target.href || "").trim();
+        const path = String(target.path || "").trim();
+        const label = String(target.label || target.title || url || path || "Inspection target").trim();
+        const primary = url
+          ? `<a href="${escapeText(url)}" target="_blank" rel="noopener noreferrer">${escapeText(label)}</a>`
+          : `<span>${escapeText(label)}</span>`;
+        const detailParts = [
+          path ? `Path: ${path}` : "",
+          target.viewport ? `Viewport: ${target.viewport}` : "",
+          target.state ? `State: ${target.state}` : "",
+          target.notes ? `Notes: ${target.notes}` : ""
+        ].filter(Boolean);
+        const meta = detailParts.length
+          ? `<span class="inspection-target-meta">${escapeText(detailParts.join(" | "))}</span>`
+          : "";
+
+        return `<li>${primary}${meta}</li>`;
+      });
+      return `<ul class="inspection-targets">${items.join("")}</ul>`;
+    }
+
+    function field(label, content) {
+      if (!content) return "";
+      return `<div class="field"><strong>${escapeText(label)}</strong>${content}</div>`;
+    }
+
+    function taskKey(task) {
+      return String(task.id || `${task.project || "task"}-${task.title || "missing-title"}-${task.createdAt || ""}`);
+    }
+
+    function hasRenderableTitle(task) {
+      if (!task || typeof task !== "object") return false;
+      const title = String(task.title || "").trim();
+      return Boolean(title && !title.toLowerCase().startsWith("untitled"));
+    }
+
+    function timestampValue(task) {
+      const fields = ["archivedAt", "doneAt", "reviewedAt", "reviewRequestedAt", "claimedAt", "createdAt"];
+      for (const fieldName of fields) {
+        const value = Date.parse(task[fieldName] || "");
+        if (!Number.isNaN(value)) return value;
+      }
+      return 0;
+    }
+
+    function columnTasks(tasks, columnKey) {
+      const safeTasks = Array.isArray(tasks) ? [...tasks] : [];
+      if (columnKey !== "done" && columnKey !== "archived") return safeTasks;
+      return safeTasks.sort((a, b) => timestampValue(b) - timestampValue(a));
+    }
+
+    function decoratedColumnTasks(tasks, sourceColumnKey) {
+      return columnTasks(tasks, sourceColumnKey).map((task) => ({
+        ...task,
+        __sourceColumn: sourceColumnKey
+      }));
+    }
+
+    function visualColumnTasks(board, visualColumn) {
+      const normalizedColumns = board?.columns || {};
+      return visualColumn.sourceKeys.flatMap((sourceColumnKey) =>
+        decoratedColumnTasks(normalizedColumns[sourceColumnKey], sourceColumnKey)
+      );
+    }
+
+    function activeAgentsForRole(role) {
+      const agents = Array.isArray(currentAgents.activeAgents)
+        ? currentAgents.activeAgents
+        : Array.isArray(currentAgents.agents)
+          ? currentAgents.agents.filter((agent) => agent?.status === "active")
+          : [];
+      return agents.filter((agent) => String(agent.role || "").toLowerCase() === role);
+    }
+
+    function shortTime(value) {
+      const parsed = Date.parse(value || "");
+      if (Number.isNaN(parsed)) return "";
+      return new Date(parsed).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+
+    function agentSchemaModel(model) {
+      const lookup = currentAgentSchema?.modelBackground || {};
+      return lookup[model] || lookup.unknown || fallbackAgentSchema.modelBackground.unknown;
+    }
+
+    function agentSchemaRole(role) {
+      const lookup = currentAgentSchema?.roleBorder || {};
+      return lookup[role] || lookup.unknown || fallbackAgentSchema.roleBorder.unknown;
+    }
+
+    function agentChipMarkup(agent) {
+      const personalName = String(agent?.personalName || agent?.agentName || "Unnamed").trim();
+      const model = String(agent?.model || "unknown").toLowerCase();
+      const role = String(agent?.role || "unknown").toLowerCase();
+      const modelSchema = agentSchemaModel(model);
+      const roleSchema = agentSchemaRole(role);
+      const titleParts = [
+        `${personalName}`,
+        `Role: ${roleSchema.label || role}`,
+        `Model: ${modelSchema.label || model}`,
+        agent?.currentTaskId ? `Task: ${agent.currentTaskId}` : "",
+        agent?.lastHeartbeatAt ? `Seen: ${shortTime(agent.lastHeartbeatAt) || agent.lastHeartbeatAt}` : "",
+        agent?.agentId ? `Id: ${agent.agentId}` : ""
+      ].filter(Boolean).join(" — ");
+      const styleParts = [
+        `--chip-bg:${modelSchema.background || "#ffffff"}`,
+        `--chip-text:${modelSchema.text || "#191816"}`,
+        `--chip-border:${roleSchema.border || "#69645d"}`
+      ].join(";");
+      const unknownClass = (model === "unknown" || role === "unknown") ? " agent-chip-unknown" : "";
+      return `<span class="agent-chip${unknownClass}" style="${styleParts}" title="${escapeText(titleParts)}">${escapeText(personalName)}</span>`;
+    }
+
+    function agentSummaryMarkup(role, label) {
+      if (!role) return "";
+      const agents = activeAgentsForRole(role);
+      const count = agents.length;
+      const title = `${label}: ${count}`;
+      const chipsRow = agents.length
+        ? `<div class="agent-chip-row">${agents.map((agent) => agentChipMarkup(agent)).join("")}</div>`
+        : `<div class="agent-meta">No active ${escapeText(label.toLowerCase())}</div>`;
+      const detailList = agents.length
+        ? agents.map((agent) => {
+            const metaParts = [
+              agent.currentTaskId ? `Task: ${agent.currentTaskId}` : "",
+              agent.lastHeartbeatAt ? `Seen: ${shortTime(agent.lastHeartbeatAt) || agent.lastHeartbeatAt}` : ""
+            ].filter(Boolean);
+            return `
+              <li>
+                ${agentChipMarkup(agent)}
+                ${metaParts.length ? `<span class="agent-meta">${escapeText(metaParts.join(" | "))}</span>` : ""}
+              </li>
+            `;
+          }).join("")
+        : `<li><span class="agent-name">No active ${escapeText(label.toLowerCase())}</span></li>`;
+      return `
+        <div class="agent-summary">
+          <button class="agent-pill" type="button" aria-label="${escapeText(title)}">${escapeText(title)}</button>
+          <div class="agent-popover" role="tooltip">
+            <div class="agent-popover-title">${escapeText(label)}</div>
+            <ul class="agent-list">${detailList}</ul>
+          </div>
+        </div>
+      `;
+    }
+
+    function spawnButtonsMarkup(role) {
+      if (!role) return "";
+      const safeRole = escapeText(role);
+      const roleLabel = role === "worker" ? "Worker" : role === "review" ? "Review" : role;
+      const dispatch = dispatchSettingsForRole(role);
+      const codexSelected = dispatch.model === "codex" ? "selected" : "";
+      const claudeSelected = dispatch.model === "claude" ? "selected" : "";
+      const autoLabel = dispatch.enabled ? "Auto: On" : "Auto: Off";
+      return `
+        <span class="dispatch-controls" role="group" aria-label="${escapeText(roleLabel)} dispatch controls">
+          <select class="dispatch-select" data-dispatch-model="${safeRole}" title="${escapeText(roleLabel)} model">
+            <option value="codex" ${codexSelected}>Codex</option>
+            <option value="claude" ${claudeSelected}>Claude</option>
+          </select>
+          <input class="dispatch-max" type="number" min="0" max="8" step="1" value="${escapeText(dispatch.maxAgents)}" data-dispatch-max="${safeRole}" title="Maximum active ${escapeText(roleLabel)} agents">
+          <button class="spawn-button" type="button" data-spawn-agent="${safeRole}" title="Spawn one ${escapeText(roleLabel)} agent with the selected model">Spawn</button>
+          <button class="spawn-button auto-dispatch-toggle" type="button" data-auto-dispatch-role="${safeRole}" aria-pressed="${dispatch.enabled ? "true" : "false"}" title="Automatically spawn ${escapeText(roleLabel)} agents when work exists and active count is below max">${autoLabel}</button>
+        </span>
+      `;
+    }
+
+    function taskRedoCount(task) {
+      const parsed = Number.parseInt(task?.redoCount, 10);
+      if (Number.isNaN(parsed) || parsed <= 0) return 0;
+      return parsed;
+    }
+
+    function taskClaimOwner(task, columnKey) {
+      if (columnKey === "claimed") {
+        return {
+          label: "Worker",
+          name: String(task.claimedBy || "").trim() || "Unknown agent"
+        };
+      }
+      if (columnKey === "reviewing") {
+        return {
+          label: "Reviewer",
+          name: String(task.reviewClaimedBy || task.reviewingBy || "").trim() || "Unknown agent"
+        };
+      }
+      return null;
+    }
+
+    function doneStatusBadge(task, columnKey) {
+      if (columnKey !== "done") return "";
+      const reviewDecision = String(task.reviewDecision || "").toLowerCase();
+      const closedAs = String(task.closedAs || "").toLowerCase();
+      const isFailed = reviewDecision === "changes_requested" || closedAs === "replaced_by_follow_up" || task.replacedByTaskId;
+      const label = isFailed ? "Failed" : "Success";
+      const statusClass = isFailed ? "failed" : "success";
+      return `<span class="done-status-badge ${statusClass}">${label}</span>`;
+    }
+
+    function isFailedDoneTask(task, columnKey) {
+      if (columnKey !== "done") return false;
+      const reviewDecision = String(task.reviewDecision || "").toLowerCase();
+      const closedAs = String(task.closedAs || "").toLowerCase();
+      return reviewDecision === "changes_requested" || closedAs === "replaced_by_follow_up" || Boolean(task.replacedByTaskId);
+    }
+
+    function failureBriefPanel(task, columnKey) {
+      if (!isFailedDoneTask(task, columnKey)) return "";
+      const brief = task.failureBrief && typeof task.failureBrief === "object" ? task.failureBrief : {};
+      const expected = String(task.failureExpected || brief.expected || "").trim();
+      const actual = String(task.failureActual || brief.actual || "").trim();
+      const decision = String(task.failureDecision || brief.decision || task.reviewNotes || "").trim();
+      const replacement = String(task.replacedByTaskId || task.latestFollowUpTaskId || "").trim();
+      const items = [
+        expected ? ["Should be", expected] : null,
+        actual ? ["Actually happening", actual] : null,
+        decision ? ["Why it failed", decision] : null,
+        replacement ? ["Follow-up task", replacement] : null
+      ].filter(Boolean);
+      if (!items.length) return "";
+      return `
+        <section class="failure-brief" aria-label="Failed review summary">
+          <div class="failure-brief-label">Failed review summary</div>
+          <div class="failure-brief-grid">
+            ${items.map(([label, value]) => `
+              <div class="failure-brief-item">
+                <strong>${escapeText(label)}</strong>
+                <p>${escapeText(value)}</p>
+              </div>
+            `).join("")}
+          </div>
+        </section>
+      `;
+    }
+
+    function doneFeedbackForm(task, key, columnKey) {
+      if (columnKey !== "done") return "";
+      const feedback = Array.isArray(task.ownerFeedback) && task.ownerFeedback.length
+        ? task.ownerFeedback[task.ownerFeedback.length - 1]?.feedback || ""
+        : "";
+
+      return `
+        <form class="done-feedback" data-review-feedback-form="${escapeText(key)}">
+          <label for="feedback-${escapeText(key)}">Feedback for reviewer</label>
+          <textarea id="feedback-${escapeText(key)}" data-review-feedback-input placeholder="Write feedback, then send this task back to Review.">${escapeText(feedback)}</textarea>
+          <div class="done-feedback-actions">
+            <button class="text-button" type="submit">Send to Review</button>
+          </div>
+        </form>
+      `;
+    }
+
+    function latestOwnerFeedback(task) {
+      const feedback = task?.ownerFeedback;
+      if (Array.isArray(feedback)) {
+        return feedback.length ? feedback[feedback.length - 1] : null;
+      }
+      if (feedback && typeof feedback === "object") return feedback;
+      if (typeof feedback === "string" && feedback.trim()) {
+        return { feedback };
+      }
+      return null;
+    }
+
+    function ownerFeedbackPanel(task, columnKey) {
+      if (columnKey === "done") return "";
+      const entry = latestOwnerFeedback(task);
+      const feedback = String(entry?.feedback || "").trim();
+      if (!feedback) return "";
+      const meta = [
+        entry.returnedBy ? `From ${entry.returnedBy}` : "",
+        entry.returnedAt ? `Returned ${entry.returnedAt}` : ""
+      ].filter(Boolean).join(" - ");
+
+      return `
+        <section class="owner-feedback" aria-label="Owner feedback">
+          <div class="owner-feedback-label">Owner feedback</div>
+          <p>${escapeText(feedback)}</p>
+          ${meta ? `<div class="owner-feedback-meta">${escapeText(meta)}</div>` : ""}
+        </section>
+      `;
+    }
+
+    function taskStatusBadge(sourceColumnKey) {
+      if (sourceColumnKey === "claimed") {
+        return `<span class="status-badge">In progress</span>`;
+      }
+      if (sourceColumnKey === "reviewing") {
+        return `<span class="status-badge">Reviewing</span>`;
+      }
+      return "";
+    }
+
+    function ticketCard(task, columnKey) {
+      const sourceColumnKey = task.__sourceColumn || columnKey;
+      const title = String(task.title || "").trim();
+      const priority = escapeText(task.priority || "normal");
+      const key = taskKey(task);
+      const isCollapsed = collapsedTasks.has(key);
+      const toggleLabel = isCollapsed ? "Expand task" : "Collapse task";
+      const redoCount = taskRedoCount(task);
+      const claimOwner = taskClaimOwner(task, sourceColumnKey);
+      const isActiveTask = sourceColumnKey === "claimed" || sourceColumnKey === "reviewing";
+      const chips = [
+        task.project,
+        task.type,
+        task.claimedBy ? `Claimed: ${task.claimedBy}` : "",
+        task.reviewClaimedBy ? `Reviewing: ${task.reviewClaimedBy}` : "",
+        task.requestedBy ? `Requested: ${task.requestedBy}` : ""
+      ].filter(Boolean);
+      const redoBadge = redoCount > 0 ? `<span class="redo-badge">Redo x${redoCount}</span>` : "";
+      const ownerBadge = claimOwner
+        ? `<span class="owner-badge">${escapeText(claimOwner.label)}: ${escapeText(claimOwner.name)}</span>`
+        : "";
+      const doneBadge = doneStatusBadge(task, sourceColumnKey);
+      const statusBadge = taskStatusBadge(sourceColumnKey);
+      const archiveButton = sourceColumnKey === "done"
+        ? `<button class="text-button archive-task" type="button" data-archive-task="${escapeText(key)}">Archive</button>`
+        : "";
+      const unclaimButton = sourceColumnKey === "claimed"
+        ? `<div class="ticket-actions"><button class="text-button" type="button" data-unclaim-task="${escapeText(key)}">Unclaim task</button></div>`
+        : "";
+      const activeClass = isActiveTask ? ` is-active-task ticket-${sourceColumnKey}-active` : "";
+
+      return `
+        <article class="ticket ${isCollapsed ? "is-collapsed" : ""}${activeClass}" data-task-id="${escapeText(key)}" data-source-column="${escapeText(sourceColumnKey)}">
+          <div class="ticket-title-row">
+            <div class="ticket-main">
+              <h2>${escapeText(title)}</h2>
+              <div class="ticket-meta">${statusBadge}${doneBadge}${ownerBadge}${redoBadge}</div>
+            </div>
+            <div class="ticket-title-actions">
+              ${archiveButton}
+              <button class="icon-button ticket-toggle" type="button" data-task-toggle="${escapeText(key)}" aria-label="${toggleLabel}" title="${toggleLabel}">${isCollapsed ? "+" : "-"}</button>
+            </div>
+          </div>
+          <div class="ticket-details" ${isCollapsed ? "hidden" : ""}>
+            ${failureBriefPanel(task, sourceColumnKey)}
+            ${doneFeedbackForm(task, key, sourceColumnKey)}
+            ${unclaimButton}
+            <div class="ticket-head">
+              <div class="ticket-id">${escapeText(task.id || "No ID")}</div>
+              <div class="priority ${priority.toLowerCase()}">${priority}</div>
+            </div>
+            ${ownerFeedbackPanel(task, sourceColumnKey)}
+            ${field("Inspect Change", renderInspectionTargets(task.inspectionTargets))}
+            ${task.summary ? `<p class="summary">${escapeText(task.summary)}</p>` : ""}
+            ${chips.length ? `<div class="chips">${chips.map((chip) => `<span class="chip">${escapeText(chip)}</span>`).join("")}</div>` : ""}
+            ${field("Requirements", listItems(task.requirements))}
+            ${field("Acceptance", listItems(task.acceptanceCriteria))}
+            ${field("Files", renderFiles(task.files))}
+            ${field("Blockers", listItems(task.blockers))}
+            ${task.notes ? field("Notes", `<p class="summary">${escapeText(task.notes)}</p>`) : ""}
+          </div>
+        </article>
+      `;
+    }
+
+    function archiveCloseButton() {
+      return `<button class="icon-button archive-close" type="button" data-archive-close aria-label="Close archived panel" title="Close archived panel">&times;</button>`;
+    }
+
+    function workflowCloseButton() {
+      return `<button class="icon-button workflow-close" type="button" data-workflow-close aria-label="Close workflow panel" title="Close workflow panel">&times;</button>`;
+    }
+
+    function doneFocusButton() {
+      const label = doneFocusOpen ? "Restore all columns" : "Expand Done column";
+      const icon = doneFocusOpen ? "&#x21A9;" : "&#x26F6;";
+      return `<button class="icon-button done-focus-toggle" type="button" data-done-focus-toggle aria-pressed="${doneFocusOpen ? "true" : "false"}" aria-label="${label}" title="${label}">${icon}</button>`;
+    }
+
+    function workflowCount(normalized, columnKey) {
+      return columnTasks(normalized.columns[columnKey], columnKey).length;
+    }
+
+    function workflowDetailDefinitions(normalized) {
+      const todoCount = workflowCount(normalized, "todo");
+      const claimedCount = workflowCount(normalized, "claimed");
+      const reviewCount = workflowCount(normalized, "review");
+      const reviewingCount = workflowCount(normalized, "reviewing");
+      const doneCount = workflowCount(normalized, "done");
+      const archivedCount = workflowCount(normalized, "archived");
+      return {
+        "planning-agent": {
+          kind: "Agent",
+          title: "Planner",
+          color: "#476f8f",
+          summary: "Turns the owner's requirements into deduplicated task-board todo cards. It does not implement or review.",
+          sections: {
+            "Start Phrase": [
+              "load as planner"
+            ],
+            Context: [
+              "Consumes the owner's direct requirements.",
+              "Current todo count: " + todoCount + ".",
+              "Checks todo, claimed, review, reviewing, done, and archived before creating or changing tasks."
+            ],
+            Reads: [
+              "The owner's requirements from chat.",
+              "The full task board through GET /api/board when the backend is running."
+            ],
+            "Backend Data Seen": [
+              "Current behavior: GET /api/board returns the full task-board JSON.",
+              "It sees todo, claimed, review, reviewing, done, and archived columns.",
+              "It may see full task metadata, notes, apiHistory, referenceImages, inspectionTargets, and board audit context.",
+              "Reason: Planning needs broad duplicate and overlap checks before creating or materially changing tasks."
+            ],
+            Goal: [
+              "Create small, actionable tasks for Workers.",
+              "Keep the list clean by avoiding duplicates."
+            ],
+            Behaviors: [
+              "Clarify scope into concrete requirements, acceptance criteria, relevant files, and inspection expectations.",
+              "Convert the owner's requirements into todo tasks only when they are actionable.",
+              "Use /api/add-task and /api/update-task when the backend is running; direct JSON edits are fallback only."
+            ],
+            Writes: [
+              "task-board/board.json through /api/add-task and /api/update-task when backend is running.",
+              "Workflow docs only when the owner asks to change the workflow."
+            ],
+            "Duplicate Rules": [
+              "Before creating or materially changing a task, scan todo, claimed, review, reviewing, done, and archived.",
+              "Check title, scope, files, acceptance criteria, relatedTaskIds, dependsOn, and sourceReviewTaskId.",
+              "Update or reference an existing matching task instead of creating a duplicate."
+            ],
+            "Role Boundary": [
+              "Planner never switches into Worker or Reviewer behavior.",
+              "If the owner asks for implementation or review while in Planner mode, record the requirement as task data and stop."
+            ],
+            "Hard Rules": [
+              "Never claim tasks.",
+              "Never implement product code.",
+              "Never switch into Worker or Reviewer behavior."
+            ]
+          }
+        },
+        todo: {
+          kind: "Board column",
+          title: "To Do",
+          color: "var(--todo)",
+          summary: "Planned, unclaimed work ready for Workers. Current count: " + todoCount + ".",
+          sections: {
+            Context: [
+              "Tasks arrive here from the Planner or Reviewer follow-ups.",
+              "Each task needs a real title, requirements, acceptance criteria, and files when known."
+            ],
+            Goal: [
+              "Hold clear work that one Worker can safely claim and complete."
+            ],
+            "Who Moves It": [
+              "Worker claims a safe todo task through /api/claim-task."
+            ],
+            "Guardrails": [
+              "Workers check claimed conflicts before claiming.",
+              "Planner and Reviewer check for duplicates before creating new todo tasks."
+            ]
+          }
+        },
+        "worker-agent": {
+          kind: "Agent",
+          title: "Worker",
+          color: "var(--claimed)",
+          summary: "Claims one todo task, implements only that task, records inspection targets, and moves it to review. It never moves work to done.",
+          sections: {
+            "Start Phrase": [
+              "load as worker"
+            ],
+            Context: [
+              "Works only from todo tasks.",
+              "Current claimed count: " + claimedCount + ".",
+              "Uses columns.claimed as the active implementation lock."
+            ],
+            Reads: [
+              "workflow/workflow-overview.md and roles/worker.md at startup.",
+              "The compact worker queue through GET /api/worker-board when the backend is running.",
+              "The full claimed task only through GET /api/task-detail after claiming.",
+              "Any referenceImages listed on the claimed task before implementation."
+            ],
+            "Backend Data Seen": [
+              "Current behavior: GET /api/worker-board returns compact summaries for columns.todo and columns.claimed.",
+              "It does not receive review, reviewing, done, archived, the top-level tasks index, or apiAuditLog through the normal worker read path.",
+              "Useful for worker decisions: unclaimed todo work, active claimed locks, selected task details, and referenceImages.",
+              "Full details are loaded only for the one selected or claimed task through GET /api/task-detail.",
+              "If a task needs broader context, the owner or a Planner should add that context directly to the task."
+            ],
+            Goal: [
+              "Complete the claimed task without conflicting with other claimed work.",
+              "Keep the todo list moving by checking for another safe task after finishing."
+            ],
+            Lifecycle: [
+              "Register through /api/register-agent with role worker at chat start.",
+              "Heartbeat through /api/heartbeat-agent after claiming and after moving work to Review, with currentTaskId set to the task being handled.",
+              "Unregister through /api/unregister-agent before ending the chat for any reason."
+            ],
+            Behaviors: [
+              "Claim exactly one safe todo task with /api/claim-task before touching implementation files.",
+              "Implement only the claimed task using existing codebase patterns and focused edits.",
+              "Run reasonable validation for touched files and record completion notes."
+            ],
+            Writes: [
+              "Product files required by the claimed task.",
+              "Task status through /api/claim-task and /api/move-to-review.",
+              "inspectionTargets so the owner and Reviewer know where to inspect."
+            ],
+            "Finish Rules": [
+              "Move finished work to Review with /api/move-to-review and never move its own work to Done.",
+              "Include inspectionTargets with URL or path, viewport, state, and short notes.",
+              "Reload the board after moving to Review and claim the next safe todo if one exists."
+            ],
+            "Conflict Rules": [
+              "Only claimed tasks create active implementation reservations.",
+              "Block only when a claimed task overlaps both target scope and implementation files or acceptance criteria.",
+              "Shared files alone do not block parallel work when scopes are distinct."
+            ],
+            "Hard Rules": [
+              "Never move its own task to done.",
+              "Never claim review tasks.",
+              "Do not treat review or done tasks as broad locks."
+            ]
+          }
+        },
+        claimed: {
+          kind: "Board column",
+          title: "Claimed / In Progress",
+          color: "var(--claimed)",
+          summary: "A Worker owns these active implementation tasks. Current count: " + claimedCount + ".",
+          sections: {
+            Context: [
+              "This is the active work reservation column.",
+              "A claimed task reserves its direct files, scope, and acceptance criteria for that Worker."
+            ],
+            Goal: [
+              "Prevent two Workers from unknowingly implementing the same scope at the same time."
+            ],
+            "Who Moves It": [
+              "Worker moves finished work to Review with /api/move-to-review."
+            ],
+            "Guardrails": [
+              "Shared files alone do not block parallel work if scopes are distinct.",
+              "Clearly overlapping scope plus target files should block a second claim."
+            ]
+          }
+        },
+        review: {
+          kind: "Board column",
+          title: "Review",
+          color: "var(--review)",
+          summary: "Completed implementation waiting for review. Current count: " + reviewCount + ".",
+          sections: {
+            Context: [
+              "Workers move completed work here.",
+              "Tasks should include inspectionTargets so reviewers know where and how to inspect."
+            ],
+            Goal: [
+              "Queue completed work for one Reviewer or the owner to validate."
+            ],
+            "Who Moves It": [
+              "Reviewer claims one review task into Reviewing with /api/claim-review.",
+              "The owner can return Done tasks here with feedback from the board viewer."
+            ],
+            "Guardrails": [
+              "A task already in Reviewing is claimed and should not be duplicated by another reviewer."
+            ]
+          }
+        },
+        "review-agent": {
+          kind: "Agent",
+          title: "Reviewer",
+          color: "#7f6cae",
+          summary: "Claims one review task into reviewing, runs a two-lens quality and correctness review, then approves to done or opens a follow-up todo. It only edits board.json.",
+          sections: {
+            "Start Phrase": [
+              "load as reviewer"
+            ],
+            Context: [
+              "Works only from Review tasks.",
+              "Current review count: " + reviewCount + "; current reviewing count: " + reviewingCount + ".",
+              "Uses inspectionTargets and owner feedback as the active review question."
+            ],
+            Reads: [
+              "workflow/workflow-overview.md and roles/reviewer.md at startup.",
+              "The compact review queue through GET /api/review-board when the backend is running.",
+              "The full claimed review task only through GET /api/task-detail after claiming.",
+              "inspectionTargets, ownerFeedback, referenceImages, acceptance criteria, and relevant browser pages."
+            ],
+            "Backend Data Seen": [
+              "Current behavior: GET /api/review-board returns compact summaries for columns.review and columns.reviewing.",
+              "It does not receive todo, claimed, done, archived, the top-level tasks index, or apiAuditLog through the normal review read path.",
+              "Useful for review decisions: unclaimed review work, active reviewing locks, selected task details, inspectionTargets, ownerFeedback, and referenceImages.",
+              "Before creating follow-up work after a failed review, it should use GET /api/duplicate-scan so only matching candidate summaries are returned."
+            ],
+            Goal: [
+              "Run a two-lens review: judge visual quality and implementation correctness for the specific task result.",
+              "Approve good work or create focused follow-up todo work when it fails."
+            ],
+            Lifecycle: [
+              "Register through /api/register-agent with role review at chat start.",
+              "Heartbeat through /api/heartbeat-agent after claiming and after each approval or request-changes decision, with currentTaskId set to the review task being handled.",
+              "Unregister through /api/unregister-agent before ending the chat for any reason."
+            ],
+            Behaviors: [
+              "Claim only tasks currently in Review with /api/claim-review; leave Reviewing tasks alone.",
+              "Use the browser to inspect the specified page, viewport, state, and interaction.",
+              "Judge visual quality and implementation correctness as the two review lenses."
+            ],
+            Writes: [
+              "Task status through /api/claim-review, /api/approve-review, and /api/request-changes.",
+              "Optional linked screenshots in reference-images/ for follow-up context."
+            ],
+            "Decision Rules": [
+              "If approved, move Reviewing to Done through /api/approve-review and record concise evidence.",
+              "If failed, use /api/request-changes with failureExpected, failureActual, and failureDecision so the Done card starts with what should be true, what is actually happening, and why it failed.",
+              "Put long evidence and secondary implementation context lower in reviewNotes or the follow-up task.",
+              "If the owner returned a Done task to Review with feedback, treat ownerFeedback as the active review question."
+            ],
+            "Duplicate Rules": [
+              "Before creating a follow-up, scan every board column for matching sourceReviewTaskId, title, scope, files, and acceptance criteria.",
+              "Update an existing matching follow-up instead of creating a duplicate.",
+              "Failed original tasks must record replacedByTaskId or latestFollowUpTaskId."
+            ],
+            "Hard Rules": [
+              "Never implement fixes.",
+              "Only edit board.json; never edit product code or workflow docs.",
+              "Do not claim tasks already in Reviewing."
+            ]
+          }
+        },
+        reviewing: {
+          kind: "Board column",
+          title: "Reviewing",
+          color: "#7f6cae",
+          summary: "A Reviewer owns these active review tasks. Current count: " + reviewingCount + ".",
+          sections: {
+            Context: [
+              "This column blocks other Reviewers from claiming the same review task.",
+              "Review ownership is recorded as reviewClaimedBy and reviewClaimedAt."
+            ],
+            Goal: [
+              "Make review ownership explicit and avoid duplicate review work."
+            ],
+            "Who Moves It": [
+              "Reviewer approves into Done or requests changes, which closes the failed task as replaced and creates/updates a todo follow-up."
+            ],
+            "Guardrails": [
+              "Other Reviewers must leave reviewing tasks alone unless the owner explicitly reassigns them."
+            ]
+          }
+        },
+        done: {
+          kind: "Board column",
+          title: "Done",
+          color: "var(--done)",
+          summary: "Accepted work, plus failed reviewed work closed as replaced by follow-up tasks. Current count: " + doneCount + ".",
+          sections: {
+            Context: [
+              "Done cards show Success or Failed tags.",
+              "Failed done tasks should record replacedByTaskId or latestFollowUpTaskId.",
+              "The owner can send a done task back to Review with feedback."
+            ],
+            Goal: [
+              "Keep accepted or closed work visible until the owner archives it."
+            ],
+            "Who Moves It": [
+              "Reviewer approves into Done.",
+              "Reviewer request-changes closes failed work into Done as replaced.",
+              "The owner archives accepted work from Done."
+            ],
+            "Guardrails": [
+              "Workers do not reopen Done tasks unless the owner creates or assigns follow-up work."
+            ]
+          }
+        },
+        archived: {
+          kind: "Board column",
+          title: "Archived",
+          color: "var(--archived)",
+          summary: "Completed work hidden from the main board. Current count: " + archivedCount + ".",
+          sections: {
+            Context: [
+              "Archived tasks are still in JSON but not shown in the main board.",
+              "The archive tray keeps old accepted work available for reference."
+            ],
+            Goal: [
+              "Keep the active board clean without deleting history."
+            ],
+            "Who Moves It": [
+              "The owner or cleanup API moves done tasks to archived with /api/archive."
+            ],
+            "Guardrails": [
+              "Archive accepted or no-longer-needed done work; do not use archive as a normal review outcome."
+            ]
+          }
+        },
+        "review-passed": {
+          kind: "Decision branch",
+          title: "Review Passed",
+          color: "var(--done)",
+          summary: "Reviewing moves to Done when the Review Agent approves the implementation.",
+          sections: {
+            Context: ["The task met the acceptance criteria and visual review question."],
+            Goal: ["Record approval clearly and keep accepted work ready for the owner to archive later."],
+            "API Path": ["/api/approve-review"],
+            "Result": ["Task moves from Reviewing to Done with reviewedBy, reviewedAt, and review notes."]
+          }
+        },
+        "review-failed": {
+          kind: "Decision branch",
+          title: "Review Failed",
+          color: "#b0473f",
+          summary: "Reviewing closes into Done as a failed/replaced task, and a follow-up todo is created or updated.",
+          sections: {
+            Context: ["The work did not satisfy the review question or acceptance criteria."],
+            Goal: ["Avoid endless re-review loops by closing the failed attempt and creating a focused fix task."],
+            "API Path": ["/api/request-changes"],
+            "Result": ["Failed original goes to the top of Done with replacedByTaskId or latestFollowUpTaskId; follow-up goes to To Do."]
+          }
+        },
+        "user-feedback": {
+          kind: "Done branch",
+          title: "User Feedback Re-review",
+          color: "var(--review)",
+          summary: "The owner can submit feedback on a Done card and send it back to Review.",
+          sections: {
+            Context: ["Used when the owner sees a done item but wants another reviewer pass before creating new work."],
+            Goal: ["Make the owner's feedback the active review question."],
+            "API Path": ["/api/return-to-review"],
+            "Result": ["Task moves from Done to Review with ownerFeedback and returnedToReviewAt."]
+          }
+        },
+        archive: {
+          kind: "Done branch",
+          title: "Archive",
+          color: "var(--archived)",
+          summary: "Done moves to Archived when accepted work no longer needs to stay visible.",
+          sections: {
+            Context: ["Used for completed work that should stay in history but leave the main board."],
+            Goal: ["Keep Done readable and the active board clean."],
+            "API Path": ["/api/archive"],
+            "Result": ["Task moves from Done to Archived."]
+          }
+        },
+        "duplicate-check": {
+          kind: "Creation guard",
+          title: "Duplicate Check",
+          color: "#8c6f40",
+          summary: "Planner and Reviewer must scan all columns before creating or updating todo work.",
+          sections: {
+            Context: [
+              "Prevents user feedback and failed reviews from creating duplicate tasks."
+            ],
+            Goal: [
+              "Keep the todo list clean and make replacement/dependency relationships explicit."
+            ],
+            "Check Against": [
+              "title, scope, files, project area, requirements, acceptance criteria",
+              "relatedTaskIds, dependsOn, sourceReviewTaskId"
+            ],
+            "Result": [
+              "Update or link an existing task when it already covers the work; create a new task only when the scope is distinct."
+            ]
+          }
+        }
+      };
+    }
+
+    function workflowNode(step, badge) {
+      const badgeHtml = badge
+        ? `<span class="count workflow-state-count" style="background: ${step.color}">${escapeText(badge)}</span>`
+        : "";
+      return `
+        <button class="workflow-state workflow-state-${escapeText(step.key)}" type="button" data-workflow-detail="${escapeText(step.key)}" style="--node-color: ${step.color}" aria-label="Open workflow details for ${escapeText(step.label)}">
+          <span>
+            <span class="workflow-state-kicker">${escapeText(step.kind || "State")}</span>
+          </span>
+          <span class="workflow-state-title">
+            <span>${escapeText(step.label)}</span>
+            ${badgeHtml}
+          </span>
+          <span class="workflow-state-meta">${escapeText(step.meta)}</span>
+        </button>
+      `;
+    }
+
+    function workflowBranch(detailKey, title, text) {
+      return `
+        <button class="workflow-branch" type="button" data-workflow-detail="${escapeText(detailKey)}" aria-label="Open workflow details for ${escapeText(title)}">
+          <strong>${escapeText(title)}</strong>
+          ${escapeText(text)}
+        </button>
+      `;
+    }
+
+    function workflowAgentEdge(label, variant = "") {
+      const variantClass = variant ? ` workflow-agent-edge-${escapeText(variant)}` : "";
+      const mergeArm = variant === "merge" ? `<i aria-hidden="true"></i>` : "";
+      return `<div class="workflow-agent-edge${variantClass}" aria-hidden="true">${mergeArm}<span>${escapeText(label)}</span></div>`;
+    }
+
+    function workflowGraphMarkup(normalized) {
+      const steps = {
+        planning: { key: "planning-agent", kind: "Agent", label: "Planner", color: "#476f8f", meta: "Turns requirements into clean todo cards." },
+        worker: { key: "worker-agent", kind: "Agent", label: "Worker", color: "var(--claimed)", meta: "Claims todo work, implements it, and requests review." },
+        reviewer: { key: "review-agent", kind: "Agent", label: "Reviewer", color: "#7f6cae", meta: "Claims review work, validates it, and decides outcome." }
+      };
+      const activeCount = ["todo", "claimed", "review", "reviewing"].reduce((total, key) => total + workflowCount(normalized, key), 0);
+      const todoCount = workflowCount(normalized, "todo");
+      const claimedCount = workflowCount(normalized, "claimed");
+      const reviewCount = workflowCount(normalized, "review");
+      const reviewingCount = workflowCount(normalized, "reviewing");
+      const doneCount = workflowCount(normalized, "done");
+      const archivedCount = workflowCount(normalized, "archived");
+      const activeWorkerCount = activeAgentsForRole("worker").length;
+      const activeReviewCount = activeAgentsForRole("review").length;
+      const mainFlow = `
+        <div class="workflow-agent-flow" aria-label="Agent workflow map">
+          <div class="workflow-agent-row">
+            ${workflowNode(steps.planning, todoCount)}
+          </div>
+          ${workflowAgentEdge("todo tickets")}
+          <div class="workflow-agent-row">
+            ${workflowNode(steps.worker, activeWorkerCount ? `${activeWorkerCount} active` : claimedCount)}
+          </div>
+          ${workflowAgentEdge("inspection targets + review request")}
+          <div class="workflow-agent-row">
+            ${workflowNode(steps.reviewer, activeReviewCount ? `${activeReviewCount} active` : reviewCount + reviewingCount)}
+          </div>
+        </div>
+      `;
+
+      return `
+        <section class="workflow-panel" id="workflow-panel" aria-hidden="${workflowPanelOpen ? "false" : "true"}">
+          <div class="workflow-panel-header">
+            <div>
+              <h2>Agent Workflow Map</h2>
+              <p>Each clickable block is an agent. Open one to see its context, goal, behavior, permissions, and hard rules.</p>
+            </div>
+            ${workflowCloseButton()}
+          </div>
+          <div class="workflow-graph">
+            ${mainFlow}
+          </div>
+          <div class="workflow-stats">
+            <div class="workflow-stat"><strong>${activeCount}</strong><span>todo / claimed / review</span></div>
+            <div class="workflow-stat"><strong>${doneCount}</strong><span>done visible</span></div>
+            <div class="workflow-stat"><strong>${archivedCount}</strong><span>archived</span></div>
+          </div>
+        </section>
+      `;
+    }
+
+    function workflowDetailSection(title, items) {
+      if (!Array.isArray(items) || !items.length) return "";
+      const isStartPhrase = title === "Start Phrase";
+      if (isStartPhrase) {
+        const phrases = [];
+        items.forEach((item) => {
+          const phrase = String(item || "").trim();
+          if (phrase && !phrases.includes(phrase)) {
+            phrases.push(phrase);
+          }
+        });
+        if (phrases.length) {
+          const startPhrase = phrases[0].endsWith(" and start") ? phrases[0] : `${phrases[0]} and start`;
+          if (!phrases.includes(startPhrase)) {
+            phrases.push(startPhrase);
+          }
+        }
+        return `
+          <section class="workflow-detail-section">
+            <div class="workflow-detail-section-header">
+              <h4>${escapeText(title)}</h4>
+            </div>
+            <ul class="start-phrase-list">
+              ${phrases.map((phrase) => `
+                <li class="start-phrase-item">
+                  <span class="start-phrase-text">${escapeText(phrase)}</span>
+                  <button class="copy-start-phrase" type="button" data-copy-start-phrase="${escapeText(phrase)}" aria-label="Copy start phrase">Copy</button>
+                </li>
+              `).join("")}
+            </ul>
+          </section>
+        `;
+      }
+
+      return `
+        <section class="workflow-detail-section">
+          <h4>${escapeText(title)}</h4>
+          <ul>${items.map((item) => `<li>${escapeText(item)}</li>`).join("")}</ul>
+        </section>
+      `;
+    }
+
+    function workflowDetailModalMarkup(normalized) {
+      if (!workflowDetailKey) return "";
+      const detail = workflowDetailDefinitions(normalized)[workflowDetailKey];
+      if (!detail) return "";
+      const sections = Object.entries(detail.sections || {})
+        .map(([title, items]) => workflowDetailSection(title, items))
+        .join("");
+      return `
+        <div class="workflow-detail-backdrop" data-workflow-detail-backdrop>
+          <section class="workflow-detail-modal" role="dialog" aria-modal="true" aria-labelledby="workflow-detail-title" style="--modal-color: ${detail.color || "var(--workflow)"}">
+            <div class="workflow-detail-header">
+              <div>
+                <span class="workflow-detail-kicker">${escapeText(detail.kind || "Workflow block")}</span>
+                <h3 id="workflow-detail-title">${escapeText(detail.title)}</h3>
+              </div>
+              <button class="icon-button" type="button" data-workflow-detail-close aria-label="Close workflow detail" title="Close workflow detail">&times;</button>
+            </div>
+            <p class="workflow-detail-summary">${escapeText(detail.summary || "")}</p>
+            <div class="workflow-detail-grid">${sections}</div>
+          </section>
+        </div>
+      `;
+    }
+
+    function renderWorkflowPanel(normalized) {
+      workflowEl.classList.toggle("is-open", workflowPanelOpen);
+      workflowEl.innerHTML = `
+        <button class="workflow-tab" type="button" data-workflow-toggle aria-expanded="${workflowPanelOpen ? "true" : "false"}" aria-controls="workflow-panel">
+          <span class="dot" aria-hidden="true"></span>
+          <span>Workflow</span>
+        </button>
+        <div class="workflow-tray" aria-hidden="${workflowPanelOpen ? "false" : "true"}">
+          ${workflowGraphMarkup(normalized)}
+        </div>
+        ${workflowDetailModalMarkup(normalized)}
+      `;
+    }
+
+    function normalizeBoard(board) {
+      const normalized = { ...fallbackBoard, ...board };
+      normalized.columns = { ...fallbackBoard.columns, ...(board.columns || {}) };
+      const taskLookup = normalized.tasks && typeof normalized.tasks === "object" ? normalized.tasks : {};
+      Object.keys(normalized.columns).forEach((columnKey) => {
+        const tasks = Array.isArray(normalized.columns[columnKey]) ? normalized.columns[columnKey] : [];
+        normalized.columns[columnKey] = tasks
+          .map((task) => {
+            if (typeof task === "string") return taskLookup[task] || null;
+            return task;
+          })
+          .filter(hasRenderableTitle);
+      });
+      return normalized;
+    }
+
+    async function loadJson(url) {
+      if (typeof window.fetch === "function") {
+        const response = await window.fetch(url, { cache: "no-store" });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      }
+
+      return new Promise((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open("GET", url, true);
+        request.overrideMimeType("application/json");
+        request.onload = () => {
+          if (request.status >= 200 && request.status < 300) {
+            try {
+              resolve(JSON.parse(request.responseText));
+            } catch (error) {
+              reject(error);
+            }
+            return;
+          }
+          reject(new Error(`HTTP ${request.status}`));
+        };
+        request.onerror = () => reject(new Error("Could not load JSON"));
+        request.send();
+      });
+    }
+
+    async function loadAgents() {
+      try {
+        return await loadJson("/viewer/agents?agentName=Task%20board%20viewer");
+      } catch (error) {
+        return fallbackAgents;
+      }
+    }
+
+    async function loadAgentSchema() {
+      try {
+        const schema = await loadJson("/viewer/agent-schema");
+        if (schema && typeof schema === "object") {
+          currentAgentSchema = {
+            modelBackground: schema.modelBackground || fallbackAgentSchema.modelBackground,
+            roleBorder: schema.roleBorder || fallbackAgentSchema.roleBorder,
+            personalNamePool: Array.isArray(schema.personalNamePool) ? schema.personalNamePool : []
+          };
+        }
+        return currentAgentSchema;
+      } catch (error) {
+        currentAgentSchema = fallbackAgentSchema;
+        return currentAgentSchema;
+      }
+    }
+
+    async function loadDispatchSettings() {
+      try {
+        const settings = await loadJson("/viewer/dispatch-settings");
+        currentDispatchSettings = settings && typeof settings === "object" ? settings : fallbackDispatchSettings;
+        return currentDispatchSettings;
+      } catch (error) {
+        currentDispatchSettings = fallbackDispatchSettings;
+        return currentDispatchSettings;
+      }
+    }
+
+    function dispatchSettingsForRole(role) {
+      const settings = currentDispatchSettings?.[role] || fallbackDispatchSettings[role] || {};
+      const maxAgents = Number.parseInt(settings.maxAgents, 10);
+      return {
+        enabled: Boolean(settings.enabled),
+        model: settings.model === "claude" ? "claude" : "codex",
+        maxAgents: Number.isNaN(maxAgents) ? 1 : Math.max(0, Math.min(maxAgents, 8))
+      };
+    }
+
+    async function saveDispatchSettings(role, updates) {
+      const current = dispatchSettingsForRole(role);
+      const payload = {
+        role,
+        enabled: "enabled" in updates ? Boolean(updates.enabled) : current.enabled,
+        model: updates.model || current.model,
+        maxAgents: "maxAgents" in updates ? Number(updates.maxAgents) : current.maxAgents
+      };
+      const settings = await postJson("/viewer/dispatch-settings", payload);
+      currentDispatchSettings = settings && typeof settings === "object" ? settings : currentDispatchSettings;
+      renderBoard(currentBoard, currentSourceLabel);
+      return currentDispatchSettings;
+    }
+
+    function postJson(url, payload) {
+      const requestPayload = {
+        agentName: "owner via task board viewer",
+        ...payload
+      };
+      if (typeof window.fetch === "function") {
+        return window.fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(requestPayload)
+        }).then(async (response) => {
+          const data = await response.json().catch(() => ({}));
+          if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+          return data;
+        });
+      }
+
+      return new Promise((resolve, reject) => {
+        const request = new XMLHttpRequest();
+        request.open("POST", url, true);
+        request.setRequestHeader("Content-Type", "application/json");
+        request.onload = () => {
+          let data = {};
+          try {
+            data = JSON.parse(request.responseText || "{}");
+          } catch (error) {
+            reject(error);
+            return;
+          }
+          if (request.status >= 200 && request.status < 300) {
+            resolve(data);
+            return;
+          }
+          reject(new Error(data.error || `HTTP ${request.status}`));
+        };
+        request.onerror = () => reject(new Error("Could not persist board action"));
+        request.send(JSON.stringify(requestPayload));
+      });
+    }
+
+    async function spawnAgent(role, tool, triggerButton) {
+      const roleLabel = role === "worker" ? "Worker Agent" : role === "review" ? "Review Agent" : `${role} agent`;
+      const toolLabel = tool === "claude" ? "Claude" : tool === "codex" ? "Codex" : tool;
+      const previousLabel = triggerButton ? triggerButton.textContent : "";
+      if (triggerButton) {
+        triggerButton.disabled = true;
+        triggerButton.textContent = "Spawning...";
+      }
+      statusEl.textContent = `Spawning ${roleLabel} in ${toolLabel}...`;
+      try {
+        const result = await postJson("/viewer/spawn-agent", { role, tool });
+        const phrase = result?.startPhrase || "";
+        const processText = result?.processId ? ` PID: ${result.processId}.` : "";
+        const logText = result?.logPath ? ` Log: ${result.logPath}.` : "";
+        statusEl.textContent = `Spawned ${roleLabel} in ${toolLabel} non-interactively.${processText}${logText} Start phrase: "${phrase}"`;
+      } catch (error) {
+        statusEl.textContent = `Spawn failed (${roleLabel} / ${toolLabel}): ${error.message}`;
+      } finally {
+        if (triggerButton) {
+          triggerButton.disabled = false;
+          triggerButton.textContent = previousLabel;
+        }
+      }
+    }
+
+    async function archiveTask(taskId) {
+      statusEl.textContent = `Archiving ${taskId}...`;
+      try {
+        await postJson("/viewer/archive", {
+          taskId,
+          archivedBy: "Task board viewer"
+        });
+        const [board, agents] = await Promise.all([
+          loadJson("board.json"),
+          loadAgents()
+        ]);
+        collapsedTasks.delete(taskId);
+        renderBoard(board, "board.json", agents);
+        statusEl.textContent = `Archived ${taskId} and updated board.json.`;
+      } catch (error) {
+        statusEl.textContent = `Archive failed for ${taskId}: ${error.message}`;
+      }
+    }
+
+    async function unclaimTask(taskId) {
+      statusEl.textContent = `Unclaiming ${taskId}...`;
+      try {
+        await postJson("/viewer/unclaim-task", {
+          taskId,
+          unclaimedBy: "owner via task board viewer",
+          reason: "Worker agent was killed before finishing."
+        });
+        const [board, agents] = await Promise.all([
+          loadJson("board.json"),
+          loadAgents()
+        ]);
+        collapsedTasks.delete(taskId);
+        renderBoard(board, "board.json", agents);
+        statusEl.textContent = `Unclaimed ${taskId} and moved it back to To Do.`;
+      } catch (error) {
+        statusEl.textContent = `Unclaim failed for ${taskId}: ${error.message}`;
+      }
+    }
+
+    async function returnTaskToReview(taskId, feedback) {
+      statusEl.textContent = `Sending ${taskId} back to review...`;
+      try {
+        await postJson("/viewer/return-to-review", {
+          taskId,
+          feedback,
+          returnedBy: "owner via task board viewer"
+        });
+        const [board, agents] = await Promise.all([
+          loadJson("board.json"),
+          loadAgents()
+        ]);
+        collapsedTasks.delete(taskId);
+        renderBoard(board, "board.json", agents);
+        statusEl.textContent = `Moved ${taskId} back to Review with feedback.`;
+      } catch (error) {
+        statusEl.textContent = `Feedback failed for ${taskId}: ${error.message}`;
+      }
+    }
+
+    function laneMarkup(key, label, tasks, options = {}) {
+      const allCollapsed = tasks.length > 0 && tasks.every((task) => collapsedTasks.has(taskKey(task)));
+      const laneToggleLabel = allCollapsed ? `Expand all ${label} tasks` : `Collapse all ${label} tasks`;
+      const extraActions = options.extraActions || "";
+      const agentSummary = options.agentRole ? agentSummaryMarkup(options.agentRole, options.agentLabel || "Agents") : "";
+      const spawnButtons = options.agentRole ? spawnButtonsMarkup(options.agentRole) : "";
+      const body = tasks.length
+        ? tasks.map((task) => ticketCard(task, key)).join("")
+        : `<div class="empty">No ${escapeText(label.toLowerCase())} tasks</div>`;
+      const addlClass = options.extraClass ? ` ${options.extraClass}` : "";
+      const agentClass = options.agentRole ? " has-agent-controls" : "";
+
+      return `
+        <section class="lane ${key}${addlClass}${agentClass}" aria-label="${escapeText(label)}">
+          <div class="lane-header">
+            <div class="lane-title"><span class="dot"></span><span>${escapeText(label)}</span></div>
+            <div class="lane-actions">
+              ${agentSummary}
+              ${spawnButtons}
+              <span class="count">${tasks.length}</span>
+              <button class="icon-button lane-toggle" type="button" data-lane-toggle="${escapeText(key)}" aria-label="${laneToggleLabel}" title="${laneToggleLabel}" ${tasks.length ? "" : "disabled"}>${allCollapsed ? "+" : "-"}</button>
+              ${extraActions}
+            </div>
+          </div>
+          <div class="lane-body">${body}</div>
+        </section>
+      `;
+    }
+
+    function renderBoard(board, sourceLabel, agentsState = currentAgents) {
+      const normalized = normalizeBoard(board);
+      currentBoard = normalized;
+      currentSourceLabel = sourceLabel;
+      currentAgents = agentsState && typeof agentsState === "object" ? agentsState : fallbackAgents;
+      boardNameEl.textContent = normalized.boardName || "Project Task Board";
+      updatedAtEl.textContent = `Updated: ${normalized.updatedAt || "unknown"}`;
+      sourceNameEl.textContent = `Source: ${sourceLabel}`;
+
+      boardEl.classList.toggle("is-done-focus", doneFocusOpen);
+      if (doneFocusOpen) {
+        const foldedLanes = visualColumns
+          .filter((column) => column.key !== "done")
+          .map((column) => laneMarkup(column.key, column.label, visualColumnTasks(normalized, column), {
+            agentRole: column.agentRole,
+            agentLabel: column.agentLabel
+          }))
+          .join("");
+        const doneColumn = visualColumns.find((column) => column.key === "done");
+        const doneTasks = visualColumnTasks(normalized, doneColumn);
+        boardEl.innerHTML = `
+          <div class="folded-stack" aria-label="Folded task columns">${foldedLanes}</div>
+          ${laneMarkup("done", "Done", doneTasks, { extraActions: doneFocusButton() })}
+        `;
+      } else {
+        boardEl.innerHTML = visualColumns.map((column) => {
+          const tasks = visualColumnTasks(normalized, column);
+          return laneMarkup(column.key, column.label, tasks, {
+            extraActions: column.key === "done" ? doneFocusButton() : "",
+            agentRole: column.agentRole,
+            agentLabel: column.agentLabel
+          });
+        }).join("");
+      }
+
+      const archivedTasks = columnTasks(normalized.columns.archived, "archived");
+      renderWorkflowPanel(normalized);
+      archiveEl.classList.toggle("is-open", archiveTrayOpen);
+      archiveEl.innerHTML = `
+        <button class="archive-tab" type="button" data-archive-toggle aria-expanded="${archiveTrayOpen ? "true" : "false"}" aria-controls="archived-panel">
+          <span class="dot" aria-hidden="true"></span>
+          <span>Archived (${archivedTasks.length})</span>
+        </button>
+        <div class="archive-tray" id="archived-panel" aria-hidden="${archiveTrayOpen ? "false" : "true"}">
+          ${laneMarkup("archived", "Archived", archivedTasks, {
+            extraClass: "archived-tray-lane",
+            extraActions: archiveCloseButton()
+          })}
+        </div>
+      `;
+    }
+
+    function toggleArchiveTray(forceOpen) {
+      if (typeof forceOpen === "boolean") {
+        archiveTrayOpen = forceOpen;
+      } else {
+        archiveTrayOpen = !archiveTrayOpen;
+      }
+      renderBoard(currentBoard, currentSourceLabel);
+    }
+
+    function toggleWorkflowPanel(forceOpen) {
+      if (typeof forceOpen === "boolean") {
+        workflowPanelOpen = forceOpen;
+      } else {
+        workflowPanelOpen = !workflowPanelOpen;
+      }
+      if (!workflowPanelOpen) {
+        workflowDetailKey = "";
+      }
+      renderBoard(currentBoard, currentSourceLabel);
+    }
+
+    function toggleDoneFocus(forceOpen) {
+      if (typeof forceOpen === "boolean") {
+        doneFocusOpen = forceOpen;
+      } else {
+        doneFocusOpen = !doneFocusOpen;
+      }
+      renderBoard(currentBoard, currentSourceLabel);
+    }
+
+    async function copyTextToClipboard(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+
+      const input = document.createElement("textarea");
+      input.value = text;
+      input.setAttribute("readonly", "");
+      input.style.position = "fixed";
+      input.style.left = "-9999px";
+      document.body.appendChild(input);
+      input.select();
+      const copied = document.execCommand("copy");
+      document.body.removeChild(input);
+      if (!copied) {
+        throw new Error("Clipboard copy failed");
+      }
+    }
+
+    boardEl.addEventListener("click", (event) => {
+      const autoDispatchButton = event.target.closest("[data-auto-dispatch-role]");
+      if (autoDispatchButton) {
+        const role = autoDispatchButton.dataset.autoDispatchRole;
+        const current = dispatchSettingsForRole(role);
+        autoDispatchButton.disabled = true;
+        saveDispatchSettings(role, { enabled: !current.enabled })
+          .then(() => {
+            statusEl.textContent = `${role === "worker" ? "Worker" : "Review"} auto dispatch ${!current.enabled ? "enabled" : "disabled"}.`;
+          })
+          .catch((error) => {
+            statusEl.textContent = `Auto dispatch update failed: ${error.message}`;
+          })
+          .finally(() => {
+            autoDispatchButton.disabled = false;
+          });
+        return;
+      }
+
+      const spawnButton = event.target.closest("[data-spawn-agent]");
+      if (spawnButton) {
+        const role = spawnButton.dataset.spawnAgent;
+        const tool = spawnButton.dataset.spawnTool || dispatchSettingsForRole(role).model;
+        spawnAgent(role, tool, spawnButton);
+        return;
+      }
+
+      const doneFocusButton = event.target.closest("[data-done-focus-toggle]");
+      if (doneFocusButton) {
+        toggleDoneFocus();
+        return;
+      }
+
+      const archiveButton = event.target.closest("[data-archive-task]");
+      if (archiveButton) {
+        archiveTask(archiveButton.dataset.archiveTask);
+        return;
+      }
+
+      const unclaimButton = event.target.closest("[data-unclaim-task]");
+      if (unclaimButton) {
+        unclaimTask(unclaimButton.dataset.unclaimTask);
+        return;
+      }
+
+      const taskButton = event.target.closest("[data-task-toggle]");
+      if (taskButton) {
+        const key = taskButton.dataset.taskToggle;
+        if (collapsedTasks.has(key)) {
+          collapsedTasks.delete(key);
+        } else {
+          collapsedTasks.add(key);
+        }
+        renderBoard(currentBoard, currentSourceLabel);
+        return;
+      }
+
+      const laneButton = event.target.closest("[data-lane-toggle]");
+      if (!laneButton) return;
+
+      const columnKey = laneButton.dataset.laneToggle;
+      const visualColumn = visualColumns.find((column) => column.key === columnKey);
+      const tasks = visualColumn
+        ? visualColumnTasks(currentBoard, visualColumn)
+        : columnTasks(currentBoard.columns[columnKey], columnKey);
+      const keys = tasks.map(taskKey);
+      const allCollapsed = keys.length > 0 && keys.every((key) => collapsedTasks.has(key));
+
+      keys.forEach((key) => {
+        if (allCollapsed) {
+          collapsedTasks.delete(key);
+        } else {
+          collapsedTasks.add(key);
+        }
+      });
+
+      renderBoard(currentBoard, currentSourceLabel);
+    });
+
+    boardEl.addEventListener("change", (event) => {
+      const modelControl = event.target.closest("[data-dispatch-model]");
+      if (modelControl) {
+        const role = modelControl.dataset.dispatchModel;
+        saveDispatchSettings(role, { model: modelControl.value })
+          .then(() => {
+            statusEl.textContent = `${role === "worker" ? "Worker" : "Review"} model set to ${modelControl.value}.`;
+          })
+          .catch((error) => {
+            statusEl.textContent = `Model update failed: ${error.message}`;
+          });
+        return;
+      }
+
+      const maxControl = event.target.closest("[data-dispatch-max]");
+      if (maxControl) {
+        const role = maxControl.dataset.dispatchMax;
+        const maxAgents = Math.max(0, Math.min(Number.parseInt(maxControl.value, 10) || 0, 8));
+        maxControl.value = String(maxAgents);
+        saveDispatchSettings(role, { maxAgents })
+          .then(() => {
+            statusEl.textContent = `${role === "worker" ? "Worker" : "Review"} max agents set to ${maxAgents}.`;
+          })
+          .catch((error) => {
+            statusEl.textContent = `Max update failed: ${error.message}`;
+          });
+      }
+    });
+
+    boardEl.addEventListener("submit", (event) => {
+      const form = event.target.closest("[data-review-feedback-form]");
+      if (!form) return;
+
+      event.preventDefault();
+      const taskId = form.dataset.reviewFeedbackForm;
+      const input = form.querySelector("[data-review-feedback-input]");
+      const feedback = input?.value?.trim() || "";
+
+      if (!feedback) {
+        statusEl.textContent = "Add feedback before sending the task back to Review.";
+        input?.focus();
+        return;
+      }
+
+      returnTaskToReview(taskId, feedback);
+    });
+
+    workflowEl.addEventListener("click", (event) => {
+      const workflowToggleButton = event.target.closest("[data-workflow-toggle]");
+      if (workflowToggleButton) {
+        toggleWorkflowPanel();
+        return;
+      }
+
+      const workflowCloseButton = event.target.closest("[data-workflow-close]");
+      if (workflowCloseButton) {
+        toggleWorkflowPanel(false);
+        return;
+      }
+
+      const detailCloseButton = event.target.closest("[data-workflow-detail-close]");
+      if (detailCloseButton) {
+        workflowDetailKey = "";
+        renderBoard(currentBoard, currentSourceLabel);
+        return;
+      }
+
+      const detailBackdrop = event.target.closest("[data-workflow-detail-backdrop]");
+      if (detailBackdrop && event.target === detailBackdrop) {
+        workflowDetailKey = "";
+        renderBoard(currentBoard, currentSourceLabel);
+        return;
+      }
+
+      const copyButton = event.target.closest("[data-copy-start-phrase]");
+      if (copyButton) {
+        const phrase = copyButton.dataset.copyStartPhrase || "";
+        copyTextToClipboard(phrase)
+          .then(() => {
+            copyButton.textContent = "Copied";
+            copyButton.classList.add("is-copied");
+            statusEl.textContent = `Copied "${phrase}".`;
+            window.setTimeout(() => {
+              copyButton.textContent = "Copy";
+              copyButton.classList.remove("is-copied");
+            }, 1400);
+          })
+          .catch(() => {
+            statusEl.textContent = `Could not copy "${phrase}".`;
+          });
+        return;
+      }
+
+      const detailButton = event.target.closest("[data-workflow-detail]");
+      if (detailButton) {
+        workflowDetailKey = detailButton.dataset.workflowDetail || "";
+        workflowPanelOpen = true;
+        renderBoard(currentBoard, currentSourceLabel);
+        return;
+      }
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && workflowDetailKey) {
+        workflowDetailKey = "";
+        renderBoard(currentBoard, currentSourceLabel);
+      }
+    });
+
+    archiveEl.addEventListener("click", (event) => {
+      const archiveToggleButton = event.target.closest("[data-archive-toggle]");
+      if (archiveToggleButton) {
+        toggleArchiveTray();
+        return;
+      }
+
+      const archiveCloseButton = event.target.closest("[data-archive-close]");
+      if (archiveCloseButton) {
+        toggleArchiveTray(false);
+        return;
+      }
+
+      const taskButton = event.target.closest("[data-task-toggle]");
+      if (taskButton) {
+        const key = taskButton.dataset.taskToggle;
+        if (collapsedTasks.has(key)) {
+          collapsedTasks.delete(key);
+        } else {
+          collapsedTasks.add(key);
+        }
+        renderBoard(currentBoard, currentSourceLabel);
+        return;
+      }
+
+      const laneButton = event.target.closest("[data-lane-toggle]");
+      if (!laneButton) return;
+
+      const columnKey = laneButton.dataset.laneToggle;
+      const tasks = columnTasks(currentBoard.columns[columnKey], columnKey);
+      const keys = tasks.map(taskKey);
+      const allCollapsed = keys.length > 0 && keys.every((key) => collapsedTasks.has(key));
+
+      keys.forEach((key) => {
+        if (allCollapsed) {
+          collapsedTasks.delete(key);
+        } else {
+          collapsedTasks.add(key);
+        }
+      });
+
+      renderBoard(currentBoard, currentSourceLabel);
+    });
+
+    async function loadDefaultBoard(options = {}) {
+      const silent = Boolean(options.silent);
+      if (!silent) {
+        statusEl.textContent = "Loading board.json...";
+      }
+      try {
+        const [board, agents] = await Promise.all([
+          loadJson("board.json"),
+          loadAgents(),
+          loadAgentSchema(),
+          loadDispatchSettings()
+        ]);
+        renderBoard(board, "board.json", agents);
+        statusEl.textContent = silent
+          ? `Auto refreshed ${new Date().toLocaleTimeString()}.`
+          : "Loaded board.json.";
+      } catch (error) {
+        if (silent) {
+          statusEl.textContent = `Auto refresh failed: ${error.message}`;
+          return;
+        }
+        renderBoard(fallbackBoard, "fallback");
+        statusEl.textContent = "Could not auto-load board.json. Use Load JSON file if the browser blocks local file access.";
+      }
+    }
+
+    function setAutoRefresh(enabled) {
+      if (enabled && !autoRefreshTimer) {
+        autoRefreshButton.textContent = "Auto refresh: On";
+        autoRefreshButton.setAttribute("aria-pressed", "true");
+        autoRefreshTimer = window.setInterval(async () => {
+          if (autoRefreshInFlight) return;
+          autoRefreshInFlight = true;
+          try {
+            await loadDefaultBoard({ silent: true });
+          } finally {
+            autoRefreshInFlight = false;
+          }
+        }, 1000);
+        loadDefaultBoard({ silent: true });
+        return;
+      }
+
+      if (!enabled && autoRefreshTimer) {
+        window.clearInterval(autoRefreshTimer);
+        autoRefreshTimer = null;
+        autoRefreshButton.textContent = "Auto refresh: Off";
+        autoRefreshButton.setAttribute("aria-pressed", "false");
+        statusEl.textContent = "Auto refresh stopped.";
+      }
+    }
+
+    fileInput.addEventListener("change", async (event) => {
+      const [file] = event.target.files;
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const board = JSON.parse(text);
+        renderBoard(board, file.name);
+        statusEl.textContent = `Loaded ${file.name}.`;
+      } catch (error) {
+        statusEl.textContent = `Could not load ${file.name}: ${error.message}`;
+      }
+    });
+
+    reloadButton.addEventListener("click", () => loadDefaultBoard());
+    autoRefreshButton.addEventListener("click", () => setAutoRefresh(!autoRefreshTimer));
+    loadDefaultBoard();
+  </script>
+</body>
+</html>

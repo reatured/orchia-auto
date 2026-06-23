@@ -1,0 +1,39 @@
+{
+  "schemaVersion": "1.0",
+  "boardName": "Project Task Board",
+  "updatedAt": "",
+  "workflowDocs": {
+    "overview": "../workflow/workflow-overview.md",
+    "planner": "../roles/planner.md",
+    "worker": "../roles/worker.md",
+    "reviewer": "../roles/reviewer.md",
+    "apiGuide": "../workflow/api-guide.md"
+  },
+  "readerView": {
+    "path": "viewer.html",
+    "audience": "the project owner",
+    "agentInstruction": "Do not read, parse, or update this HTML file during normal task work. Agents coordinate by updating board.json only."
+  },
+  "transitionApi": {
+    "server": "task-board/server.py",
+    "baseUrl": "http://127.0.0.1:4177",
+    "apiLog": "task-board/task-board-api.log records every GET and POST API request as JSON Lines with timestamp, method, endpoint, task ID, agentName, status, and error details.",
+    "agentInstruction": "When the local task-board backend is running, prefer these endpoints for task creation, edits, status changes, and cleanup so claims and moves are atomic. If the backend is not running, update board.json directly using the same workflow rules.",
+    "agentName": "Every agent must register at chat start with POST /api/register-agent (personalName, model, role) to receive an agentId, then include that agentId in every later API payload.",
+    "titleValidation": "Every task must have a real, nonblank title. Untitled, Untitled task, and blank titles are invalid; the API rejects them and the viewer hides malformed records."
+  },
+  "roleSeparation": {
+    "planner": "Planner is planning-only. It records requirements in board.json, but never switches into Worker or Reviewer behavior in the same chat.",
+    "worker": "Worker execution starts only in a separate Worker chat or when the owner explicitly starts an agent with the Worker role.",
+    "reviewer": "Reviewer review starts only in a separate Reviewer chat or when the owner explicitly starts an agent with the Reviewer role.",
+    "hardRule": "Planner must not review completed work, claim tasks, edit product code, run implementation, or make code changes. Reviewer may update only board.json (plus reference images when recorded on a follow-up task). Reviewer must not plan general work, claim todo tasks, edit code, edit docs, edit the HTML viewer, run implementation, or make code changes."
+  },
+  "columns": {
+    "todo": [],
+    "claimed": [],
+    "review": [],
+    "reviewing": [],
+    "done": [],
+    "archived": []
+  }
+}

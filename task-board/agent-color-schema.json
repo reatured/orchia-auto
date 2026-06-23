@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "description": "Shared color + naming schema for agent chips. Background = model, border = role. Read by server.py and viewer.html. Edit personalNamePool freely.",
+  "modelBackground": {
+    "claude": {
+      "label": "Claude",
+      "background": "#f4a86b",
+      "text": "#3b1f08"
+    },
+    "codex": {
+      "label": "Codex",
+      "background": "#7eb1d6",
+      "text": "#0d2538"
+    },
+    "unknown": {
+      "label": "Unknown model",
+      "background": "#e3ddd2",
+      "text": "#191816"
+    }
+  },
+  "roleBorder": {
+    "planning": {
+      "label": "Planner",
+      "border": "#c98a3d"
+    },
+    "worker": {
+      "label": "Worker",
+      "border": "#3f6f8f"
+    },
+    "review": {
+      "label": "Reviewer",
+      "border": "#6f5aa8"
+    },
+    "unknown": {
+      "label": "Unknown role",
+      "border": "#69645d"
+    }
+  },
+  "personalNamePool": [
+    "ada",
+    "ben",
+    "cleo",
+    "dane",
+    "echo",
+    "finn",
+    "gray",
+    "hana",
+    "iris",
+    "jude"
+  ]
+}

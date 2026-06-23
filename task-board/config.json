@@ -1,0 +1,15 @@
+{
+  "_comment": "Edit these values for your project. The server reads this file at startup. See README.md.",
+  "projectName": "Your Project Name",
+  "boardTitle": "Project Task Board",
+  "owner": "owner",
+  "ownerLabel": "the project owner",
+  "devServerUrl": "http://localhost:3000",
+  "host": "127.0.0.1",
+  "port": 4177,
+  "projectRoot": "..",
+  "spawn": {
+    "claudeCommand": "claude",
+    "codexCommand": "codex"
+  }
+}
