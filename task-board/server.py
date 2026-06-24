@@ -8,6 +8,7 @@ import signal
 import shlex
 import shutil
 import subprocess
+import sys
 import threading
 import time
 import ctypes
@@ -67,6 +68,7 @@ except (TypeError, ValueError):
 _spawn_cfg = CONFIG.get("spawn") if isinstance(CONFIG.get("spawn"), dict) else {}
 CLAUDE_COMMAND = str(_spawn_cfg.get("claudeCommand") or "claude")
 CODEX_COMMAND = str(_spawn_cfg.get("codexCommand") or "codex")
+QWEN_COMMAND = str(_spawn_cfg.get("qwenCommand") or "qwen")
 # projectRoot in config.json is resolved relative to this task-board/ folder.
 PROJECT_ROOT = (ROOT / str(CONFIG.get("projectRoot") or "..")).resolve()
 
@@ -78,10 +80,15 @@ VIEWER_LOG_PATH = ROOT / "task-board-viewer.log"
 SPAWN_LOG_DIR = ROOT / "spawned-agent-logs"
 CODEX_SQLITE_STATE_DIR = ROOT / "codex-sqlite-state"
 DISPATCH_SETTINGS_PATH = ROOT / "agent-dispatch-settings.json"
+PLANNER_CHAT_DIR = ROOT / "planner-chat"
+PLANNER_CHAT_SESSION_PATH = PLANNER_CHAT_DIR / "session.json"
+PLANNER_CHAT_LOG_DIR = PLANNER_CHAT_DIR / "logs"
+PLANNER_CHAT_OUTPUT_LIMIT = 20000
 API_LOG_LOCK = threading.Lock()
 VIEWER_LOG_LOCK = threading.Lock()
 ACTIVE_AGENTS_LOCK = threading.Lock()
 DISPATCH_SETTINGS_LOCK = threading.Lock()
+PLANNER_CHAT_LOCK = threading.Lock()
 ACTIVE_AGENT_STALE_SECONDS = 10 * 60
 AUTO_DISPATCH_INTERVAL_SECONDS = 5
 DISPATCH_PENDING_SECONDS = 120
@@ -103,6 +110,7 @@ GET_ACTIONS = {
     "/api/agent-schema": "get_agent_schema",
     "/api/pause": "get_pause_status",
     "/api/pause-status": "get_pause_status",
+    "/api/planner-chat": "planner_chat_poll",
 }
 VIEWER_GET_ACTIONS = {
     "/viewer/board": "get_board",
@@ -116,6 +124,7 @@ VIEWER_GET_ACTIONS = {
     "/viewer/dispatch-settings": "get_dispatch_settings",
     "/viewer/pause": "get_pause_status",
     "/viewer/pause-status": "get_pause_status",
+    "/viewer/planner-chat": "planner_chat_poll",
 }
 POST_ACTIONS = {
     "/api/add-task": "add_task",
@@ -133,18 +142,22 @@ POST_ACTIONS = {
     "/api/heartbeat-agent": "heartbeat_agent",
     "/api/unregister-agent": "unregister_agent",
     "/api/spawn-agent": "spawn_agent",
+    "/api/terminate-agent": "terminate_agent",
     "/api/agent-health-check": "agent_health_check",
     "/api/hard-stop": "hard_stop_spawned_agents",
     "/api/hard-stop-spawned-agents": "hard_stop_spawned_agents",
     "/api/pause": "pause_plus_one_hour",
     "/api/pause-plus-one-hour": "pause_plus_one_hour",
     "/api/resume-now": "resume_now",
+    "/api/planner-chat-send": "planner_chat_send",
+    "/api/planner-chat-clear": "planner_chat_clear",
 }
 VIEWER_POST_ACTIONS = {
     "/viewer/archive": "archive_task",
     "/viewer/return-to-review": "return_task_to_review",
     "/viewer/unclaim-task": "unclaim_task",
     "/viewer/spawn-agent": "spawn_agent",
+    "/viewer/terminate-agent": "terminate_agent",
     "/viewer/agent-health-check": "agent_health_check",
     "/viewer/dispatch-settings": "update_dispatch_settings",
     "/viewer/hard-stop": "hard_stop_spawned_agents",
@@ -152,9 +165,11 @@ VIEWER_POST_ACTIONS = {
     "/viewer/pause": "pause_plus_one_hour",
     "/viewer/pause-plus-one-hour": "pause_plus_one_hour",
     "/viewer/resume-now": "resume_now",
+    "/viewer/planner-chat-send": "planner_chat_send",
+    "/viewer/planner-chat-clear": "planner_chat_clear",
 }
 SPAWNABLE_AGENT_ROLES = {"worker", "review"}
-SPAWNABLE_TOOLS = {"claude", "codex"}
+SPAWNABLE_TOOLS = {"claude", "codex", "qwen"}
 BOARD_COLUMN_ORDER = ["todo", "claimed", "review", "reviewing", "done", "archived"]
 COMPACT_BOARD_OMITTED_KEYS = [
     "workflowDocs",
@@ -221,6 +236,7 @@ def default_dispatch_settings() -> dict:
         "commands": {
             "claude": CLAUDE_COMMAND,
             "codex": CODEX_COMMAND,
+            "qwen": QWEN_COMMAND,
         },
         "worker": {
             "enabled": False,
@@ -379,6 +395,10 @@ def agent_subprocess_env(tool: str = "") -> dict:
     if tool == "codex" and not str(env.get("CODEX_SQLITE_HOME", "") or "").strip():
         CODEX_SQLITE_STATE_DIR.mkdir(parents=True, exist_ok=True)
         env["CODEX_SQLITE_HOME"] = str(CODEX_SQLITE_STATE_DIR)
+    if tool == "qwen":
+        env["FORCE_COLOR"] = "0"
+        env["NO_COLOR"] = "1"
+        env["QWEN_CODE_DEBUG"] = "1"
     return env
 
 
@@ -418,6 +438,7 @@ def normalize_dispatch_settings(settings: dict | None) -> dict:
     normalized["commands"] = {
         "claude": normalize_spawn_command(source_commands.get("claude"), CLAUDE_COMMAND),
         "codex": normalize_spawn_command(source_commands.get("codex"), CODEX_COMMAND),
+        "qwen": normalize_spawn_command(source_commands.get("qwen"), QWEN_COMMAND),
     }
     for role in ("worker", "review"):
         source = settings.get(role)
@@ -1578,6 +1599,8 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             return "claude"
         if model in {"codex", "openai-codex"}:
             return "codex"
+        if model in {"qwen", "qwen-code"}:
+            return "qwen"
         return model or "unknown"
 
     def start_phrase_for_role(self, role: str) -> str:
@@ -1588,7 +1611,12 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         commands = settings.get("commands")
         if not isinstance(commands, dict):
             commands = {}
-        fallback = CLAUDE_COMMAND if tool == "claude" else CODEX_COMMAND
+        if tool == "claude":
+            fallback = CLAUDE_COMMAND
+        elif tool == "qwen":
+            fallback = QWEN_COMMAND
+        else:
+            fallback = CODEX_COMMAND
         return normalize_spawn_command(commands.get(tool), fallback)
 
     def spawn_command_args(self, tool: str, command_override: object = None) -> list[str]:
@@ -1950,6 +1978,8 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             args.extend(["exec", "--skip-git-repo-check", HEALTH_CHECK_PROMPT])
         else:
             args.extend(["-p", HEALTH_CHECK_PROMPT])
+            if tool == "qwen":
+                args.append("-y")
 
         started = time.monotonic()
         env = agent_subprocess_env(tool)
@@ -1961,10 +1991,11 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 stdin=subprocess.DEVNULL,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
-                text=True,
+                text=False,
                 timeout=HEALTH_CHECK_TIMEOUT_SECONDS,
                 check=False,
             )
+            result.stdout = result.stdout.decode("utf-8", errors="replace") if isinstance(result.stdout, (bytes, bytearray)) else (result.stdout or "")
         except FileNotFoundError as error:
             return {
                 "ok": False,
@@ -1976,7 +2007,13 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 "durationMs": round((time.monotonic() - started) * 1000),
             }
         except subprocess.TimeoutExpired as error:
-            output = error.output if isinstance(error.output, str) else ""
+            raw_output = error.output
+            if isinstance(raw_output, (bytes, bytearray)):
+                output = raw_output.decode("utf-8", errors="replace")
+            elif isinstance(raw_output, str):
+                output = raw_output
+            else:
+                output = ""
             return {
                 "ok": False,
                 "status": "timeout",
@@ -2053,6 +2090,10 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 "codex": normalize_spawn_command(
                     commands_payload.get("codex"),
                     current_commands.get("codex", CODEX_COMMAND),
+                ),
+                "qwen": normalize_spawn_command(
+                    commands_payload.get("qwen"),
+                    current_commands.get("qwen", QWEN_COMMAND),
                 ),
             }
 
@@ -2829,11 +2870,34 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
 
     def unclaim_task(self, board: dict, columns: dict, payload: dict) -> None:
         task_id = self.require_task_id(payload)
-        task = self.pop_task(columns, "claimed", task_id)
-        todo = self.ensure_column(columns, "todo")
         timestamp = now_iso()
         agent_name = self.agent_name(payload, "Task board viewer")
         reason = str(payload.get("reason", "") or "").strip() or "Claim released because the worker agent stopped before finishing."
+
+        reviewing_column = self.ensure_column(columns, "reviewing")
+        in_reviewing = any(
+            isinstance(t, dict) and t.get("id") == task_id for t in reviewing_column
+        )
+
+        if in_reviewing:
+            task = self.pop_task(columns, "reviewing", task_id)
+            review = self.ensure_column(columns, "review")
+            task["status"] = "review"
+            task["reviewClaimedBy"] = ""
+            task["reviewClaimedAt"] = ""
+            task["unclaimedBy"] = payload.get("unclaimedBy") or agent_name
+            task["unclaimedAt"] = timestamp
+            self.append_note(task, f"Unclaimed from reviewing ({timestamp}) by {task['unclaimedBy']}: {reason}")
+            self.record_task_api_action(task, "unclaim-task", agent_name, timestamp)
+            self.record_board_api_action(board, "unclaim-task", agent_name, timestamp, task_id)
+            self.clear_active_agents_for_task(task_id, "review", timestamp, reason)
+            self.update_board_timestamp(board, timestamp)
+            review.insert(0, task)
+            self.persist_board(board)
+            return {"taskIds": [task_id], "destinationColumn": "review"}
+
+        task = self.pop_task(columns, "claimed", task_id)
+        todo = self.ensure_column(columns, "todo")
         task["status"] = "todo"
         task["claimedBy"] = ""
         task["claimedAt"] = ""
@@ -2846,7 +2910,122 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         self.update_board_timestamp(board, timestamp)
         todo.insert(0, task)
         self.persist_board(board)
-        return {"taskIds": [task_id]}
+        return {"taskIds": [task_id], "destinationColumn": "todo"}
+
+    def terminate_agent(self, board: dict, columns: dict, payload: dict) -> dict:
+        agent_id = str(payload.get("agentId") or "").strip()
+        process_id = parse_process_id(payload.get("processId"))
+        task_id = str(payload.get("taskId") or "").strip()
+        actor = self.agent_name(payload, "Task board viewer")
+        reason = str(payload.get("reason") or "").strip() or "Agent terminated by owner via viewer."
+        timestamp = now_iso()
+
+        active_state = self.load_active_agents_state()
+        agents = active_state.get("agents") if isinstance(active_state.get("agents"), list) else []
+
+        matched_agent = None
+        for agent in agents:
+            if not isinstance(agent, dict):
+                continue
+            if agent_id and str(agent.get("agentId") or "").strip() == agent_id:
+                matched_agent = agent
+                break
+            if process_id and str(agent.get("processId") or "").strip() == str(process_id):
+                matched_agent = agent
+                break
+
+        if matched_agent:
+            agent_task_id = str(matched_agent.get("currentTaskId") or "").strip()
+            if not task_id and agent_task_id:
+                task_id = agent_task_id
+            matched_agent["currentTaskId"] = ""
+            matched_agent["status"] = "stale"
+            existing_notes = str(matched_agent.get("notes", "") or "").strip()
+            termination_note = f"Terminated ({timestamp}) by {actor}: {reason}"
+            matched_agent["notes"] = f"{existing_notes}\n{termination_note}".strip() if existing_notes else termination_note
+            matched_agent["lastHeartbeatAt"] = timestamp
+            active_state["updatedAt"] = timestamp
+            self.persist_active_agents_state(active_state)
+
+        unclaimed_task_id = ""
+        if task_id:
+            claimed = columns.get("claimed") if isinstance(columns, dict) else None
+            claimed_tasks = claimed.get("tasks") if isinstance(claimed, dict) else []
+            for i, task in enumerate(claimed_tasks):
+                if not isinstance(task, dict):
+                    continue
+                if str(task.get("taskId") or "").strip() == task_id:
+                    todo = self.ensure_column(columns, "todo")
+                    removed = claimed_tasks.pop(i)
+                    removed["status"] = "todo"
+                    removed["claimedBy"] = ""
+                    removed["claimedAt"] = ""
+                    removed["unclaimedBy"] = actor
+                    removed["unclaimedAt"] = timestamp
+                    self.append_note(removed, f"Unclaimed ({timestamp}) by {actor}: {reason}")
+                    self.record_task_api_action(removed, "unclaim-task", actor, timestamp)
+                    self.record_board_api_action(board, "unclaim-task", actor, timestamp, task_id)
+                    self.update_board_timestamp(board, timestamp)
+                    todo.insert(0, removed)
+                    self.persist_board(board)
+                    unclaimed_task_id = task_id
+                    break
+
+        spawn_terminated = False
+        spawn_process_id = 0
+        settings = load_dispatch_settings()
+        pending = settings.get("pendingSpawns") if isinstance(settings.get("pendingSpawns"), list) else []
+        remaining_pending = []
+        for spawn in pending:
+            if not isinstance(spawn, dict):
+                remaining_pending.append(spawn)
+                continue
+            spawn_pid = parse_process_id(spawn.get("processId"))
+            matched_by_process = process_id and spawn_pid == process_id
+            matched_by_agent = False
+            if agent_id and not matched_by_process:
+                spawn_agent_id = str(spawn.get("agentId") or "").strip()
+                spawn_name = str(spawn.get("personalName") or "").strip()
+                matched_by_agent = spawn_agent_id == agent_id or (
+                    matched_agent and str(matched_agent.get("personalName") or "").strip() == spawn_name
+                    and self.normalize_agent_role(spawn.get("role")) == self.normalize_agent_role(matched_agent.get("role"))
+                )
+            if matched_by_process or matched_by_agent:
+                process_status = spawned_process_status(spawn)
+                if is_live_pending_spawn(spawn, process_status=process_status):
+                    result = terminate_spawned_process(spawn, process_status)
+                    spawn_terminated = bool(result.get("terminated"))
+                    spawn_process_id = parse_process_id(spawn.get("processId"))
+                else:
+                    spawn_terminated = True
+                    spawn_process_id = spawn_pid
+                continue
+            remaining_pending.append(spawn)
+        settings["pendingSpawns"] = remaining_pending
+        settings["updatedAt"] = timestamp
+        persist_dispatch_settings(settings)
+
+        if not spawn_terminated and not matched_agent and not unclaimed_task_id:
+            raise JsonResponseError(
+                "No matching agent or process found to terminate.",
+                status=404,
+            )
+
+        message_parts = []
+        if unclaimed_task_id:
+            message_parts.append(f"Unclaimed {unclaimed_task_id}")
+        if spawn_terminated:
+            message_parts.append(f"terminated PID {spawn_process_id}")
+        elif matched_agent:
+            message_parts.append("marked agent stale")
+        return {
+            "ok": True,
+            "message": "; ".join(message_parts) if message_parts else "Done.",
+            "agentId": agent_id or str(matched_agent.get("agentId") or "") if matched_agent else agent_id,
+            "processId": spawn_process_id or process_id,
+            "unclaimedTaskId": unclaimed_task_id,
+            "terminated": spawn_terminated,
+        }
 
     def move_to_review(self, board: dict, columns: dict, payload: dict) -> None:
         task_id = self.require_task_id(payload)
@@ -3001,6 +3180,8 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         else:
             args = self.spawn_command_args(tool)
             args.extend(["-p", start_phrase])
+            if tool == "qwen":
+                args.extend(["-y", "-o", "stream-json"])
         cli_command = args[0]
         cli_command_text = self.spawn_command_for_tool(tool)
 
@@ -3013,17 +3194,59 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             if hasattr(subprocess, "CREATE_NO_WINDOW"):
                 popen_flags |= subprocess.CREATE_NO_WINDOW
             env = agent_subprocess_env(tool)
-            with log_path.open("a", encoding="utf-8") as log_file:
-                log_file.write(f"Spawned {role} agent ({tool}) at {now_iso()}\n")
-                log_file.write(f"Working directory: {working_dir}\n")
-                log_file.write(f"Backend: {backend_base_url}\n")
-                if resume_run:
-                    log_file.write(f"Resume of process: {resume_run.get('processId', '')}\n")
-                    log_file.write(f"Prior log: {resume_run.get('logPath', '')}\n")
-                if tool == "codex":
-                    log_file.write(f"Codex SQLite state: {env.get('CODEX_SQLITE_HOME', '')}\n")
-                log_file.write(f"Prompt: {start_phrase}\n\n")
-                log_file.flush()
+            log_file = log_path.open("a", encoding="utf-8")
+            log_file.write(f"Spawned {role} agent ({tool}) at {now_iso()}\n")
+            log_file.write(f"Working directory: {working_dir}\n")
+            log_file.write(f"Backend: {backend_base_url}\n")
+            if resume_run:
+                log_file.write(f"Resume of process: {resume_run.get('processId', '')}\n")
+                log_file.write(f"Prior log: {resume_run.get('logPath', '')}\n")
+            if tool == "codex":
+                log_file.write(f"Codex SQLite state: {env.get('CODEX_SQLITE_HOME', '')}\n")
+            log_file.write(f"Prompt: {start_phrase}\n\n")
+            log_file.flush()
+
+            if tool == "qwen":
+                formatter_script = str(Path(__file__).parent / "format_qwen_log.py")
+                process = subprocess.Popen(
+                    args,
+                    cwd=working_dir,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=log_file,
+                    creationflags=popen_flags,
+                    close_fds=True,
+                )
+
+                def _pipe_qwen_through_formatter(proc, log_fh, fmt_script):
+                    try:
+                        fmt_proc = subprocess.Popen(
+                            [sys.executable, "-u", fmt_script],
+                            stdin=proc.stdout,
+                            stdout=log_fh,
+                            stderr=log_fh,
+                        )
+                        fmt_proc.wait()
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            proc.stdout.close()
+                        except Exception:
+                            pass
+                        try:
+                            log_fh.close()
+                        except Exception:
+                            pass
+
+                t = threading.Thread(
+                    target=_pipe_qwen_through_formatter,
+                    args=(process, log_file, formatter_script),
+                    daemon=True,
+                )
+                t.start()
+            else:
                 process = subprocess.Popen(
                     args,
                     cwd=working_dir,
@@ -3034,6 +3257,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                     creationflags=popen_flags,
                     close_fds=True,
                 )
+                log_file.close()
         except FileNotFoundError as error:
             raise RuntimeError(f"Could not launch non-interactive {tool} agent: {error}") from error
         except Exception as error:
@@ -3052,6 +3276,220 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "logPath": str(log_path),
             "workingDirectory": working_dir,
             "resumeOfProcessId": resume_run.get("processId", "") if resume_run else "",
+        }
+
+    # --- Planner chat (interactive human input to the Planner agent) ---
+
+    PLANNER_CHAT_OUTPUT_MARKER = "===PLANNER-OUTPUT==="
+
+    def _new_chat_id(self) -> str:
+        return f"pc_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}"
+
+    def load_planner_chat(self) -> dict:
+        try:
+            data = json.loads(PLANNER_CHAT_SESSION_PATH.read_text(encoding="utf-8-sig"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return {"messages": []}
+        if not isinstance(data, dict):
+            return {"messages": []}
+        if not isinstance(data.get("messages"), list):
+            data["messages"] = []
+        return data
+
+    def save_planner_chat(self, data: dict) -> None:
+        PLANNER_CHAT_DIR.mkdir(parents=True, exist_ok=True)
+        temp_path = PLANNER_CHAT_SESSION_PATH.with_suffix(".json.tmp")
+        temp_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        os.replace(temp_path, PLANNER_CHAT_SESSION_PATH)
+
+    def read_planner_chat_output(self, log_path: str) -> str:
+        if not log_path:
+            return ""
+        try:
+            text = Path(log_path).read_text(encoding="utf-8", errors="replace")
+        except (FileNotFoundError, OSError):
+            return ""
+        marker = self.PLANNER_CHAT_OUTPUT_MARKER
+        if marker in text:
+            text = text.split(marker, 1)[1]
+        text = text.strip()
+        if len(text) > PLANNER_CHAT_OUTPUT_LIMIT:
+            text = "...(truncated)...\n" + text[-PLANNER_CHAT_OUTPUT_LIMIT:]
+        return text
+
+    def refresh_planner_chat(self, data: dict) -> bool:
+        changed = False
+        for message in data.get("messages", []):
+            if not isinstance(message, dict) or message.get("role") != "planner":
+                continue
+            log_path = str(message.get("logPath") or "")
+            output = self.read_planner_chat_output(log_path)
+            if output != message.get("output"):
+                message["output"] = output
+                changed = True
+            if message.get("status") != "running":
+                continue
+            pid = message.get("processId")
+            status = spawned_process_status({
+                "processId": pid,
+                "spawnedAt": message.get("spawnedAt"),
+            })
+            if not status.get("isRunning"):
+                message["status"] = "done"
+                message["finishedAt"] = now_iso()
+                message["processState"] = status.get("state", "")
+                changed = True
+        return changed
+
+    def planner_chat_poll(self, board: dict, payload: dict) -> dict:
+        del board, payload
+        with PLANNER_CHAT_LOCK:
+            data = self.load_planner_chat()
+            if self.refresh_planner_chat(data):
+                self.save_planner_chat(data)
+            return {"messages": data.get("messages", [])}
+
+    def planner_chat_clear(self, board: dict, columns: dict, payload: dict) -> dict:
+        del board, columns, payload
+        with PLANNER_CHAT_LOCK:
+            self.save_planner_chat({"messages": []})
+            return {"messages": []}
+
+    def build_planner_chat_phrase(self, message: str, backend_base_url: str) -> str:
+        return (
+            "load as planner and start; your model is planner-chat; "
+            f"backendBaseUrl is {backend_base_url}; use this full base URL for every task-board API call; "
+            f"call {backend_base_url}/api/register-agent with personalName, model, role to receive your agentId. "
+            "You are receiving a direct request from the owner through the planner chat window. "
+            "Record and decompose it into deduplicated todo tasks per your planner rules; do not implement or review. "
+            "Owner request:\n" + message
+        )
+
+    def planner_chat_send(self, board: dict, columns: dict, payload: dict) -> dict:
+        del board, columns
+        message = str(payload.get("message") or "").strip()
+        if not message:
+            raise ValueError("Planner chat message must not be blank")
+
+        requested_tool = str(payload.get("tool") or payload.get("model") or "claude").strip().lower()
+        tool = requested_tool if requested_tool in SPAWNABLE_TOOLS else "claude"
+
+        backend_base_url = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
+        start_phrase = self.build_planner_chat_phrase(message, backend_base_url)
+
+        command_override = payload.get("command") if "command" in payload else None
+        args = self.spawn_command_args(tool, command_override=command_override)
+        if tool == "codex":
+            args.extend(["exec", "--skip-git-repo-check", start_phrase])
+        else:
+            args.extend(["-p", start_phrase])
+            if tool == "qwen":
+                args.extend(["-y", "-o", "stream-json"])
+
+        message_id = self._new_chat_id()
+        spawned_at = now_iso()
+        working_dir = str(PROJECT_ROOT)
+        try:
+            PLANNER_CHAT_LOG_DIR.mkdir(parents=True, exist_ok=True)
+            log_path = PLANNER_CHAT_LOG_DIR / f"{message_id}-{tool}.log"
+            popen_flags = 0
+            if hasattr(subprocess, "CREATE_NO_WINDOW"):
+                popen_flags |= subprocess.CREATE_NO_WINDOW
+            env = agent_subprocess_env(tool)
+            log_file = log_path.open("a", encoding="utf-8")
+            log_file.write(f"Planner chat ({tool}) at {spawned_at}\n")
+            log_file.write(f"Working directory: {working_dir}\n")
+            log_file.write(f"Backend: {backend_base_url}\n")
+            log_file.write(f"{self.PLANNER_CHAT_OUTPUT_MARKER}\n")
+            log_file.flush()
+
+            if tool == "qwen":
+                process = subprocess.Popen(
+                    args,
+                    cwd=working_dir,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=subprocess.PIPE,
+                    stderr=log_file,
+                    creationflags=popen_flags,
+                    close_fds=True,
+                )
+                formatter_script = str(Path(__file__).parent / "format_qwen_log.py")
+
+                def _pipe_qwen_through_formatter(proc, log_fh, fmt_script):
+                    try:
+                        fmt_proc = subprocess.Popen(
+                            [sys.executable, "-u", fmt_script],
+                            stdin=proc.stdout,
+                            stdout=log_fh,
+                            stderr=log_fh,
+                        )
+                        fmt_proc.wait()
+                    except Exception:
+                        pass
+                    finally:
+                        try:
+                            proc.stdout.close()
+                        except Exception:
+                            pass
+                        try:
+                            log_fh.close()
+                        except Exception:
+                            pass
+
+                threading.Thread(
+                    target=_pipe_qwen_through_formatter,
+                    args=(process, log_file, formatter_script),
+                    daemon=True,
+                ).start()
+            else:
+                process = subprocess.Popen(
+                    args,
+                    cwd=working_dir,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=log_file,
+                    stderr=subprocess.STDOUT,
+                    creationflags=popen_flags,
+                    close_fds=True,
+                )
+                log_file.close()
+        except FileNotFoundError as error:
+            raise RuntimeError(f"Could not launch planner chat ({tool}): {error}") from error
+        except Exception as error:
+            raise RuntimeError(f"Planner chat send failed: {error}") from error
+
+        with PLANNER_CHAT_LOCK:
+            data = self.load_planner_chat()
+            data["messages"].append({
+                "id": self._new_chat_id(),
+                "role": "owner",
+                "text": message,
+                "createdAt": spawned_at,
+            })
+            data["messages"].append({
+                "id": message_id,
+                "role": "planner",
+                "tool": tool,
+                "status": "running",
+                "processId": process.pid,
+                "spawnedAt": spawned_at,
+                "logPath": str(log_path),
+                "output": "",
+                "createdAt": spawned_at,
+                "finishedAt": "",
+            })
+            self.save_planner_chat(data)
+            messages = data.get("messages", [])
+
+        return {
+            "sent": True,
+            "messageId": message_id,
+            "tool": tool,
+            "processId": process.pid,
+            "logPath": str(log_path),
+            "backendBaseUrl": backend_base_url,
+            "messages": messages,
         }
 
     def persist_board(self, board: dict) -> None:

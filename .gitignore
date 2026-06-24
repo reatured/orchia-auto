@@ -5,6 +5,7 @@ task-board/active-agents.json
 task-board/agent-dispatch-settings.json
 task-board/codex-sqlite-state/
 task-board/spawned-agent-logs/
+task-board/planner-chat/
 task-board/task-board-api.log
 task-board/task-board-viewer.log
 

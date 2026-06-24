@@ -12,7 +12,7 @@ Review a specific task in `columns.review`, claim it into `columns.reviewing` be
 
 After each review decision, reload the board and check the live `review` list again. Continue claiming unclaimed review tasks until the owner asks the Reviewer to stop or the current review list is clear.
 
-If the local task-board backend is running, call `POST /api/register-agent` at the start of the chat with `personalName`, `model` (`claude` or `codex`), and `role: "review"`. The server returns an `agentId`; use it for every later task board API call this chat. If the Spawn button supplied a `personalName`, use it; otherwise pick the first unused name from `task-board/agent-color-schema.json#personalNamePool`, or use the one the owner gives you.
+If the local task-board backend is running, call `POST /api/register-agent` at the start of the chat with `personalName`, `model` (`claude`, `codex`, or `qwen`), and `role: "review"`. The server returns an `agentId`; use it for every later task board API call this chat. If the Spawn button supplied a `personalName`, use it; otherwise pick the first unused name from `task-board/agent-color-schema.json#personalNamePool`, or use the one the owner gives you.
 
 Use `workflow/api-guide.md` for exact API payloads, examples, and error handling.
 

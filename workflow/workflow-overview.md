@@ -65,6 +65,14 @@ flowchart LR
 
 The Web Front-End Auditor is read-only with respect to the task board. It writes a Markdown handoff for Planner, and Planner decides which findings become deduplicated `todo` tasks.
 
+### Human-input agents and the Planner chat
+
+Nodes in the viewer's Agent Workflow Map carry an `acceptsHumanInput` flag. Only the **Planner** is flagged today; Worker and Reviewer are not, because the owner directs work through planning rather than into in-flight implementation or review. A human-input node shows a "Human input" badge and, when clicked, opens a docked **chat window** beside the workflow graph instead of the read-only detail modal.
+
+The chat lets the owner give the Planner a request directly, like a CLI prompt. Each message spawns a one-shot Planner process (`claude` / `codex` / `qwen`, selectable in the chat header) started with `load as planner and start` plus the owner's text and the backend base URL. The Planner records and decomposes the request into deduplicated `todo` tasks per the normal planner rules — it does not implement or review. Output streams back into the chat panel as the process runs.
+
+Backend endpoints (viewer and API): `POST /viewer/planner-chat-send` (launch a Planner with the owner message), `GET /viewer/planner-chat` (poll the session, refresh process status, stream log output), and `POST /viewer/planner-chat-clear` (reset the conversation). Session state and per-message logs live under `task-board/planner-chat/` (runtime-only, gitignored).
+
 ## Roles
 
 Use one of these role files when starting a new agent:

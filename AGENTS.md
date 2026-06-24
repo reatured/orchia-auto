@@ -1,6 +1,6 @@
 # Agent Instructions
 
-This project uses a simple JSON-backed task board with three separate board roles: **Planner**, **Worker**, and **Reviewer**. It also supports an upstream **Web Front-End Auditor** that visually inspects the running UI and writes handoff files for Planner. The Planner turns requirements and handoffs into tasks, Workers implement tasks, and Reviewers review completed work. The workflow is compatible with both the Claude and Codex CLIs.
+This project uses a simple JSON-backed task board with three separate board roles: **Planner**, **Worker**, and **Reviewer**. It also supports an upstream **Web Front-End Auditor** that visually inspects the running UI and writes handoff files for Planner. The Planner turns requirements and handoffs into tasks, Workers implement tasks, and Reviewers review completed work. The workflow is compatible with the Claude, Codex, and Qwen CLIs.
 
 > **New to this repo?** This is a reusable starter. Edit `task-board/config.json` and the role files for your project — see `README.md` ("Adapt to your project").
 
@@ -48,6 +48,23 @@ python task-board\server.py
 
 It serves the board API and the read-only viewer at the host/port from `task-board/config.json` (default `http://127.0.0.1:4177/viewer.html`).
 
+If you lose the terminal that started the backend, stop it by port:
+
+```bash
+# macOS / Linux / Git Bash
+PORT=4177
+for pid in $(lsof -tiTCP:$PORT -sTCP:LISTEN); do kill "$pid"; done
+```
+```powershell
+# Windows PowerShell
+$port = 4177
+Get-NetTCPConnection -LocalPort $port -State Listen |
+  Select-Object -ExpandProperty OwningProcess -Unique |
+  ForEach-Object { Stop-Process -Id $_ }
+```
+
+Replace `4177` if `task-board/config.json` uses a different port.
+
 When the backend is running, use its API instead of manually editing or moving tasks in JSON:
 
 - `GET /api/board`, `GET /api/worker-board`, `GET /api/review-board`
@@ -60,7 +77,7 @@ When the backend is running, use its API instead of manually editing or moving t
 
 For payload shapes, examples (curl + PowerShell), and error handling, read `workflow/api-guide.md`.
 
-Every agent that talks to the API registers at chat start with `POST /api/register-agent` (`personalName`, `model` = `claude` or `codex`, `role`), receives an `agentId`, and includes that `agentId` in every later payload. Workers and Reviewers also heartbeat after claiming/moving a task and unregister before ending the chat.
+Every agent that talks to the API registers at chat start with `POST /api/register-agent` (`personalName`, `model` = `claude`, `codex`, or `qwen`, `role`), receives an `agentId`, and includes that `agentId` in every later payload. Workers and Reviewers also heartbeat after claiming/moving a task and unregister before ending the chat.
 
 `GET /api/agents` returns active registered agents plus pending spawned Worker/Reviewer processes. Pending spawned entries include `processId`, PID-backed `processStatus`, and a latest log preview from `task-board/spawned-agent-logs/`. The viewer uses that data for the compact top lane agent tabs; agents should still coordinate only through board/API endpoints, not by reading the viewer.
 

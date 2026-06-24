@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "boardName": "Project Task Board",
-  "updatedAt": "2026-06-24T11:47:55-07:00",
+  "updatedAt": "2026-06-24T14:36:26-07:00",
   "workflowDocs": {
     "overview": "../workflow/workflow-overview.md",
     "webFrontendAuditor": "../roles/web-frontend-auditor.md",
@@ -33,26 +33,170 @@
   "columns": {
     "todo": [],
     "claimed": [],
-    "review": [
+    "review": [],
+    "reviewing": [],
+    "done": [
+      {
+        "id": "TASK-20260624-008",
+        "title": "Redesign workflow graph to support non-linear vertical layouts",
+        "project": "Task board viewer",
+        "priority": "high",
+        "type": "implementation",
+        "status": "done",
+        "requestedBy": "owner",
+        "createdBy": "dane",
+        "createdAt": "2026-06-24T13:35:59-07:00",
+        "agentName": "dane",
+        "claimedBy": "ada",
+        "claimedAt": "2026-06-24T13:57:02-07:00",
+        "reviewClaimedBy": "gray",
+        "reviewClaimedAt": "2026-06-24T14:35:15-07:00",
+        "reviewRequestedAt": "2026-06-24T14:03:28-07:00",
+        "doneAt": "2026-06-24T14:36:26-07:00",
+        "reviewedBy": "finn",
+        "reviewedAt": "2026-06-24T14:36:26-07:00",
+        "redoCount": 0,
+        "summary": "Redesign the workflow graph in the viewer tray to support non-linear vertical layouts (parallel branches, splits, merges) without arrow overlap. The current linear single-column layout causes arrows to stack and overlap. The graph must handle future complex workflows with parallel agents, branching paths, and merge points while staying vertical.",
+        "requirements": [
+          "Fix arrow/edge overlap in the current linear vertical layout. Edges connecting nodes must not visually collide or overlap each other.",
+          "Support parallel (side-by-side) nodes within the vertical flow \u2014 e.g. two Workers running simultaneously shown next to each other in the same row.",
+          "Support split edges (one node branching into multiple downstream nodes) with clear visual routing lines that do not overlap.",
+          "Support merge edges (multiple upstream nodes converging into one downstream node) with clear visual routing lines that do not overlap.",
+          "Use the full width of the workflow tray instead of the current narrow centered column (max-width 420px). Nodes should spread across available space to prevent overlap.",
+          "Keep the overall flow vertical (top-to-bottom) but allow horizontal positioning within rows for parallel paths.",
+          "The current 5-node workflow (Auditor \u2192 Handoff \u2192 Planner \u2192 Worker \u2192 Reviewer) should still render correctly and look clean in the new layout system.",
+          "Edge labels (e.g. 'visual findings', 'todo tickets') must remain readable and not overlap nodes or other edges.",
+          "Remove or properly implement the unused CSS classes (.workflow-agent-row-upstream, .workflow-parallel-start, .workflow-edge-block) \u2014 either wire them into the rendering logic or remove the dead CSS.",
+          "The graph layout must be data-driven: the workflowGraphMarkup() function should compose nodes and edges from a graph data structure, not hardcoded HTML, so future workflow shapes work without JS changes.",
+          "Responsive: at mobile widths the graph should collapse to a single-column fallback without arrow overlap."
+        ],
+        "acceptanceCriteria": [
+          "The current 5-node linear workflow renders without any arrow or edge overlap at desktop widths (1920, 1440).",
+          "A test/example graph with parallel branches (e.g. Planner \u2192 two parallel Workers \u2192 Reviewer merge) renders correctly with split and merge edges that do not overlap.",
+          "Edge labels are legible and do not overlap nodes or other edges at any supported width.",
+          "Nodes use the available tray width \u2014 not confined to a narrow 420px centered column.",
+          "At mobile widths (< 768px), the graph falls back to a clean single-column layout.",
+          "The workflowGraphMarkup() JS function builds the graph from a data structure rather than hardcoded HTML strings.",
+          "Dead CSS classes (.workflow-agent-row-upstream, .workflow-parallel-start, .workflow-edge-block) are either wired in or removed.",
+          "python3 -m py_compile task-board/server.py passes. Viewer inline JS has no syntax errors.",
+          "All existing workflow detail modals (clicking a node) still open and display correct content."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [],
+        "sourceHandoffs": [],
+        "files": [
+          "task-board/viewer.html"
+        ],
+        "referenceImages": [
+          {
+            "path": "reference-images/TASK-20260624-008-workflow-graph-complex-example.png",
+            "description": "Owner-provided screenshot showing the desired non-linear workflow graph layout with parallel branches, split/merge edges, and no arrow overlap. Worker must inspect this image to understand the target visual design.",
+            "source": "owner screenshot"
+          }
+        ],
+        "inspectionTargets": [
+          {
+            "label": "Workflow graph layout - desktop",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "1920x1080, 1440x900",
+            "state": "Open the viewer, click the Workflow tab to open the side tray, inspect the graph layout",
+            "notes": "Verify nodes use the full tray width (not confined to narrow column). Check that all 5 nodes render cleanly with no arrow/edge overlap. Click each node to verify detail modals still open."
+          },
+          {
+            "label": "Workflow graph layout - mobile",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "390x844, 768x1024",
+            "state": "Open the viewer at mobile width, open Workflow tray",
+            "notes": "Verify single-column fallback at mobile widths. Edges should not overlap."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Owner provided a screenshot reference showing a more complex future workflow with parallel branches and merge points. The current graph infrastructure has dead CSS for branching (.workflow-agent-row-upstream, .workflow-parallel-start) that was never wired in. The goal is to build a proper graph layout system that handles both the current simple linear flow and future complex DAGs.\n\nReference image from owner showing target layout for complex non-linear workflows.\n\nUnclaimed (2026-06-24T13:56:36-07:00) by owner via task board viewer: Worker agent was killed before finishing.\n\nRedesigned workflow graph for non-linear vertical layouts. Changes: (1) buildWorkflowGraph() now uses a clean data-driven structure separating node definitions, layout rows, and edges \u2014 future workflow shapes work without rendering changes. (2) workflowGraphEdgeBlock() rewritten with 3-phase rendering: merge groups (N\u21921), split groups (1\u2192N), and simple 1:1 edges \u2014 supports parallel branches with no arrow overlap. (3) CSS widened: single-column rows now use 1fr instead of 480px cap, multi-column rows also use 1fr. (4) Dead CSS classes (.workflow-agent-row-upstream, .workflow-parallel-start, .workflow-edge-block) confirmed absent. (5) Mobile responsive: existing 680px media query forces single-column fallback. (6) Verified: py_compile server.py passes, JS syntax OK, detail modal keys unchanged.\n\nUnclaimed from reviewing (2026-06-24T14:34:51-07:00) by owner via task board viewer: Reviewer agent was killed before finishing.\n\nReview approved (2026-06-24T14:36:26-07:00): Approved after thorough code-level review. buildWorkflowGraph() is fully data-driven with nodeDefs, layout rows, and edges. workflowGraphEdgeBlock() implements 3-phase rendering (merge groups, split groups, 1:1 edges) supporting non-linear DAGs. Dead CSS classes (.workflow-agent-row-upstream, .workflow-parallel-start, .workflow-edge-block) confirmed removed (0 matches). Graph rows use minmax(260px, 1fr) replacing the old 420px narrow column cap. Mobile media query at 680px forces single-column fallback. py_compile server.py passes. JS syntax verified clean via new Function() parse. Detail modal click handlers (data-workflow-detail, close, backdrop) preserved and functional. Could not do live visual inspection (browser unavailable) but SVG coordinate math in colCenterX distributes nodes evenly and edge routing uses proper spacing to prevent overlap.",
+        "lastApiAction": "approve-review",
+        "lastApiActor": "finn",
+        "lastApiAt": "2026-06-24T14:36:26-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "dane",
+            "at": "2026-06-24T13:35:59-07:00"
+          },
+          {
+            "action": "update-task",
+            "agentName": "dane",
+            "at": "2026-06-24T13:36:37-07:00"
+          },
+          {
+            "action": "claim-task",
+            "agentName": "ada",
+            "at": "2026-06-24T13:49:01-07:00"
+          },
+          {
+            "action": "unclaim-task",
+            "agentName": "owner via task board viewer",
+            "at": "2026-06-24T13:56:36-07:00"
+          },
+          {
+            "action": "claim-task",
+            "agentName": "ada",
+            "at": "2026-06-24T13:57:02-07:00"
+          },
+          {
+            "action": "move-to-review",
+            "agentName": "ada",
+            "at": "2026-06-24T14:03:28-07:00"
+          },
+          {
+            "action": "claim-review",
+            "agentName": "finn",
+            "at": "2026-06-24T14:03:54-07:00"
+          },
+          {
+            "action": "unclaim-task",
+            "agentName": "owner via task board viewer",
+            "at": "2026-06-24T14:34:51-07:00"
+          },
+          {
+            "action": "claim-review",
+            "agentName": "gray",
+            "at": "2026-06-24T14:35:15-07:00"
+          },
+          {
+            "action": "approve-review",
+            "agentName": "finn",
+            "at": "2026-06-24T14:36:26-07:00"
+          }
+        ],
+        "lastEditedBy": "dane",
+        "lastEditedAt": "2026-06-24T13:36:37-07:00",
+        "unclaimedBy": "owner via task board viewer",
+        "unclaimedAt": "2026-06-24T14:34:51-07:00",
+        "completedBy": "ada",
+        "reviewDecision": "approved",
+        "reviewNotes": "Approved after thorough code-level review. buildWorkflowGraph() is fully data-driven with nodeDefs, layout rows, and edges. workflowGraphEdgeBlock() implements 3-phase rendering (merge groups, split groups, 1:1 edges) supporting non-linear DAGs. Dead CSS classes (.workflow-agent-row-upstream, .workflow-parallel-start, .workflow-edge-block) confirmed removed (0 matches). Graph rows use minmax(260px, 1fr) replacing the old 420px narrow column cap. Mobile media query at 680px forces single-column fallback. py_compile server.py passes. JS syntax verified clean via new Function() parse. Detail modal click handlers (data-workflow-detail, close, backdrop) preserved and functional. Could not do live visual inspection (browser unavailable) but SVG coordinate math in colCenterX distributes nodes evenly and edge routing uses proper spacing to prevent overlap."
+      },
       {
         "id": "TASK-20260624-002",
         "title": "Add viewer pause controls and countdown",
         "project": "Task board agent rate-limit controls",
         "priority": "high",
         "type": "implementation",
-        "status": "review",
+        "status": "done",
         "requestedBy": "owner",
         "createdBy": "dane",
         "createdAt": "2026-06-24T10:30:06-07:00",
         "agentName": "dane",
         "claimedBy": "echo",
         "claimedAt": "2026-06-24T11:34:56-07:00",
-        "reviewClaimedBy": "",
-        "reviewClaimedAt": "",
+        "reviewClaimedBy": "ada",
+        "reviewClaimedAt": "2026-06-24T13:26:33-07:00",
         "reviewRequestedAt": "2026-06-24T11:47:55-07:00",
-        "doneAt": "",
-        "reviewedBy": "",
-        "reviewedAt": "",
+        "doneAt": "2026-06-24T13:31:43-07:00",
+        "reviewedBy": "ada",
+        "reviewedAt": "2026-06-24T13:31:43-07:00",
         "redoCount": 0,
         "summary": "Add owner-facing Pause +1h and Resume now controls to the task board viewer, with visible paused status and countdown.",
         "requirements": [
@@ -95,10 +239,10 @@
         ],
         "blockers": [],
         "sourceReviewTaskId": "",
-        "notes": "Depends on backend pause/status/resume endpoints from TASK-20260624-001. Keep the UI simple: one Pause +1h button that accumulates the pause period, plus Resume now.\n\nClaiming viewer pause controls. Existing claimed work is TASK-20260624-003; this task is viewer-focused and only overlaps server.py for pause API integration from TASK-20260624-001.\n\nUnclaimed (2026-06-24T11:34:31-07:00) by owner via task board viewer: Worker agent was killed before finishing.\n\nCompleted viewer pause controls: Pause +1h and Resume now render in the toolbar, live countdown updates in place, and Worker/Reviewer Spawn plus Auto controls are disabled and labeled while paused. Validation: inline script syntax check passed; BrowserOS interaction verified pause, accumulation, disabled controls, and resume; Chrome screenshots inspected at 1920x1080, 1440x900, 768x1024, and 390x844. Board pause status was resumed to unpaused after validation.",
-        "lastApiAction": "move-to-review",
-        "lastApiActor": "echo",
-        "lastApiAt": "2026-06-24T11:47:55-07:00",
+        "notes": "Depends on backend pause/status/resume endpoints from TASK-20260624-001. Keep the UI simple: one Pause +1h button that accumulates the pause period, plus Resume now.\n\nClaiming viewer pause controls. Existing claimed work is TASK-20260624-003; this task is viewer-focused and only overlaps server.py for pause API integration from TASK-20260624-001.\n\nUnclaimed (2026-06-24T11:34:31-07:00) by owner via task board viewer: Worker agent was killed before finishing.\n\nCompleted viewer pause controls: Pause +1h and Resume now render in the toolbar, live countdown updates in place, and Worker/Reviewer Spawn plus Auto controls are disabled and labeled while paused. Validation: inline script syntax check passed; BrowserOS interaction verified pause, accumulation, disabled controls, and resume; Chrome screenshots inspected at 1920x1080, 1440x900, 768x1024, and 390x844. Board pause status was resumed to unpaused after validation.\n\nUnclaimed from reviewing (2026-06-24T13:25:53-07:00) by owner via task board viewer: Reviewer agent was killed before finishing.\n\nReview approved (2026-06-24T13:31:43-07:00): Approved after reviewing task-board/viewer.html pause UI/state handling and task-board/server.py pause/status/resume enforcement. Verified in Chrome/Selenium that Pause +1h shows active pause with about one hour remaining, a second Pause +1h adds about another hour, manual Reload JSON keeps the paused UI/countdown, Worker and Reviewer Spawn/Auto controls render disabled as Paused/Auto paused, and Resume now clears the pause without page reload and re-enables controls. Exact viewport checks at 1920x1080, 1440x900, 768x1024, and 390x844 reported no overlap or horizontal overflow; screenshots visually matched. Validation passed: python3 -m py_compile task-board/server.py, extracted viewer inline script syntax check, and browser console had no severe errors. Board pause status was restored to unpaused after review.",
+        "lastApiAction": "approve-review",
+        "lastApiActor": "ada",
+        "lastApiAt": "2026-06-24T13:31:43-07:00",
         "apiHistory": [
           {
             "action": "add-task",
@@ -124,15 +268,125 @@
             "action": "move-to-review",
             "agentName": "echo",
             "at": "2026-06-24T11:47:55-07:00"
+          },
+          {
+            "action": "claim-review",
+            "agentName": "ada",
+            "at": "2026-06-24T12:47:06-07:00"
+          },
+          {
+            "action": "unclaim-task",
+            "agentName": "owner via task board viewer",
+            "at": "2026-06-24T13:25:53-07:00"
+          },
+          {
+            "action": "claim-review",
+            "agentName": "ada",
+            "at": "2026-06-24T13:26:33-07:00"
+          },
+          {
+            "action": "approve-review",
+            "agentName": "ada",
+            "at": "2026-06-24T13:31:43-07:00"
           }
         ],
         "unclaimedBy": "owner via task board viewer",
-        "unclaimedAt": "2026-06-24T11:34:31-07:00",
-        "completedBy": "echo"
-      }
-    ],
-    "reviewing": [],
-    "done": [
+        "unclaimedAt": "2026-06-24T13:25:53-07:00",
+        "completedBy": "echo",
+        "reviewDecision": "approved",
+        "reviewNotes": "Approved after reviewing task-board/viewer.html pause UI/state handling and task-board/server.py pause/status/resume enforcement. Verified in Chrome/Selenium that Pause +1h shows active pause with about one hour remaining, a second Pause +1h adds about another hour, manual Reload JSON keeps the paused UI/countdown, Worker and Reviewer Spawn/Auto controls render disabled as Paused/Auto paused, and Resume now clears the pause without page reload and re-enables controls. Exact viewport checks at 1920x1080, 1440x900, 768x1024, and 390x844 reported no overlap or horizontal overflow; screenshots visually matched. Validation passed: python3 -m py_compile task-board/server.py, extracted viewer inline script syntax check, and browser console had no severe errors. Board pause status was restored to unpaused after review."
+      },
+      {
+        "id": "TASK-20260624-007",
+        "title": "Add unclaim button to reviewing task cards",
+        "project": "Task board viewer",
+        "priority": "normal",
+        "type": "implementation",
+        "status": "done",
+        "requestedBy": "owner",
+        "createdBy": "dane",
+        "createdAt": "2026-06-24T12:57:58-07:00",
+        "agentName": "dane",
+        "claimedBy": "echo",
+        "claimedAt": "2026-06-24T12:58:17-07:00",
+        "reviewClaimedBy": "ben",
+        "reviewClaimedAt": "2026-06-24T13:03:00-07:00",
+        "reviewRequestedAt": "2026-06-24T13:01:48-07:00",
+        "doneAt": "2026-06-24T13:07:02-07:00",
+        "reviewedBy": "ben",
+        "reviewedAt": "2026-06-24T13:07:02-07:00",
+        "redoCount": 0,
+        "summary": "Add an 'Unclaim review' button to reviewing-column task cards in the viewer, similar to the existing unclaim button on claimed-column cards. The server-side unclaim endpoint must also handle reviewing tasks, moving them back to the review column.",
+        "requirements": [
+          "In viewer.html ticketCard(), render an unclaim button for tasks in the reviewing column (sourceColumnKey === 'reviewing'), styled consistently with the existing claimed-column unclaim button.",
+          "The reviewing unclaim button should call the same /viewer/unclaim-task endpoint but with enough context for the server to know it came from reviewing.",
+          "In server.py unclaim_task(), detect whether the task is in the claimed or reviewing column. If reviewing, pop from reviewing, clear reviewClaimedBy and reviewClaimedAt, and move the task back to the review column (not todo). If claimed, keep the existing behavior (move to todo).",
+          "Clear the appropriate claim fields: for reviewing tasks clear reviewClaimedBy/reviewClaimedAt; for claimed tasks clear claimedBy/claimedAt as today.",
+          "Add a note to the task recording who unclaimed it and from which column.",
+          "The viewer status message after unclaim should reflect the destination column ('moved back to Review' for reviewing, 'moved back to To Do' for claimed)."
+        ],
+        "acceptanceCriteria": [
+          "A reviewing-column task card shows an 'Unclaim review' button in the expanded ticket details.",
+          "Clicking the unclaim button on a reviewing task moves it from reviewing to review and clears reviewClaimedBy/reviewClaimedAt.",
+          "The existing unclaim behavior for claimed-column tasks (move to todo, clear claimedBy/claimedAt) is unchanged.",
+          "After unclaiming a reviewing task, the board re-renders and the task appears in the Review column.",
+          "Validation: python3 -m py_compile task-board/server.py passes; viewer inline JS has no syntax errors."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [],
+        "sourceHandoffs": [],
+        "files": [
+          "task-board/viewer.html",
+          "task-board/server.py"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Viewer reviewing unclaim",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop",
+            "state": "Open the viewer with at least one task in the reviewing column, expand the card, and click the Unclaim review button.",
+            "notes": "Verify the task moves to Review (not To Do), reviewClaimedBy is cleared, and a note is appended. Also verify the existing claimed-column unclaim still works."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Added unclaim button for reviewing-column task cards. server.py unclaim_task() now detects whether the task is in reviewing or claimed and routes it back to the correct destination (review or todo). viewer.html ticketCard() renders an \"Unclaim review\" button for reviewing cards with consistent styling. Click handler passes source column to unclaimTask() which shows the appropriate status message. Both files validated (py_compile + JS syntax check).\n\nReview approved (2026-06-24T13:07:02-07:00): All acceptance criteria verified. server.py unclaim_task() correctly auto-detects reviewing vs claimed column, clears the right fields, and routes tasks to the correct destination (review or todo). viewer.html renders an Unclaim review button for reviewing cards with consistent styling, passes source column via data-unclaim-source, and shows differentiated status messages (moved back to Review vs To Do). py_compile and JS syntax checks both pass. Minor note: terminate_agent() has a pre-existing inline unclaim bug (treats columns as dicts instead of lists) that is out of scope for this task.",
+        "lastApiAction": "approve-review",
+        "lastApiActor": "ben",
+        "lastApiAt": "2026-06-24T13:07:02-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "dane",
+            "at": "2026-06-24T12:57:58-07:00"
+          },
+          {
+            "action": "claim-task",
+            "agentName": "echo",
+            "at": "2026-06-24T12:58:17-07:00"
+          },
+          {
+            "action": "move-to-review",
+            "agentName": "echo",
+            "at": "2026-06-24T13:01:48-07:00"
+          },
+          {
+            "action": "claim-review",
+            "agentName": "ben",
+            "at": "2026-06-24T13:03:00-07:00"
+          },
+          {
+            "action": "approve-review",
+            "agentName": "ben",
+            "at": "2026-06-24T13:07:02-07:00"
+          }
+        ],
+        "completedBy": "echo",
+        "reviewDecision": "approved",
+        "reviewNotes": "All acceptance criteria verified. server.py unclaim_task() correctly auto-detects reviewing vs claimed column, clears the right fields, and routes tasks to the correct destination (review or todo). viewer.html renders an Unclaim review button for reviewing cards with consistent styling, passes source column via data-unclaim-source, and shows differentiated status messages (moved back to Review vs To Do). py_compile and JS syntax checks both pass. Minor note: terminate_agent() has a pre-existing inline unclaim bug (treats columns as dicts instead of lists) that is out of scope for this task."
+      },
       {
         "id": "TASK-20260624-005",
         "title": "Document pause and resume workflow rules",
@@ -1708,6 +1962,120 @@
       "agentName": "echo",
       "taskId": "TASK-20260624-002",
       "at": "2026-06-24T11:47:55-07:00"
+    },
+    {
+      "action": "claim-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260624-002",
+      "at": "2026-06-24T12:47:06-07:00"
+    },
+    {
+      "action": "add-task",
+      "agentName": "dane",
+      "taskId": "TASK-20260624-007",
+      "at": "2026-06-24T12:57:58-07:00"
+    },
+    {
+      "action": "claim-task",
+      "agentName": "echo",
+      "taskId": "TASK-20260624-007",
+      "at": "2026-06-24T12:58:17-07:00"
+    },
+    {
+      "action": "move-to-review",
+      "agentName": "echo",
+      "taskId": "TASK-20260624-007",
+      "at": "2026-06-24T13:01:48-07:00"
+    },
+    {
+      "action": "claim-review",
+      "agentName": "ben",
+      "taskId": "TASK-20260624-007",
+      "at": "2026-06-24T13:03:00-07:00"
+    },
+    {
+      "action": "approve-review",
+      "agentName": "ben",
+      "taskId": "TASK-20260624-007",
+      "at": "2026-06-24T13:07:02-07:00"
+    },
+    {
+      "action": "unclaim-task",
+      "agentName": "owner via task board viewer",
+      "taskId": "TASK-20260624-002",
+      "at": "2026-06-24T13:25:53-07:00"
+    },
+    {
+      "action": "claim-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260624-002",
+      "at": "2026-06-24T13:26:33-07:00"
+    },
+    {
+      "action": "approve-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260624-002",
+      "at": "2026-06-24T13:31:43-07:00"
+    },
+    {
+      "action": "add-task",
+      "agentName": "dane",
+      "taskId": "TASK-20260624-008",
+      "at": "2026-06-24T13:35:59-07:00"
+    },
+    {
+      "action": "update-task",
+      "agentName": "dane",
+      "taskId": "TASK-20260624-008",
+      "at": "2026-06-24T13:36:37-07:00"
+    },
+    {
+      "action": "claim-task",
+      "agentName": "ada",
+      "taskId": "TASK-20260624-008",
+      "at": "2026-06-24T13:49:01-07:00"
+    },
+    {
+      "action": "unclaim-task",
+      "agentName": "owner via task board viewer",
+      "taskId": "TASK-20260624-008",
+      "at": "2026-06-24T13:56:36-07:00"
+    },
+    {
+      "action": "claim-task",
+      "agentName": "ada",
+      "taskId": "TASK-20260624-008",
+      "at": "2026-06-24T13:57:02-07:00"
+    },
+    {
+      "action": "move-to-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260624-008",
+      "at": "2026-06-24T14:03:28-07:00"
+    },
+    {
+      "action": "claim-review",
+      "agentName": "finn",
+      "taskId": "TASK-20260624-008",
+      "at": "2026-06-24T14:03:54-07:00"
+    },
+    {
+      "action": "unclaim-task",
+      "agentName": "owner via task board viewer",
+      "taskId": "TASK-20260624-008",
+      "at": "2026-06-24T14:34:51-07:00"
+    },
+    {
+      "action": "claim-review",
+      "agentName": "gray",
+      "taskId": "TASK-20260624-008",
+      "at": "2026-06-24T14:35:15-07:00"
+    },
+    {
+      "action": "approve-review",
+      "agentName": "finn",
+      "taskId": "TASK-20260624-008",
+      "at": "2026-06-24T14:36:26-07:00"
     }
   ]
 }

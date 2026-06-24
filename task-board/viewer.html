@@ -682,152 +682,280 @@
       overflow-wrap: anywhere;
     }
 
-    .workflow-parallel-start {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 10px;
-      align-items: stretch;
+    .workflow-state.has-human-input {
+      border-left-width: 5px;
+      box-shadow: 0 1px 0 rgba(25, 24, 22, 0.04), inset 0 0 0 1px rgba(71, 111, 143, 0.18);
     }
 
-    .workflow-parallel-start + .workflow-state-link {
-      height: 32px;
-    }
-
-    .workflow-agent-flow {
-      display: grid;
-      gap: 0;
-      max-width: 760px;
-      margin: 0 auto;
-    }
-
-    .workflow-agent-row {
-      display: grid;
-      grid-template-columns: minmax(240px, 420px);
-      justify-content: center;
-      gap: 10px;
-      min-width: 0;
-    }
-
-    .workflow-agent-row-upstream {
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .workflow-agent-edge {
-      display: grid;
-      justify-items: center;
-      min-height: 44px;
-      color: var(--muted);
-      font-size: 11px;
-      font-weight: 760;
-      text-align: center;
-      text-transform: uppercase;
-      position: relative;
-    }
-
-    .workflow-agent-edge::before {
-      content: "";
-      width: 2px;
-      height: 100%;
-      background: var(--line);
-      display: block;
-    }
-
-    .workflow-agent-edge::after {
-      content: "";
-      position: absolute;
-      left: 50%;
-      bottom: 6px;
-      width: 8px;
-      height: 8px;
-      border-right: 2px solid var(--line);
-      border-bottom: 2px solid var(--line);
-      transform: translateX(-50%) rotate(45deg);
-      background: var(--page);
-    }
-
-    .workflow-agent-edge span {
-      position: absolute;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      max-width: min(260px, calc(100vw - 96px));
-      border: 1px solid var(--line);
+    .workflow-human-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      align-self: start;
+      margin-top: 2px;
+      padding: 2px 8px;
       border-radius: 999px;
-      background: #fbfaf7;
-      padding: 3px 9px;
-      line-height: 1.25;
+      background: rgba(71, 111, 143, 0.14);
+      color: var(--node-color, #476f8f);
+      font-size: 10.5px;
+      font-weight: 760;
+      letter-spacing: 0.01em;
+      text-transform: uppercase;
     }
 
-    .workflow-agent-edge-merge {
-      min-height: 64px;
-    }
-
-    .workflow-agent-edge-merge::before {
-      margin-top: 10px;
-      height: calc(100% - 10px);
-    }
-
-    .workflow-agent-edge-merge span {
-      top: 34px;
-    }
-
-    .workflow-agent-edge-merge i {
-      position: absolute;
-      top: 10px;
-      left: 25%;
-      right: 25%;
-      height: 2px;
-      background: var(--line);
-      display: block;
-    }
-
-    .workflow-agent-edge-merge i::before,
-    .workflow-agent-edge-merge i::after {
-      content: "";
-      position: absolute;
-      top: -12px;
-      width: 2px;
-      height: 12px;
-      background: var(--line);
-    }
-
-    .workflow-agent-edge-merge i::before {
-      left: 0;
-    }
-
-    .workflow-agent-edge-merge i::after {
+    /* Planner chat dock */
+    .planner-chat-dock {
+      position: fixed;
+      top: 0;
       right: 0;
-    }
-
-    .workflow-edge-block {
-      min-height: 98px;
+      bottom: 0;
+      width: min(420px, 92vw);
+      background: var(--panel);
+      border-left: 1px solid var(--line);
+      box-shadow: -14px 0 40px rgba(25, 24, 22, 0.18);
       display: flex;
       flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      color: var(--muted);
-      font-size: 11px;
-      text-align: center;
-      min-width: 0;
+      transform: translateX(105%);
+      transition: transform 220ms ease;
+      z-index: 1200;
     }
 
-    .workflow-edge-block::before {
-      content: attr(data-arrow);
+    .planner-chat-dock.is-open {
+      transform: translateX(0);
+    }
+
+    .planner-chat-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      border-top: 5px solid var(--workflow);
+    }
+
+    .planner-chat-header h3 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 800;
+      flex: 1 1 auto;
+    }
+
+    .planner-chat-header .planner-chat-sub {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: none;
+    }
+
+    .planner-chat-tool {
+      font: inherit;
+      font-size: 12px;
+      padding: 4px 6px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--page);
+      color: var(--ink);
+    }
+
+    .planner-chat-iconbtn {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: var(--page);
+      color: var(--ink);
+      border-radius: 6px;
       width: 28px;
       height: 28px;
-      display: grid;
-      place-items: center;
-      border: 1px solid var(--line);
-      border-radius: 999px;
-      background: #fbfaf7;
-      color: var(--ink);
-      font-weight: 760;
+      cursor: pointer;
+      font-size: 15px;
+      line-height: 1;
     }
 
-    .workflow-edge-label {
-      max-width: 70px;
+    .planner-chat-iconbtn:hover { border-color: #aaa197; }
+
+    .planner-chat-body {
+      flex: 1 1 auto;
+      overflow-y: auto;
+      padding: 14px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .planner-chat-empty {
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+      margin: auto 0;
+      padding: 24px 8px;
+    }
+
+    .planner-msg {
+      max-width: 92%;
+      padding: 9px 12px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.45;
+      white-space: pre-wrap;
       overflow-wrap: anywhere;
+    }
+
+    .planner-msg.owner {
+      align-self: flex-end;
+      background: var(--workflow);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .planner-msg.planner {
+      align-self: flex-start;
+      background: var(--page);
+      border: 1px solid var(--line);
+      border-bottom-left-radius: 4px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+
+    .planner-msg .planner-msg-meta {
+      display: block;
+      margin-bottom: 4px;
+      font-size: 10.5px;
+      font-weight: 760;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+      opacity: 0.75;
+      font-family: var(--app-font, inherit);
+    }
+
+    .planner-msg .planner-msg-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .planner-msg .planner-msg-status.running::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #c98a3d;
+      animation: planner-pulse 1s ease-in-out infinite;
+    }
+
+    @keyframes planner-pulse {
+      0%, 100% { opacity: 0.35; }
+      50% { opacity: 1; }
+    }
+
+    .planner-chat-footer {
+      border-top: 1px solid var(--line);
+      padding: 12px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .planner-chat-input {
+      width: 100%;
+      resize: vertical;
+      min-height: 64px;
+      max-height: 200px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 9px 10px;
+      font: inherit;
+      font-size: 13px;
+      background: var(--page);
+      color: var(--ink);
+      box-sizing: border-box;
+    }
+
+    .planner-chat-send {
+      align-self: flex-end;
+      appearance: none;
+      border: none;
+      background: var(--workflow);
+      color: #fff;
+      font: inherit;
+      font-weight: 760;
+      padding: 8px 18px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .planner-chat-send:disabled { opacity: 0.5; cursor: default; }
+
+    .planner-chat-hint {
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .wf-graph-canvas {
+      display: grid;
+      gap: 0;
+      width: 100%;
+      max-width: 100%;
+    }
+
+    .wf-graph-row {
+      display: grid;
+      gap: 12px;
+      justify-content: center;
+      min-width: 0;
+      padding: 0 8px;
+    }
+
+    .wf-graph-row[data-cols="1"] {
+      grid-template-columns: minmax(260px, 1fr);
+    }
+
+    .wf-graph-row[data-cols="2"] {
+      grid-template-columns: repeat(2, minmax(200px, 1fr));
+    }
+
+    .wf-graph-row[data-cols="3"] {
+      grid-template-columns: repeat(3, minmax(180px, 1fr));
+    }
+
+    .wf-graph-edge-block {
+      position: relative;
+      height: 52px;
+      min-width: 0;
+      overflow: visible;
+    }
+
+    .wf-graph-edge-block svg {
+      display: block;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+    }
+
+    .wf-graph-edge-line {
+      stroke: var(--line);
+      stroke-width: 2;
+      fill: none;
+    }
+
+    .wf-graph-edge-arrow {
+      fill: var(--line);
+    }
+
+    .wf-graph-edge-label-bg {
+      fill: #fbfaf7;
+      stroke: var(--line);
+      stroke-width: 1;
+      rx: 99;
+    }
+
+    .wf-graph-edge-label-text {
+      fill: var(--muted);
+      font-size: 10px;
+      font-weight: 760;
+      text-anchor: middle;
+      dominant-baseline: central;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
     }
 
     .workflow-branch-column {
@@ -1294,6 +1422,38 @@
       line-height: 1.45;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
+    }
+
+    .agent-run-popover-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .terminate-agent-button {
+      min-height: 28px;
+      border: 1px solid #d4a59a;
+      border-radius: 6px;
+      background: #fdf2f0;
+      color: #8b3a2a;
+      padding: 4px 10px;
+      font-size: 12px;
+      font-weight: 760;
+      line-height: 1;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .terminate-agent-button:hover {
+      border-color: #c4736a;
+      background: #fbe6e2;
+    }
+
+    .terminate-agent-button:disabled {
+      cursor: progress;
+      opacity: 0.62;
     }
 
     .lane-header {
@@ -2142,29 +2302,18 @@
 
       .workflow-state-line,
       .workflow-state-stack,
-      .workflow-parallel-start,
-      .workflow-agent-row,
-      .workflow-agent-row-upstream,
+      .wf-graph-row,
       .workflow-detail-grid {
         grid-template-columns: 1fr;
         width: 100%;
       }
 
-      .workflow-agent-edge-merge {
-        min-height: 44px;
+      .wf-graph-edge-block {
+        height: 44px;
       }
 
-      .workflow-agent-edge-merge i {
-        display: none;
-      }
-
-      .workflow-agent-edge-merge::before {
-        margin-top: 0;
-        height: 100%;
-      }
-
-      .workflow-agent-edge-merge span {
-        top: 50%;
+      .wf-graph-edge-label-text {
+        font-size: 9px;
       }
 
       .workflow-stats {
@@ -2235,7 +2384,8 @@
     const fallbackDispatchSettings = {
       commands: {
         claude: "claude",
-        codex: "codex"
+        codex: "codex",
+        qwen: "qwen"
       },
       worker: {
         enabled: false,
@@ -2269,6 +2419,7 @@
       modelBackground: {
         claude: { label: "Claude", background: "#f4a86b", text: "#3b1f08" },
         codex: { label: "Codex", background: "#7eb1d6", text: "#0d2538" },
+        qwen: { label: "Qwen", background: "#a78bfa", text: "#1e0d3a" },
         unknown: { label: "Unknown model", background: "#e3ddd2", text: "#191816" }
       },
       roleBorder: {
@@ -2709,8 +2860,11 @@
       const logText = agentRunLogText(entry);
       const key = agentRunKey(entry, state);
       const isPinned = pinnedAgentRunKey === key;
+      const agentId = String(entry?.agentId || "").trim();
+      const processId = String(entry?.processId || "").trim();
+      const currentTaskId = String(entry?.currentTaskId || "").trim();
       return `
-        <div class="agent-run-tab-wrap${isPinned ? " is-pinned" : ""}" data-agent-run-key="${escapeText(key)}">
+        <div class="agent-run-tab-wrap${isPinned ? " is-pinned" : ""}" data-agent-run-key="${escapeText(key)}" data-terminate-agent-id="${escapeText(agentId)}" data-terminate-process-id="${escapeText(processId)}" data-terminate-task-id="${escapeText(currentTaskId)}">
           <button class="agent-run-tab ${displayState.className}" type="button" aria-expanded="${isPinned ? "true" : "false"}" aria-label="${escapeText(displayName)} ${escapeText(stateLabel)} agent log">
             <span class="agent-run-dot" aria-hidden="true"></span>
             <span class="agent-run-name">${escapeText(displayName)}</span>
@@ -2719,6 +2873,9 @@
             <div class="agent-run-popover-title">${escapeText(displayName)}</div>
             <div class="agent-run-popover-meta">${escapeText(meta)}</div>
             <pre class="agent-run-log">${escapeText(logText)}</pre>
+            <div class="agent-run-popover-actions">
+              <button class="terminate-agent-button" type="button" data-terminate-agent title="Unclaim task and terminate agent process">Terminate</button>
+            </div>
           </div>
         </div>
       `;
@@ -2751,6 +2908,9 @@
         if (titleEl) titleEl.textContent = displayName;
         if (metaEl) metaEl.textContent = agentRunMeta(entry, displayState.stateLabel);
         if (logEl) logEl.textContent = agentRunLogText(entry);
+        wrap.setAttribute("data-terminate-agent-id", String(entry?.agentId || "").trim());
+        wrap.setAttribute("data-terminate-process-id", String(entry?.processId || "").trim());
+        wrap.setAttribute("data-terminate-task-id", String(entry?.currentTaskId || "").trim());
       });
       applyPinnedAgentRunState();
     }
@@ -2812,6 +2972,7 @@
       const dispatch = dispatchSettingsForRole(role);
       const codexSelected = dispatch.model === "codex" ? "selected" : "";
       const claudeSelected = dispatch.model === "claude" ? "selected" : "";
+      const qwenSelected = dispatch.model === "qwen" ? "selected" : "";
       const autoLabel = dispatch.enabled ? "Auto: On" : "Auto: Off";
       const paused = Boolean(currentPauseStatus?.isPaused);
       const pausedClass = paused ? " is-paused" : "";
@@ -2830,6 +2991,7 @@
           <select class="dispatch-select" data-dispatch-model="${safeRole}" title="${escapeText(roleLabel)} model" ${pausedAttr}>
             <option value="codex" ${codexSelected}>Codex</option>
             <option value="claude" ${claudeSelected}>Claude</option>
+            <option value="qwen" ${qwenSelected}>Qwen</option>
           </select>
           <input class="dispatch-max" type="number" min="0" max="8" step="1" value="${escapeText(dispatch.maxAgents)}" data-dispatch-max="${safeRole}" title="Maximum active ${escapeText(roleLabel)} agents" ${pausedAttr}>
           <button class="spawn-button${pausedClass}" type="button" data-spawn-agent="${safeRole}" title="${escapeText(spawnTitle)}" ${pausedAttr}>${paused ? "Paused" : "Spawn"}</button>
@@ -2991,8 +3153,10 @@
         ? `<button class="text-button archive-task" type="button" data-archive-task="${escapeText(key)}">Archive</button>`
         : "";
       const unclaimButton = sourceColumnKey === "claimed"
-        ? `<div class="ticket-actions"><button class="text-button" type="button" data-unclaim-task="${escapeText(key)}">Unclaim task</button></div>`
-        : "";
+        ? `<div class="ticket-actions"><button class="text-button" type="button" data-unclaim-task="${escapeText(key)}" data-unclaim-source="claimed">Unclaim task</button></div>`
+        : sourceColumnKey === "reviewing"
+          ? `<div class="ticket-actions"><button class="text-button" type="button" data-unclaim-task="${escapeText(key)}" data-unclaim-source="reviewing">Unclaim review</button></div>`
+          : "";
       const activeClass = isActiveTask ? ` is-active-task ticket-${sourceColumnKey}-active` : "";
 
       return `
@@ -3508,8 +3672,15 @@
       const badgeHtml = badge
         ? `<span class="count workflow-state-count" style="background: ${step.color}">${escapeText(badge)}</span>`
         : "";
+      const humanInput = !!step.acceptsHumanInput;
+      const humanAttrs = humanInput
+        ? ` data-human-input="1" data-chat-detail="${escapeText(step.key)}" data-chat-label="${escapeText(step.label)}"`
+        : "";
+      const humanBadge = humanInput
+        ? `<span class="workflow-human-badge" title="Accepts human input — click to open chat">&#128172; Human input</span>`
+        : "";
       return `
-        <button class="workflow-state workflow-state-${escapeText(step.key)}" type="button" data-workflow-detail="${escapeText(step.key)}" style="--node-color: ${step.color}" aria-label="Open workflow details for ${escapeText(step.label)}">
+        <button class="workflow-state workflow-state-${escapeText(step.key)}${humanInput ? " has-human-input" : ""}" type="button" data-workflow-detail="${escapeText(step.key)}"${humanAttrs} style="--node-color: ${step.color}" aria-label="${humanInput ? "Open chat with " : "Open workflow details for "}${escapeText(step.label)}">
           <span>
             <span class="workflow-state-kicker">${escapeText(step.kind || "State")}</span>
           </span>
@@ -3518,6 +3689,7 @@
             ${badgeHtml}
           </span>
           <span class="workflow-state-meta">${escapeText(step.meta)}</span>
+          ${humanBadge}
         </button>
       `;
     }
@@ -3531,72 +3703,225 @@
       `;
     }
 
-    function workflowAgentEdge(label, variant = "") {
-      const variantClass = variant ? ` workflow-agent-edge-${escapeText(variant)}` : "";
-      const mergeArm = variant === "merge" ? `<i aria-hidden="true"></i>` : "";
-      return `<div class="workflow-agent-edge${variantClass}" aria-hidden="true">${mergeArm}<span>${escapeText(label)}</span></div>`;
+    function buildWorkflowGraph(normalized) {
+      var todoCount = workflowCount(normalized, "todo");
+      var claimedCount = workflowCount(normalized, "claimed");
+      var reviewCount = workflowCount(normalized, "review");
+      var reviewingCount = workflowCount(normalized, "reviewing");
+      var activeWorkerCount = activeAgentsForRole("worker").length;
+      var activeReviewCount = activeAgentsForRole("review").length;
+
+      var nodeDefs = {
+        auditor:  { key: "frontend-auditor",  kind: "Upstream agent", label: "Web Front-End Auditor", color: "#4f7f77", meta: "Finds visual UI issues before planning." },
+        handoff:  { key: "frontend-handoff",  kind: "Artifact",       label: "Audit Handoff",          color: "#8c6f40", meta: "Markdown findings for Planner." },
+        planner:  { key: "planning-agent",    kind: "Agent",          label: "Planner",                color: "#476f8f", meta: "Turns requirements and handoffs into todo cards.", acceptsHumanInput: true },
+        worker:   { key: "worker-agent",      kind: "Agent",          label: "Worker",                 color: "var(--claimed)", meta: "Claims todo work, implements it, and requests review." },
+        reviewer: { key: "review-agent",      kind: "Agent",          label: "Reviewer",               color: "#7f6cae", meta: "Claims review work, validates it, and decides outcome." }
+      };
+
+      var badges = {
+        planner:  todoCount,
+        worker:   activeWorkerCount ? (activeWorkerCount + " active") : claimedCount,
+        reviewer: activeReviewCount ? (activeReviewCount + " active") : reviewCount + reviewingCount
+      };
+
+      var layout = [
+        { ids: ["auditor"] },
+        { ids: ["handoff"] },
+        { ids: ["planner"] },
+        { ids: ["worker"] },
+        { ids: ["reviewer"] }
+      ];
+
+      var edges = [
+        { from: "auditor",  to: "handoff",  label: "visual findings" },
+        { from: "handoff",  to: "planner",  label: "planning input" },
+        { from: "planner",  to: "worker",   label: "todo tickets" },
+        { from: "worker",   to: "reviewer", label: "inspection targets + review request" }
+      ];
+
+      var rows = layout.map(function(row) {
+        return {
+          nodes: row.ids.map(function(id) {
+            return { id: id, step: nodeDefs[id], badge: badges[id] || null };
+          })
+        };
+      });
+
+      return { rows: rows, edges: edges };
+    }
+
+    function workflowGraphEdgeBlock(sourceRow, targetRow, edges) {
+      var VB_W = 1000;
+      var VB_H = 52;
+      var ARROW_SIZE = 6;
+      var sCols = sourceRow.nodes.length;
+      var tCols = targetRow.nodes.length;
+      var MID_Y = VB_H * 0.40;
+      var BOTTOM_Y = VB_H - ARROW_SIZE - 2;
+
+      function colCenterX(col, totalCols) {
+        return (col + 0.5) / totalCols * VB_W;
+      }
+
+      function arrowAt(x, y) {
+        return '<polygon points="' + (x - ARROW_SIZE) + ',' + y + ' ' + (x + ARROW_SIZE) + ',' + y + ' ' + x + ',' + (y + ARROW_SIZE + 1) + '" class="wf-graph-edge-arrow"/>';
+      }
+
+      function labelPill(x, y, text) {
+        var safeLabel = escapeText(text || "");
+        var charW = 6.2;
+        var padX = 14;
+        var textW = safeLabel.length * charW;
+        var pillW = Math.max(textW + padX, 32);
+        var pillH = 16;
+        var html = '<rect x="' + (x - pillW / 2) + '" y="' + (y - pillH / 2) + '" width="' + pillW + '" height="' + pillH + '" class="wf-graph-edge-label-bg"/>';
+        html += '<text x="' + x + '" y="' + y + '" class="wf-graph-edge-label-text">' + safeLabel + '</text>';
+        return html;
+      }
+
+      function nodeIdx(row, id) {
+        for (var i = 0; i < row.nodes.length; i++) {
+          if (row.nodes[i].id === id) return i;
+        }
+        return -1;
+      }
+
+      var paths = "";
+      var labels = "";
+
+      var bySource = {};
+      var byTarget = {};
+      edges.forEach(function(e) {
+        if (!bySource[e.from]) bySource[e.from] = [];
+        bySource[e.from].push(e);
+        if (!byTarget[e.to]) byTarget[e.to] = [];
+        byTarget[e.to].push(e);
+      });
+
+      var rendered = {};
+
+      // 1. Merge groups: multiple sources → single target
+      Object.keys(byTarget).forEach(function(targetId) {
+        var targetEdges = byTarget[targetId];
+        if (targetEdges.length <= 1) return;
+
+        var ti = nodeIdx(targetRow, targetId);
+        if (ti < 0) return;
+        var tx = colCenterX(ti, tCols);
+
+        var sourceXs = [];
+        targetEdges.forEach(function(e) {
+          var si = nodeIdx(sourceRow, e.from);
+          if (si >= 0) sourceXs.push(colCenterX(si, sCols));
+        });
+        sourceXs.sort(function(a, b) { return a - b; });
+
+        sourceXs.forEach(function(sx) {
+          paths += '<line x1="' + sx + '" y1="0" x2="' + sx + '" y2="' + MID_Y + '" class="wf-graph-edge-line"/>';
+        });
+        if (sourceXs.length > 1) {
+          paths += '<line x1="' + sourceXs[0] + '" y1="' + MID_Y + '" x2="' + sourceXs[sourceXs.length - 1] + '" y2="' + MID_Y + '" class="wf-graph-edge-line"/>';
+        }
+        paths += '<line x1="' + tx + '" y1="' + MID_Y + '" x2="' + tx + '" y2="' + BOTTOM_Y + '" class="wf-graph-edge-line"/>';
+        paths += arrowAt(tx, BOTTOM_Y);
+
+        var mergeLx = sourceXs.reduce(function(a, b) { return a + b; }, 0) / sourceXs.length;
+        labels += labelPill(mergeLx, MID_Y, targetEdges[0].label || "");
+        targetEdges.forEach(function(e) { rendered[e.from + "\u2192" + e.to] = true; });
+      });
+
+      // 2. Split groups: single source → multiple targets
+      Object.keys(bySource).forEach(function(sourceId) {
+        var sourceEdges = bySource[sourceId];
+        if (sourceEdges.length <= 1) return;
+        var allDone = sourceEdges.every(function(e) { return rendered[e.from + "\u2192" + e.to]; });
+        if (allDone) return;
+
+        var si = nodeIdx(sourceRow, sourceId);
+        if (si < 0) return;
+        var sx = colCenterX(si, sCols);
+
+        var targetXs = [];
+        sourceEdges.forEach(function(e) {
+          if (rendered[e.from + "\u2192" + e.to]) return;
+          var ti = nodeIdx(targetRow, e.to);
+          if (ti >= 0) targetXs.push(colCenterX(ti, tCols));
+        });
+        targetXs.sort(function(a, b) { return a - b; });
+        if (!targetXs.length) return;
+
+        paths += '<line x1="' + sx + '" y1="0" x2="' + sx + '" y2="' + MID_Y + '" class="wf-graph-edge-line"/>';
+
+        var spanMin = Math.min(sx, targetXs[0]);
+        var spanMax = Math.max(sx, targetXs[targetXs.length - 1]);
+        if (targetXs.length > 1 || Math.abs(sx - targetXs[0]) > 4) {
+          paths += '<line x1="' + spanMin + '" y1="' + MID_Y + '" x2="' + spanMax + '" y2="' + MID_Y + '" class="wf-graph-edge-line"/>';
+        }
+
+        targetXs.forEach(function(tx) {
+          paths += '<line x1="' + tx + '" y1="' + MID_Y + '" x2="' + tx + '" y2="' + BOTTOM_Y + '" class="wf-graph-edge-line"/>';
+          paths += arrowAt(tx, BOTTOM_Y);
+        });
+
+        labels += labelPill(sx, MID_Y, sourceEdges[0].label || "");
+        sourceEdges.forEach(function(e) { rendered[e.from + "\u2192" + e.to] = true; });
+      });
+
+      // 3. Simple 1:1 edges
+      edges.forEach(function(e) {
+        if (rendered[e.from + "\u2192" + e.to]) return;
+
+        var si = nodeIdx(sourceRow, e.from);
+        var ti = nodeIdx(targetRow, e.to);
+        if (si < 0 || ti < 0) return;
+        var sx = colCenterX(si, sCols);
+        var tx = colCenterX(ti, tCols);
+
+        if (Math.abs(sx - tx) < 4) {
+          paths += '<line x1="' + sx + '" y1="0" x2="' + tx + '" y2="' + BOTTOM_Y + '" class="wf-graph-edge-line"/>';
+          labels += labelPill(sx, VB_H * 0.42, e.label || "");
+        } else {
+          paths += '<path d="M' + sx + ',0 L' + sx + ',' + MID_Y + ' L' + tx + ',' + MID_Y + ' L' + tx + ',' + BOTTOM_Y + '" class="wf-graph-edge-line"/>';
+          labels += labelPill((sx + tx) / 2, MID_Y, e.label || "");
+        }
+        paths += arrowAt(tx, BOTTOM_Y);
+      });
+
+      return '<div class="wf-graph-edge-block" aria-hidden="true"><svg viewBox="0 0 ' + VB_W + ' ' + VB_H + '" preserveAspectRatio="xMidYMid meet">' + paths + labels + '</svg></div>';
     }
 
     function workflowGraphMarkup(normalized) {
-      const steps = {
-        auditor: { key: "frontend-auditor", kind: "Upstream agent", label: "Web Front-End Auditor", color: "#4f7f77", meta: "Finds visual UI issues before planning." },
-        handoff: { key: "frontend-handoff", kind: "Artifact", label: "Audit Handoff", color: "#8c6f40", meta: "Markdown findings for Planner." },
-        planning: { key: "planning-agent", kind: "Agent", label: "Planner", color: "#476f8f", meta: "Turns requirements and handoffs into todo cards." },
-        worker: { key: "worker-agent", kind: "Agent", label: "Worker", color: "var(--claimed)", meta: "Claims todo work, implements it, and requests review." },
-        reviewer: { key: "review-agent", kind: "Agent", label: "Reviewer", color: "#7f6cae", meta: "Claims review work, validates it, and decides outcome." }
-      };
-      const activeCount = ["todo", "claimed", "review", "reviewing"].reduce((total, key) => total + workflowCount(normalized, key), 0);
-      const todoCount = workflowCount(normalized, "todo");
-      const claimedCount = workflowCount(normalized, "claimed");
-      const reviewCount = workflowCount(normalized, "review");
-      const reviewingCount = workflowCount(normalized, "reviewing");
-      const doneCount = workflowCount(normalized, "done");
-      const archivedCount = workflowCount(normalized, "archived");
-      const activeWorkerCount = activeAgentsForRole("worker").length;
-      const activeReviewCount = activeAgentsForRole("review").length;
-      const mainFlow = `
-        <div class="workflow-agent-flow" aria-label="Agent workflow map">
-          <div class="workflow-agent-row">
-            ${workflowNode(steps.auditor)}
-          </div>
-          ${workflowAgentEdge("visual findings")}
-          <div class="workflow-agent-row">
-            ${workflowNode(steps.handoff)}
-          </div>
-          ${workflowAgentEdge("planning input")}
-          <div class="workflow-agent-row">
-            ${workflowNode(steps.planning, todoCount)}
-          </div>
-          ${workflowAgentEdge("todo tickets")}
-          <div class="workflow-agent-row">
-            ${workflowNode(steps.worker, activeWorkerCount ? `${activeWorkerCount} active` : claimedCount)}
-          </div>
-          ${workflowAgentEdge("inspection targets + review request")}
-          <div class="workflow-agent-row">
-            ${workflowNode(steps.reviewer, activeReviewCount ? `${activeReviewCount} active` : reviewCount + reviewingCount)}
-          </div>
-        </div>
-      `;
+      var graph = buildWorkflowGraph(normalized);
+      var activeCount = ["todo", "claimed", "review", "reviewing"].reduce(function(total, key) { return total + workflowCount(normalized, key); }, 0);
+      var doneCount = workflowCount(normalized, "done");
+      var archivedCount = workflowCount(normalized, "archived");
 
-      return `
-        <section class="workflow-panel" id="workflow-panel" aria-hidden="${workflowPanelOpen ? "false" : "true"}">
-          <div class="workflow-panel-header">
-            <div>
-              <h2>Agent Workflow Map</h2>
-              <p>Each clickable block is an agent or handoff artifact. Open one to see its context, goal, behavior, permissions, and hard rules.</p>
-            </div>
-            ${workflowCloseButton()}
-          </div>
-          <div class="workflow-graph">
-            ${mainFlow}
-          </div>
-          <div class="workflow-stats">
-            <div class="workflow-stat"><strong>${activeCount}</strong><span>todo / claimed / review</span></div>
-            <div class="workflow-stat"><strong>${doneCount}</strong><span>done visible</span></div>
-            <div class="workflow-stat"><strong>${archivedCount}</strong><span>archived</span></div>
-          </div>
-        </section>
-      `;
+      var canvasHtml = '<div class="wf-graph-canvas" aria-label="Agent workflow map">';
+
+      graph.rows.forEach(function(row, rowIdx) {
+        var colCount = row.nodes.length;
+        canvasHtml += '<div class="wf-graph-row" data-cols="' + colCount + '">';
+        row.nodes.forEach(function(node) {
+          canvasHtml += workflowNode(node.step, node.badge);
+        });
+        canvasHtml += '</div>';
+
+        if (rowIdx < graph.rows.length - 1) {
+          var nextRow = graph.rows[rowIdx + 1];
+          var rowEdges = graph.edges.filter(function(e) {
+            return row.nodes.some(function(n) { return n.id === e.from; }) &&
+                   nextRow.nodes.some(function(n) { return n.id === e.to; });
+          });
+          if (rowEdges.length) {
+            canvasHtml += workflowGraphEdgeBlock(row, nextRow, rowEdges);
+          }
+        }
+      });
+
+      canvasHtml += '</div>';
+
+      return '\n        <section class="workflow-panel" id="workflow-panel" aria-hidden="' + (workflowPanelOpen ? "false" : "true") + '">\n          <div class="workflow-panel-header">\n            <div>\n              <h2>Agent Workflow Map</h2>\n              <p>Each clickable block is an agent or handoff artifact. Open one to see its context, goal, behavior, permissions, and hard rules.</p>\n            </div>\n            ' + workflowCloseButton() + '\n          </div>\n          <div class="workflow-graph">\n            ' + canvasHtml + '\n          </div>\n          <div class="workflow-stats">\n            <div class="workflow-stat"><strong>' + activeCount + '</strong><span>todo / claimed / review</span></div>\n            <div class="workflow-stat"><strong>' + doneCount + '</strong><span>done visible</span></div>\n            <div class="workflow-stat"><strong>' + archivedCount + '</strong><span>archived</span></div>\n          </div>\n        </section>\n      ';
     }
 
     function workflowDetailSection(title, items) {
@@ -3807,9 +4132,11 @@
     function dispatchSettingsForRole(role) {
       const settings = currentDispatchSettings?.[role] || fallbackDispatchSettings[role] || {};
       const maxAgents = Number.parseInt(settings.maxAgents, 10);
+      const validModels = ["claude", "codex", "qwen"];
+      const model = validModels.includes(settings.model) ? settings.model : "codex";
       return {
         enabled: Boolean(settings.enabled),
-        model: settings.model === "claude" ? "claude" : "codex",
+        model,
         maxAgents: Number.isNaN(maxAgents) ? 1 : Math.max(0, Math.min(maxAgents, 8))
       };
     }
@@ -3819,7 +4146,8 @@
       const fallbackCommands = fallbackDispatchSettings.commands;
       return {
         claude: String(commands.claude || fallbackCommands.claude || "claude").trim() || "claude",
-        codex: String(commands.codex || fallbackCommands.codex || "codex").trim() || "codex"
+        codex: String(commands.codex || fallbackCommands.codex || "codex").trim() || "codex",
+        qwen: String(commands.qwen || fallbackCommands.qwen || "qwen").trim() || "qwen"
       };
     }
 
@@ -3841,11 +4169,12 @@
       const payload = {
         commands: {
           claude: String(commands.claude || "").trim(),
-          codex: String(commands.codex || "").trim()
+          codex: String(commands.codex || "").trim(),
+          qwen: String(commands.qwen || "").trim()
         }
       };
-      if (!payload.commands.claude || !payload.commands.codex) {
-        throw new Error("Both commands are required.");
+      if (!payload.commands.claude || !payload.commands.codex || !payload.commands.qwen) {
+        throw new Error("All three commands (Claude, Codex, Qwen) are required.");
       }
       const previousLabel = triggerButton ? triggerButton.textContent : "";
       if (triggerButton) {
@@ -3868,6 +4197,7 @@
     function agentToolLabel(tool) {
       if (tool === "claude") return "Claude Code";
       if (tool === "codex") return "Codex";
+      if (tool === "qwen") return "Qwen";
       return tool || "Agent";
     }
 
@@ -3935,10 +4265,15 @@
                 <label for="settingsClaudeCommand">Claude Code command</label>
                 <input class="settings-command-input" id="settingsClaudeCommand" name="claude" type="text" value="${escapeText(commands.claude)}" autocomplete="off" autocapitalize="none" spellcheck="false">
               </div>
+              <div class="settings-field">
+                <label for="settingsQwenCommand">Qwen command</label>
+                <input class="settings-command-input" id="settingsQwenCommand" name="qwen" type="text" value="${escapeText(commands.qwen)}" autocomplete="off" autocapitalize="none" spellcheck="false">
+              </div>
             </div>
             <div class="settings-actions">
               <button class="settings-health-button" type="button" data-health-check-tool="codex">Test Codex</button>
               <button class="settings-health-button" type="button" data-health-check-tool="claude">Test Claude</button>
+              <button class="settings-health-button" type="button" data-health-check-tool="qwen">Test Qwen</button>
               <button class="settings-save-button" type="submit">Save</button>
             </div>
           </form>
@@ -3996,7 +4331,7 @@
 
     async function spawnAgent(role, tool, triggerButton) {
       const roleLabel = role === "worker" ? "Worker Agent" : role === "review" ? "Review Agent" : `${role} agent`;
-      const toolLabel = tool === "claude" ? "Claude" : tool === "codex" ? "Codex" : tool;
+      const toolLabel = tool === "claude" ? "Claude" : tool === "codex" ? "Codex" : tool === "qwen" ? "Qwen" : tool;
       const previousLabel = triggerButton ? triggerButton.textContent : "";
       if (currentPauseStatus.isPaused) {
         statusEl.textContent = pausedControlMessage(`${roleLabel} spawning is paused`);
@@ -4046,13 +4381,15 @@
       }
     }
 
-    async function unclaimTask(taskId) {
+    async function unclaimTask(taskId, source) {
       statusEl.textContent = `Unclaiming ${taskId}...`;
       try {
         await postJson("/viewer/unclaim-task", {
           taskId,
           unclaimedBy: "owner via task board viewer",
-          reason: "Worker agent was killed before finishing."
+          reason: source === "reviewing"
+            ? "Reviewer agent was killed before finishing."
+            : "Worker agent was killed before finishing."
         });
         const [board, agents] = await Promise.all([
           loadJson("board.json"),
@@ -4060,9 +4397,43 @@
         ]);
         collapsedTasks.delete(taskId);
         renderBoard(board, "board.json", agents);
-        statusEl.textContent = `Unclaimed ${taskId} and moved it back to To Do.`;
+        statusEl.textContent = source === "reviewing"
+          ? `Unclaimed ${taskId} and moved it back to Review.`
+          : `Unclaimed ${taskId} and moved it back to To Do.`;
       } catch (error) {
         statusEl.textContent = `Unclaim failed for ${taskId}: ${error.message}`;
+      }
+    }
+
+    async function terminateAgent(agentId, processId, taskId, triggerButton) {
+      const label = agentId || processId || "agent";
+      const previousLabel = triggerButton ? triggerButton.textContent : "";
+      if (triggerButton) {
+        triggerButton.disabled = true;
+        triggerButton.textContent = "Terminating...";
+      }
+      statusEl.textContent = `Terminating agent ${label}...`;
+      try {
+        const payload = {};
+        if (agentId) payload.agentId = agentId;
+        if (processId) payload.processId = Number(processId);
+        if (taskId) payload.taskId = taskId;
+        const result = await postJson("/viewer/terminate-agent", payload);
+        const [board, agents] = await Promise.all([
+          loadJson("board.json"),
+          loadAgents()
+        ]);
+        if (taskId) collapsedTasks.delete(taskId);
+        renderBoard(board, "board.json", agents);
+        const msg = result?.message || `Terminated agent ${label}.`;
+        statusEl.textContent = msg;
+      } catch (error) {
+        statusEl.textContent = `Terminate failed for ${label}: ${error.message}`;
+      } finally {
+        if (triggerButton) {
+          triggerButton.disabled = false;
+          triggerButton.textContent = previousLabel;
+        }
       }
     }
 
@@ -4236,6 +4607,18 @@
     }
 
     boardEl.addEventListener("click", (event) => {
+      const terminateButton = event.target.closest("[data-terminate-agent]");
+      if (terminateButton) {
+        const wrapper = terminateButton.closest("[data-agent-run-key]");
+        if (wrapper) {
+          const agentId = wrapper.getAttribute("data-terminate-agent-id") || "";
+          const processId = wrapper.getAttribute("data-terminate-process-id") || "";
+          const taskId = wrapper.getAttribute("data-terminate-task-id") || "";
+          terminateAgent(agentId, processId, taskId, terminateButton);
+        }
+        return;
+      }
+
       const agentRunButton = event.target.closest(".agent-run-tab");
       if (agentRunButton) {
         const wrapper = agentRunButton.closest("[data-agent-run-key]");
@@ -4295,7 +4678,7 @@
 
       const unclaimButton = event.target.closest("[data-unclaim-task]");
       if (unclaimButton) {
-        unclaimTask(unclaimButton.dataset.unclaimTask);
+        unclaimTask(unclaimButton.dataset.unclaimTask, unclaimButton.dataset.unclaimSource || "claimed");
         return;
       }
 
@@ -4416,8 +4799,10 @@
       const submitButton = form.querySelector(".settings-save-button");
       const codexInput = form.elements.codex;
       const claudeInput = form.elements.claude;
+      const qwenInput = form.elements.qwen;
       const codex = String(codexInput?.value || "").trim();
       const claude = String(claudeInput?.value || "").trim();
+      const qwen = String(qwenInput?.value || "").trim();
 
       if (!codex) {
         statusEl.textContent = "Add a Codex command before saving settings.";
@@ -4429,9 +4814,14 @@
         claudeInput?.focus();
         return;
       }
+      if (!qwen) {
+        statusEl.textContent = "Add a Qwen command before saving settings.";
+        qwenInput?.focus();
+        return;
+      }
 
       statusEl.textContent = "Saving settings...";
-      saveCommandSettings({ codex, claude }, submitButton)
+      saveCommandSettings({ codex, claude, qwen }, submitButton)
         .then(() => {
           statusEl.textContent = "Settings saved.";
         })
@@ -4439,6 +4829,166 @@
           statusEl.textContent = `Settings update failed: ${error.message}`;
         });
     });
+
+    // --- Planner chat dock (interactive human input to the Planner) ---
+    const plannerChat = {
+      dock: null,
+      bodyEl: null,
+      inputEl: null,
+      sendEl: null,
+      toolEl: null,
+      titleEl: null,
+      subEl: null,
+      open: false,
+      detailKey: "",
+      pollTimer: null,
+      sending: false,
+      lastSignature: ""
+    };
+
+    function buildPlannerChatDock() {
+      if (plannerChat.dock) return;
+      const dock = document.createElement("aside");
+      dock.className = "planner-chat-dock";
+      dock.setAttribute("aria-label", "Planner chat");
+      dock.innerHTML = `
+        <div class="planner-chat-header">
+          <div style="flex:1 1 auto; min-width:0;">
+            <h3 data-planner-chat-title>Planner chat</h3>
+            <span class="planner-chat-sub" data-planner-chat-sub>Send a request directly to the Planner agent</span>
+          </div>
+          <select class="planner-chat-tool" data-planner-chat-tool aria-label="Planner model">
+            <option value="claude">Claude</option>
+            <option value="codex">Codex</option>
+            <option value="qwen">Qwen</option>
+          </select>
+          <button class="planner-chat-iconbtn" type="button" data-planner-chat-details title="Open planner details">&#9432;</button>
+          <button class="planner-chat-iconbtn" type="button" data-planner-chat-close title="Close chat" aria-label="Close planner chat">&times;</button>
+        </div>
+        <div class="planner-chat-body" data-planner-chat-body></div>
+        <div class="planner-chat-footer">
+          <textarea class="planner-chat-input" data-planner-chat-input placeholder="Tell the Planner what to plan..."></textarea>
+          <div style="display:flex; align-items:center; justify-content:space-between; gap:10px;">
+            <span class="planner-chat-hint">Enter to send &middot; Shift+Enter for newline</span>
+            <button class="planner-chat-send" type="button" data-planner-chat-send>Send</button>
+          </div>
+        </div>
+      `;
+      document.body.appendChild(dock);
+      plannerChat.dock = dock;
+      plannerChat.bodyEl = dock.querySelector("[data-planner-chat-body]");
+      plannerChat.inputEl = dock.querySelector("[data-planner-chat-input]");
+      plannerChat.sendEl = dock.querySelector("[data-planner-chat-send]");
+      plannerChat.toolEl = dock.querySelector("[data-planner-chat-tool]");
+      plannerChat.titleEl = dock.querySelector("[data-planner-chat-title]");
+      plannerChat.subEl = dock.querySelector("[data-planner-chat-sub]");
+
+      dock.querySelector("[data-planner-chat-close]").addEventListener("click", closePlannerChat);
+      dock.querySelector("[data-planner-chat-details]").addEventListener("click", () => {
+        if (plannerChat.detailKey) {
+          workflowDetailKey = plannerChat.detailKey;
+          workflowPanelOpen = true;
+          renderBoard(currentBoard, currentSourceLabel);
+        }
+      });
+      plannerChat.sendEl.addEventListener("click", sendPlannerMessage);
+      plannerChat.inputEl.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" && !event.shiftKey) {
+          event.preventDefault();
+          sendPlannerMessage();
+        }
+      });
+    }
+
+    function openPlannerChat(opts) {
+      buildPlannerChatDock();
+      plannerChat.detailKey = (opts && opts.detailKey) || "";
+      const label = (opts && opts.label) || "Planner";
+      plannerChat.titleEl.textContent = `${label} chat`;
+      plannerChat.open = true;
+      plannerChat.dock.classList.add("is-open");
+      pollPlannerChat();
+      if (plannerChat.pollTimer) window.clearInterval(plannerChat.pollTimer);
+      plannerChat.pollTimer = window.setInterval(pollPlannerChat, 2000);
+      window.setTimeout(() => plannerChat.inputEl && plannerChat.inputEl.focus(), 240);
+    }
+
+    function closePlannerChat() {
+      plannerChat.open = false;
+      if (plannerChat.dock) plannerChat.dock.classList.remove("is-open");
+      if (plannerChat.pollTimer) {
+        window.clearInterval(plannerChat.pollTimer);
+        plannerChat.pollTimer = null;
+      }
+    }
+
+    function renderPlannerMessages(messages) {
+      const list = Array.isArray(messages) ? messages : [];
+      const signature = JSON.stringify(list.map((m) => [m.id, m.status, (m.output || "").length, (m.text || "").length]));
+      if (signature === plannerChat.lastSignature) return;
+      plannerChat.lastSignature = signature;
+
+      const body = plannerChat.bodyEl;
+      if (!body) return;
+      const nearBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+
+      if (!list.length) {
+        body.innerHTML = `<div class="planner-chat-empty">No messages yet. Send a request and the Planner will turn it into todo tasks on the board.</div>`;
+        return;
+      }
+
+      body.innerHTML = list.map((msg) => {
+        if (msg.role === "owner") {
+          return `<div class="planner-msg owner">${escapeText(msg.text || "")}</div>`;
+        }
+        const running = msg.status === "running";
+        const statusText = running ? "Planner working..." : "Planner";
+        const output = msg.output ? escapeText(msg.output) : (running ? "Starting up..." : "(no output captured)");
+        return `
+          <div class="planner-msg planner">
+            <span class="planner-msg-meta"><span class="planner-msg-status ${running ? "running" : ""}">${escapeText(statusText)}${msg.tool ? " &middot; " + escapeText(msg.tool) : ""}</span></span>${output}
+          </div>`;
+      }).join("");
+
+      if (nearBottom) body.scrollTop = body.scrollHeight;
+    }
+
+    async function pollPlannerChat() {
+      if (!plannerChat.open) return;
+      try {
+        const data = await loadJson("/viewer/planner-chat?agentName=Task%20board%20viewer");
+        renderPlannerMessages(data.messages);
+      } catch (error) {
+        /* transient; next poll retries */
+      }
+    }
+
+    async function sendPlannerMessage() {
+      if (plannerChat.sending) return;
+      const message = String(plannerChat.inputEl.value || "").trim();
+      if (!message) {
+        plannerChat.inputEl.focus();
+        return;
+      }
+      const tool = plannerChat.toolEl ? plannerChat.toolEl.value : "claude";
+      plannerChat.sending = true;
+      plannerChat.sendEl.disabled = true;
+      plannerChat.sendEl.textContent = "Sending...";
+      try {
+        const data = await postJson("/viewer/planner-chat-send", { message, tool });
+        plannerChat.inputEl.value = "";
+        plannerChat.lastSignature = "";
+        renderPlannerMessages(data.messages);
+        statusEl.textContent = `Planner chat: launched ${tool} planner.`;
+      } catch (error) {
+        statusEl.textContent = `Planner chat failed: ${error.message}`;
+      } finally {
+        plannerChat.sending = false;
+        plannerChat.sendEl.disabled = false;
+        plannerChat.sendEl.textContent = "Send";
+        plannerChat.inputEl.focus();
+      }
+    }
 
     workflowEl.addEventListener("click", (event) => {
       const workflowToggleButton = event.target.closest("[data-workflow-toggle]");
@@ -4486,6 +5036,15 @@
         return;
       }
 
+      const humanInputButton = event.target.closest("[data-human-input]");
+      if (humanInputButton) {
+        openPlannerChat({
+          detailKey: humanInputButton.dataset.chatDetail || "",
+          label: humanInputButton.dataset.chatLabel || "Planner"
+        });
+        return;
+      }
+
       const detailButton = event.target.closest("[data-workflow-detail]");
       if (detailButton) {
         workflowDetailKey = detailButton.dataset.workflowDetail || "";
@@ -4496,6 +5055,10 @@
     });
 
     document.addEventListener("keydown", (event) => {
+      if (event.key === "Escape" && plannerChat.open) {
+        closePlannerChat();
+        return;
+      }
       if (event.key === "Escape" && workflowDetailKey) {
         workflowDetailKey = "";
         renderBoard(currentBoard, currentSourceLabel);

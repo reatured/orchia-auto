@@ -12,7 +12,7 @@ Claim one unclaimed task from `task-board/board.json`, complete it, and move it 
 
 After each completed task, reload the board and check the live list again. Continue claiming safe `todo` tasks until the owner asks the Worker to stop or the current list has no safe unclaimed work.
 
-If the local task-board backend is running, call `POST /api/register-agent` at the start of the chat with `personalName`, `model` (`claude` or `codex`), and `role: "worker"`. The server returns an `agentId`; use it for every later task board API call this chat. If the Spawn button supplied a `personalName`, use it; otherwise pick the first unused name from `task-board/agent-color-schema.json#personalNamePool`, or use the one the owner gives you.
+If the local task-board backend is running, call `POST /api/register-agent` at the start of the chat with `personalName`, `model` (`claude`, `codex`, or `qwen`), and `role: "worker"`. The server returns an `agentId`; use it for every later task board API call this chat. If the Spawn button supplied a `personalName`, use it; otherwise pick the first unused name from `task-board/agent-color-schema.json#personalNamePool`, or use the one the owner gives you.
 
 Use `workflow/api-guide.md` for exact API payloads, examples, and error handling.
 

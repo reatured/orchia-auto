@@ -194,6 +194,6 @@ A single static **HTML page** served by the backend. It is the **owner's reader 
 2. **Edit `task-board/config.json`:** `projectName`, `boardTitle`, `owner`/`ownerLabel`, `devServerUrl`, `host`/`port`, `spawn` command names.
 3. **Tailor the role files** (`roles/*.md`): list the source directories agents must not edit; specialize the Web Front-End Auditor's visual checklist and the Reviewer's quality + correctness lenses for your domain.
 4. **(Optional)** edit `agent-color-schema.json` (`personalNamePool`); add more upstream research/audit roles if needed.
-5. **Run the backend:** on macOS/Linux use `python3 task-board/server.py`; on Windows use `py -3 task-board\server.py` or `python task-board\server.py` → open the viewer URL it prints.
+5. **Run the backend:** on macOS/Linux use `python3 task-board/server.py`; on Windows use `py -3 task-board\server.py` or `python task-board\server.py` → open the viewer URL it prints. If you lose the terminal, stop it by port: macOS/Linux/Git Bash `PORT=4177; for pid in $(lsof -tiTCP:$PORT -sTCP:LISTEN); do kill "$pid"; done`; Windows PowerShell `$port = 4177; Get-NetTCPConnection -LocalPort $port -State Listen | Select-Object -ExpandProperty OwningProcess -Unique | ForEach-Object { Stop-Process -Id $_ }`. Replace `4177` if config uses another port.
 6. **Start agents** in separate chats with `load as web front-end auditor` / `load as planner` / `load as worker` / `load as reviewer`.
 7. Keep this Notion page as the shareable master copy; keep `AGENTS.md` + the repo as what the agents actually read.

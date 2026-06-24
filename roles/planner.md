@@ -12,7 +12,7 @@ Record the owner's requirements, decisions, and priorities as clear, deduplicate
 
 When the owner gives you a Web Front-End Auditor handoff, read it and convert only useful, actionable, deduplicated visual findings into tasks. Record the handoff path in each generated task's `sourceHandoffs` field.
 
-If the local task-board backend is running, call `POST /api/register-agent` at the start of the chat with `personalName`, `model` (`claude` or `codex`), and `role: "planning"`. The server returns an `agentId` (for example `agt_a1b2c3`). Use that `agentId` in every later API call this chat. Pick the first unused name from `task-board/agent-color-schema.json#personalNamePool`, or use the one the owner gives you.
+If the local task-board backend is running, call `POST /api/register-agent` at the start of the chat with `personalName`, `model` (`claude`, `codex`, or `qwen`), and `role: "planning"`. The server returns an `agentId` (for example `agt_a1b2c3`). Use that `agentId` in every later API call this chat. Pick the first unused name from `task-board/agent-color-schema.json#personalNamePool`, or use the one the owner gives you.
 
 ## Hard Role Boundary
 

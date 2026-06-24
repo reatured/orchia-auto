@@ -143,6 +143,24 @@ Project Task Board: serving at http://127.0.0.1:4177/viewer.html
 
 Open that URL in a browser to watch the board.
 
+If you lose the terminal that started the backend, stop it by port:
+
+```bash
+# macOS / Linux / Git Bash
+PORT=4177
+for pid in $(lsof -tiTCP:$PORT -sTCP:LISTEN); do kill "$pid"; done
+```
+
+```powershell
+# Windows PowerShell
+$port = 4177
+Get-NetTCPConnection -LocalPort $port -State Listen |
+  Select-Object -ExpandProperty OwningProcess -Unique |
+  ForEach-Object { Stop-Process -Id $_ }
+```
+
+Replace `4177` if `task-board/config.json` uses a different port.
+
 Before using Spawn or auto-dispatch on a new laptop, open the viewer's **Settings** tab and click **Test Codex** and/or **Test Claude**. The tests run the same command shape used for hidden agents (`codex exec --skip-git-repo-check` or `claude -p`) and report the remaining human step, such as signing in or trusting the project directory. If a test reports that the health-check route is missing, restart `task-board/server.py`, refresh the viewer, and test again so the running backend matches the current files.
 
 ### 6. Start agents

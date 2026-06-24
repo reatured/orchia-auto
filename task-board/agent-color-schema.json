@@ -12,6 +12,11 @@
       "background": "#7eb1d6",
       "text": "#0d2538"
     },
+    "qwen": {
+      "label": "Qwen",
+      "background": "#a78bfa",
+      "text": "#1e0d3a"
+    },
     "unknown": {
       "label": "Unknown model",
       "background": "#e3ddd2",
