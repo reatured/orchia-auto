@@ -4,6 +4,8 @@ A reusable, project-agnostic **multi-agent workflow** for coordinating AI coding
 
 Copy this repo into a new project, adjust a few config values and role files, and start coordinating multiple agents on real work without them stepping on each other.
 
+Current starter version: **0.3.0**. See [`CHANGELOG.md`](CHANGELOG.md) for upgrade notes.
+
 ---
 
 ## What is this for?
@@ -50,7 +52,7 @@ todo → claimed → review → reviewing → done → archived
 | `done` | Accepted work (or failed work closed and replaced by a follow-up). |
 | `archived` | Accepted work hidden from the main board. |
 
-The **read-only HTML viewer** (`task-board/viewer.html`) is your window into the board. It collapses the six columns into three visual ones (**To Do**, **Review**, **Done**) and shows each active agent as a colored chip — **background = model** (orange Claude, blue Codex), **border = role**. Agents never read or edit the viewer; it's purely for you.
+The **read-only HTML viewer** (`task-board/viewer.html`) is your window into the board. It collapses the six columns into three visual ones (**To Do**, **Review**, **Done**), shows active and pending spawned agents in a top lane strip, and keeps active-agent count and dispatch controls in the To Do and Review headers. Agent chips use **background = model** (orange Claude, blue Codex) and **border = role**. Hover a top agent tab to see the latest spawned-process log preview. Agents never read or edit the viewer; it's purely for you.
 
 The board is the **lock**: a task in `claimed` reserves its files and scope for that Worker. Shared files alone don't block — same-file work can proceed when scopes differ. Before creating a task, the Planner and Reviewer scan every column for duplicates so the board never fills with overlapping work.
 
@@ -147,7 +149,7 @@ Open a **separate chat per agent** and load a role with its start phrase:
 
 A typical first run: give requirements to a **Planner** chat → start one or more **Worker** chats to claim and build → start a **Reviewer** chat to approve. Watch it all move on the viewer.
 
-> The viewer also has **Spawn** buttons and optional **auto-dispatch** to launch Workers/Reviewers as hidden CLI processes — handy once you're comfortable with the manual flow.
+> The viewer also has **Spawn** buttons and optional **auto-dispatch** to launch Workers/Reviewers as hidden CLI processes. Spawned output is written to `task-board/spawned-agent-logs/`, and the viewer uses PID checks plus log previews to show whether a spawned process is still running.
 
 ---
 
@@ -156,6 +158,8 @@ A typical first run: give requirements to a **Planner** chat → start one or mo
 ```
 orchia-auto/
   README.md                     # this file
+  VERSION                       # current starter version
+  CHANGELOG.md                  # release and upgrade notes
   AGENTS.md                     # entry point both Claude and Codex read first
   CLAUDE.md                     # one-line pointer to AGENTS.md
   roles/

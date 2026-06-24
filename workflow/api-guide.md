@@ -8,6 +8,7 @@ Use this guide when the local task-board backend is running:
 - API audit log: `task-board/task-board-api.log`
 - Viewer log: `task-board/task-board-viewer.log`
 - Dispatch settings: `task-board/agent-dispatch-settings.json`
+- Spawned agent output: `task-board/spawned-agent-logs/`
 
 Spawned agents are given the current `backendBaseUrl` in their start prompt. Use that exact URL, including port.
 
@@ -49,7 +50,7 @@ $base = "http://127.0.0.1:4177"
 | `GET /api/review-board` | Compact `review` + `reviewing` summaries. |
 | `GET /api/task-detail?taskId=...` | One full task and its current column. |
 | `GET /api/duplicate-scan?taskId=...` | Server-side duplicate scan; matching candidates only. |
-| `GET /api/agents` | Active registered agents. |
+| `GET /api/agents` | Active registered agents plus pending spawned processes, PID status, and latest log previews. |
 | `GET /api/agent-schema` | Color/role/name schema for rendering chips. |
 | `POST /api/register-agent` | Register at chat start; returns `agentId`. |
 | `POST /api/heartbeat-agent` | Refresh presence + current task ID. |
@@ -110,6 +111,8 @@ Invoke-RestMethod -Uri "$base/api/duplicate-scan?taskId=TASK-YYYYMMDD-001&agentI
 ```
 
 `GET /api/worker-board` and `GET /api/review-board` return only the role's active columns as compact summaries; they omit `done`, `archived`, the top-level `tasks` index, `apiAuditLog`, and policy text. After choosing a task, load full details with `GET /api/task-detail`.
+
+`GET /api/agents` is mainly for the owner-facing viewer and diagnostics. Registered agents appear in `activeAgents`. Hidden spawned processes that have not registered yet appear in `pendingSpawns` with `processId`, `processStatus.state` (`running`, `exited`, `pid-reused`, or `unknown`), and `latestLog.preview`. Workers and Reviewers should not use this endpoint to choose tasks; use `/api/worker-board` or `/api/review-board`.
 
 ## Planner APIs
 

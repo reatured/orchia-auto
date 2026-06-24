@@ -852,6 +852,7 @@
 
     .board.is-done-focus .lane:not(.done) .agent-summary,
     .board.is-done-focus .lane:not(.done) .spawn-group,
+    .board.is-done-focus .lane:not(.done) .lane-agent-strip,
     .board.is-done-focus .lane:not(.done) .dispatch-controls {
       display: none;
     }
@@ -888,8 +889,154 @@
     }
 
     .lane:has(.agent-summary:hover),
-    .lane:has(.agent-summary:focus-within) {
+    .lane:has(.agent-summary:focus-within),
+    .lane:has(.agent-run-tab-wrap:hover),
+    .lane:has(.agent-run-tab-wrap:focus-within) {
       z-index: 20;
+    }
+
+    .lane-agent-strip {
+      display: flex;
+      align-items: flex-end;
+      gap: 6px;
+      min-height: 36px;
+      padding: 0 12px 6px;
+      background: rgba(255, 255, 255, 0.36);
+    }
+
+    .lane-agent-strip.is-blank {
+      pointer-events: none;
+    }
+
+    .lane-agent-tabs {
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .agent-run-tab-wrap {
+      position: relative;
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .agent-run-tab {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 26px;
+      max-width: 132px;
+      border: 1px solid color-mix(in srgb, var(--lane-color) 34%, var(--line));
+      border-radius: 999px;
+      background: #ffffff;
+      color: color-mix(in srgb, var(--lane-color) 78%, #191816);
+      padding: 3px 9px;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 760;
+      line-height: 1;
+      cursor: default;
+      box-shadow: 0 6px 14px rgba(25, 24, 22, 0.06);
+    }
+
+    .agent-run-tab.is-pending {
+      border-style: dashed;
+      background: color-mix(in srgb, var(--lane-color) 8%, #ffffff);
+    }
+
+    .agent-run-tab.is-running {
+      border-style: dashed;
+      background: color-mix(in srgb, var(--lane-color) 12%, #ffffff);
+    }
+
+    .agent-run-tab.is-exited,
+    .agent-run-tab.is-reused,
+    .agent-run-tab.is-unknown {
+      border-color: #c9c1b7;
+      background: #f3f0ea;
+      color: #6d665e;
+      opacity: 0.82;
+    }
+
+    .agent-run-name {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .agent-run-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--lane-color);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--lane-color) 16%, #ffffff);
+    }
+
+    .agent-run-tab.is-pending .agent-run-dot {
+      background: transparent;
+      border: 1px solid var(--lane-color);
+    }
+
+    .agent-run-tab.is-exited .agent-run-dot,
+    .agent-run-tab.is-reused .agent-run-dot,
+    .agent-run-tab.is-unknown .agent-run-dot {
+      background: #9a9288;
+      border: 0;
+      box-shadow: none;
+    }
+
+    .agent-run-popover {
+      position: absolute;
+      left: 0;
+      top: calc(100% + 8px);
+      z-index: 40;
+      display: none;
+      width: min(420px, calc(100vw - 48px));
+      max-width: 420px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      box-shadow: 0 18px 42px rgba(25, 24, 22, 0.18);
+      padding: 10px;
+    }
+
+    .agent-run-tab-wrap:hover .agent-run-popover,
+    .agent-run-tab-wrap:focus-within .agent-run-popover {
+      display: block;
+    }
+
+    .agent-run-popover-title {
+      margin: 0 0 4px;
+      font-size: 12px;
+      font-weight: 760;
+      color: var(--ink);
+    }
+
+    .agent-run-popover-meta {
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .agent-run-log {
+      max-height: 220px;
+      overflow: auto;
+      margin: 0;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fbfaf7;
+      padding: 8px;
+      color: #312d29;
+      font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+      font-size: 11px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
     }
 
     .lane-header {
@@ -1743,7 +1890,8 @@
     const fallbackAgents = {
       updatedAt: "",
       agents: [],
-      activeAgents: []
+      activeAgents: [],
+      pendingSpawns: []
     };
     const fallbackDispatchSettings = {
       worker: {
@@ -1895,6 +2043,15 @@
       return agents.filter((agent) => String(agent.role || "").toLowerCase() === role);
     }
 
+    function pendingSpawnsForRole(role) {
+      const pending = Array.isArray(currentAgents.pendingSpawns)
+        ? currentAgents.pendingSpawns
+        : Array.isArray(currentDispatchSettings.pendingSpawns)
+          ? currentDispatchSettings.pendingSpawns
+          : [];
+      return pending.filter((spawn) => String(spawn.role || "").toLowerCase() === role);
+    }
+
     function shortTime(value) {
       const parsed = Date.parse(value || "");
       if (Number.isNaN(parsed)) return "";
@@ -1932,6 +2089,93 @@
       ].join(";");
       const unknownClass = (model === "unknown" || role === "unknown") ? " agent-chip-unknown" : "";
       return `<span class="agent-chip${unknownClass}" style="${styleParts}" title="${escapeText(titleParts)}">${escapeText(personalName)}</span>`;
+    }
+
+    function agentRunLogText(entry) {
+      const latestLog = entry?.latestLog && typeof entry.latestLog === "object" ? entry.latestLog : {};
+      const preview = String(latestLog.preview || "").trim();
+      if (preview) return preview;
+      const notes = String(entry?.notes || "").trim();
+      if (notes) return notes;
+      return "No log output recorded yet.";
+    }
+
+    function agentRunMeta(entry, stateLabel) {
+      const latestLog = entry?.latestLog && typeof entry.latestLog === "object" ? entry.latestLog : {};
+      const processStatus = entry?.processStatus && typeof entry.processStatus === "object" ? entry.processStatus : {};
+      const parts = [
+        `State: ${stateLabel}`,
+        entry?.model ? `Model: ${entry.model}` : "",
+        entry?.currentTaskId ? `Task: ${entry.currentTaskId}` : "",
+        entry?.processId ? `PID: ${entry.processId}` : "",
+        processStatus.state ? `PID state: ${processStatus.state}` : "",
+        processStatus.createdAt ? `PID started: ${shortTime(processStatus.createdAt) || processStatus.createdAt}` : "",
+        processStatus.checkedAt ? `PID checked: ${shortTime(processStatus.checkedAt) || processStatus.checkedAt}` : "",
+        entry?.lastHeartbeatAt ? `Seen: ${shortTime(entry.lastHeartbeatAt) || entry.lastHeartbeatAt}` : "",
+        entry?.spawnedAt ? `Spawned: ${shortTime(entry.spawnedAt) || entry.spawnedAt}` : "",
+        latestLog.updatedAt ? `Log: ${shortTime(latestLog.updatedAt) || latestLog.updatedAt}` : "",
+        latestLog.fileName ? latestLog.fileName : "",
+      ].filter(Boolean);
+      return parts.join(" | ");
+    }
+
+    function pendingSpawnDisplayState(entry) {
+      const status = String(entry?.status || "").toLowerCase();
+      const processState = String(entry?.processStatus?.state || "").toLowerCase();
+      if (status.includes("running") || processState === "running") {
+        return { className: "is-running", stateLabel: "spawned running" };
+      }
+      if (status.includes("exited") || processState === "exited") {
+        return { className: "is-exited", stateLabel: "spawned exited" };
+      }
+      if (status.includes("pid-reused") || processState === "pid-reused") {
+        return { className: "is-reused", stateLabel: "spawned pid reused" };
+      }
+      if (status.includes("unknown") || processState === "unknown") {
+        return { className: "is-unknown", stateLabel: "spawned unknown" };
+      }
+      return { className: "is-pending", stateLabel: "pending registration" };
+    }
+
+    function agentRunTabMarkup(entry, state) {
+      const displayState = state === "pending"
+        ? pendingSpawnDisplayState(entry)
+        : { className: "is-registered", stateLabel: "registered live" };
+      const stateLabel = displayState.stateLabel;
+      const name = String(entry?.personalName || entry?.agentName || "agent").trim();
+      const displayName = name || "agent";
+      const meta = agentRunMeta(entry, stateLabel);
+      const logText = agentRunLogText(entry);
+      return `
+        <div class="agent-run-tab-wrap">
+          <button class="agent-run-tab ${displayState.className}" type="button" aria-label="${escapeText(displayName)} ${escapeText(stateLabel)} agent log">
+            <span class="agent-run-dot" aria-hidden="true"></span>
+            <span class="agent-run-name">${escapeText(displayName)}</span>
+          </button>
+          <div class="agent-run-popover" role="tooltip">
+            <div class="agent-run-popover-title">${escapeText(displayName)}</div>
+            <div class="agent-run-popover-meta">${escapeText(meta)}</div>
+            <pre class="agent-run-log">${escapeText(logText)}</pre>
+          </div>
+        </div>
+      `;
+    }
+
+    function laneAgentStripMarkup(role) {
+      if (!role) {
+        return `<div class="lane-agent-strip is-blank" aria-hidden="true"></div>`;
+      }
+      const registeredTabs = activeAgentsForRole(role).map((agent) => agentRunTabMarkup(agent, "registered"));
+      const pendingTabs = pendingSpawnsForRole(role).map((spawn) => agentRunTabMarkup(spawn, "pending"));
+      const tabs = [...registeredTabs, ...pendingTabs];
+      if (!tabs.length) {
+        return `<div class="lane-agent-strip is-blank" aria-label="No active or pending agents"></div>`;
+      }
+      return `
+        <div class="lane-agent-strip" aria-label="${escapeText(role)} agents">
+          <div class="lane-agent-tabs">${tabs.join("")}</div>
+        </div>
+      `;
     }
 
     function agentSummaryMarkup(role, label) {
@@ -2990,9 +3234,11 @@
         : `<div class="empty">No ${escapeText(label.toLowerCase())} tasks</div>`;
       const addlClass = options.extraClass ? ` ${options.extraClass}` : "";
       const agentClass = options.agentRole ? " has-agent-controls" : "";
+      const agentStrip = options.showAgentStrip === false ? "" : laneAgentStripMarkup(options.agentRole || "");
 
       return `
         <section class="lane ${key}${addlClass}${agentClass}" aria-label="${escapeText(label)}">
+          ${agentStrip}
           <div class="lane-header">
             <div class="lane-title"><span class="dot"></span><span>${escapeText(label)}</span></div>
             <div class="lane-actions">
@@ -3054,7 +3300,8 @@
         <div class="archive-tray" id="archived-panel" aria-hidden="${archiveTrayOpen ? "false" : "true"}">
           ${laneMarkup("archived", "Archived", archivedTasks, {
             extraClass: "archived-tray-lane",
-            extraActions: archiveCloseButton()
+            extraActions: archiveCloseButton(),
+            showAgentStrip: false
           })}
         </div>
       `;

@@ -7,6 +7,8 @@ This project uses a simple JSON-backed task board with three separate agent role
 ## Start Here
 
 - Workflow overview: `workflow/workflow-overview.md`
+- Current starter version: `VERSION`
+- Release notes and upgrade notes: `CHANGELOG.md`
 - Planner role: `roles/planner.md`
 - Worker role: `roles/worker.md`
 - Reviewer role: `roles/reviewer.md`
@@ -55,6 +57,8 @@ When the backend is running, use its API instead of manually editing or moving t
 For payload shapes, examples (curl + PowerShell), and error handling, read `workflow/api-guide.md`.
 
 Every agent that talks to the API registers at chat start with `POST /api/register-agent` (`personalName`, `model` = `claude` or `codex`, `role`), receives an `agentId`, and includes that `agentId` in every later payload. Workers and Reviewers also heartbeat after claiming/moving a task and unregister before ending the chat.
+
+`GET /api/agents` returns active registered agents plus pending spawned Worker/Reviewer processes. Pending spawned entries include `processId`, PID-backed `processStatus`, and a latest log preview from `task-board/spawned-agent-logs/`. The viewer uses that data for the compact top lane agent tabs; agents should still coordinate only through board/API endpoints, not by reading the viewer.
 
 If the backend is not running, agents coordinate by editing `task-board/board.json` directly using the same role rules.
 

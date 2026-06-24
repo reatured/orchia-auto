@@ -95,6 +95,7 @@ A small **Python 3.10+ HTTP server** (standard library only) owns the board file
 - Validates task titles (rejects blank / "Untitled").
 - Maintains **active-agent presence** (register / heartbeat / unregister) and an **append-only audit log** (JSON Lines) separate from the viewer's log.
 - Can **spawn** Worker/Reviewer agents as hidden non-interactive CLI processes (branches for `claude` vs `codex`), with optional **auto-dispatch** (per-role model, max agents, on/off).
+- Tracks spawned-process PID state and latest log previews so the viewer can show pending spawned agents as running, exited, PID-reused, or unknown.
 
 ### `board.json` shape (top level)
 
@@ -143,6 +144,8 @@ Base URL from config (default `http://127.0.0.1:4177`). Agents use `/api/...`; t
 
 **Reads:** `GET /api/board`, `/api/worker-board` (`todo`+`claimed`), `/api/review-board` (`review`+`reviewing`), `/api/task-detail?taskId=…`, `/api/duplicate-scan?taskId=…&includeArchived=true`, `/api/agents`, `/api/agent-schema`.
 
+`/api/agents` returns active registered agents plus pending spawned processes with `processId`, PID-backed `processStatus`, and `latestLog.preview`. Workers and Reviewers should still choose work from `/api/worker-board` or `/api/review-board`; `/api/agents` is for the owner-facing viewer and diagnostics.
+
 **Presence:** `POST /api/register-agent` (→ returns `agentId`), `/api/heartbeat-agent`, `/api/unregister-agent`.
 
 **Planner:** `POST /api/add-task`, `/api/update-task`, `/api/delete-task` (cleanup only).
@@ -162,8 +165,9 @@ Base URL from config (default `http://127.0.0.1:4177`). Agents use `/api/...`; t
 A single static **HTML page** served by the backend. It is the **owner's reader view** — agents never read or edit it during normal work. It:
 
 - Polls the board and renders the three visual columns (To Do, Review, Done), highlighting `claimed` and `reviewing` cards.
+- Renders active and pending spawned Worker/Reviewer agents in a top lane strip. Hovering a tab shows the latest spawned-agent log preview plus PID status.
 - Renders each active agent as a **chip**: background color = model (orange Claude, blue Codex), border color = role. Colors come from a shared `agent-color-schema.json`.
-- Shows active Worker/Reviewer counts in column headers.
+- Shows active Worker/Reviewer counts and dispatch controls in column headers.
 - Provides owner controls: return a `done` task to review with feedback, archive, unclaim a dead worker's task, and Spawn / auto-dispatch agents.
 
 ---

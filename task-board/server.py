@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import threading
 import time
+import ctypes
+from ctypes import wintypes
 from datetime import datetime, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -80,6 +82,9 @@ DISPATCH_SETTINGS_LOCK = threading.Lock()
 ACTIVE_AGENT_STALE_SECONDS = 10 * 60
 AUTO_DISPATCH_INTERVAL_SECONDS = 5
 DISPATCH_PENDING_SECONDS = 120
+PID_START_TOLERANCE_SECONDS = 30
+PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+STILL_ACTIVE = 259
 GET_ACTIONS = {
     "/api/board": "get_board",
     "/api/worker-board": "get_worker_board",
@@ -259,6 +264,169 @@ def parse_iso_datetime(value: object) -> datetime | None:
         return None
 
 
+def parse_process_id(value: object) -> int:
+    try:
+        parsed = int(str(value or "").strip())
+    except (TypeError, ValueError):
+        return 0
+    return parsed if parsed > 0 else 0
+
+
+def filetime_to_datetime(filetime: wintypes.FILETIME) -> datetime | None:
+    value = (int(filetime.dwHighDateTime) << 32) + int(filetime.dwLowDateTime)
+    if value <= 0:
+        return None
+    unix_seconds = (value - 116444736000000000) / 10000000
+    try:
+        return datetime.fromtimestamp(unix_seconds, timezone.utc).astimezone()
+    except (OSError, OverflowError, ValueError):
+        return None
+
+
+def windows_process_status(pid: int, spawned_at: datetime | None) -> dict:
+    checked_at = now_iso()
+    try:
+        kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+        kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+        kernel32.OpenProcess.restype = wintypes.HANDLE
+        kernel32.GetExitCodeProcess.argtypes = [wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD)]
+        kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+        kernel32.GetProcessTimes.argtypes = [
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.FILETIME),
+            ctypes.POINTER(wintypes.FILETIME),
+            ctypes.POINTER(wintypes.FILETIME),
+            ctypes.POINTER(wintypes.FILETIME),
+        ]
+        kernel32.GetProcessTimes.restype = wintypes.BOOL
+        kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+        kernel32.CloseHandle.restype = wintypes.BOOL
+        handle = kernel32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid)
+        if not handle:
+            error_code = ctypes.get_last_error()
+            state = "unknown" if error_code == 5 else "exited"
+            return {
+                "processId": pid,
+                "isRunning": False,
+                "state": state,
+                "checkedAt": checked_at,
+                "errorCode": error_code,
+            }
+
+        try:
+            exit_code = wintypes.DWORD()
+            if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+                return {
+                    "processId": pid,
+                    "isRunning": False,
+                    "state": "unknown",
+                    "checkedAt": checked_at,
+                    "errorCode": ctypes.get_last_error(),
+                }
+
+            running = int(exit_code.value) == STILL_ACTIVE
+            creation_time = wintypes.FILETIME()
+            exit_time = wintypes.FILETIME()
+            kernel_time = wintypes.FILETIME()
+            user_time = wintypes.FILETIME()
+            created_at = None
+            if kernel32.GetProcessTimes(
+                handle,
+                ctypes.byref(creation_time),
+                ctypes.byref(exit_time),
+                ctypes.byref(kernel_time),
+                ctypes.byref(user_time),
+            ):
+                created_at = filetime_to_datetime(creation_time)
+
+            if running and created_at and spawned_at:
+                if (spawned_at - created_at).total_seconds() > PID_START_TOLERANCE_SECONDS:
+                    return {
+                        "processId": pid,
+                        "isRunning": False,
+                        "state": "pid-reused",
+                        "checkedAt": checked_at,
+                        "createdAt": created_at.isoformat(timespec="seconds"),
+                    }
+
+            return {
+                "processId": pid,
+                "isRunning": running,
+                "state": "running" if running else "exited",
+                "checkedAt": checked_at,
+                "createdAt": created_at.isoformat(timespec="seconds") if created_at else "",
+                "exitCode": "" if running else int(exit_code.value),
+            }
+        finally:
+            kernel32.CloseHandle(handle)
+    except Exception as error:
+        return {
+            "processId": pid,
+            "isRunning": False,
+            "state": "unknown",
+            "checkedAt": checked_at,
+            "error": str(error),
+        }
+
+
+def generic_process_status(pid: int, spawned_at: datetime | None = None) -> dict:
+    del spawned_at
+    checked_at = now_iso()
+    try:
+        os.kill(pid, 0)
+        return {
+            "processId": pid,
+            "isRunning": True,
+            "state": "running",
+            "checkedAt": checked_at,
+        }
+    except ProcessLookupError:
+        return {
+            "processId": pid,
+            "isRunning": False,
+            "state": "exited",
+            "checkedAt": checked_at,
+        }
+    except PermissionError:
+        return {
+            "processId": pid,
+            "isRunning": True,
+            "state": "running",
+            "checkedAt": checked_at,
+            "warning": "permission-limited",
+        }
+    except Exception as error:
+        return {
+            "processId": pid,
+            "isRunning": False,
+            "state": "unknown",
+            "checkedAt": checked_at,
+            "error": str(error),
+        }
+
+
+def spawned_process_status(spawn: object) -> dict:
+    if not isinstance(spawn, dict):
+        return {
+            "processId": 0,
+            "isRunning": False,
+            "state": "unknown",
+            "checkedAt": now_iso(),
+        }
+    pid = parse_process_id(spawn.get("processId"))
+    if not pid:
+        return {
+            "processId": 0,
+            "isRunning": False,
+            "state": "missing-pid",
+            "checkedAt": now_iso(),
+        }
+    spawned_at = parse_iso_datetime(spawn.get("spawnedAt"))
+    if os.name == "nt":
+        return windows_process_status(pid, spawned_at)
+    return generic_process_status(pid, spawned_at)
+
+
 def is_recent_spawn(spawn: object, role: str, now: datetime) -> bool:
     if not isinstance(spawn, dict):
         return False
@@ -266,6 +434,9 @@ def is_recent_spawn(spawn: object, role: str, now: datetime) -> bool:
         return False
     spawned_at = parse_iso_datetime(spawn.get("spawnedAt"))
     if not spawned_at:
+        return False
+    process_status = spawned_process_status(spawn)
+    if process_status.get("state") in {"exited", "pid-reused"}:
         return False
     return (now - spawned_at).total_seconds() <= DISPATCH_PENDING_SECONDS
 
@@ -740,7 +911,143 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         }
 
     def get_agents(self, board: dict, payload: dict) -> dict:
-        return self.load_active_agents_state()
+        state = self.load_active_agents_state()
+        return self.with_agent_log_state(state)
+
+    def spawn_log_path_is_safe(self, path: Path) -> bool:
+        try:
+            resolved = path.resolve()
+            root = SPAWN_LOG_DIR.resolve()
+            return resolved == root or root in resolved.parents
+        except OSError:
+            return False
+
+    def read_spawn_log_preview(self, log_path: object, max_bytes: int = 6000, max_lines: int = 18) -> dict:
+        raw_path = str(log_path or "").strip()
+        if not raw_path:
+            return {}
+        path = Path(raw_path)
+        if not path.is_absolute():
+            path = ROOT / path
+        if not self.spawn_log_path_is_safe(path) or not path.is_file():
+            return {}
+        try:
+            size = path.stat().st_size
+            with path.open("rb") as log_file:
+                if size > max_bytes:
+                    log_file.seek(size - max_bytes)
+                    raw = log_file.read(max_bytes)
+                else:
+                    raw = log_file.read()
+            text = raw.decode("utf-8", errors="replace")
+            if size > max_bytes:
+                text = text.split("\n", 1)[-1]
+            lines = [line.rstrip() for line in text.splitlines() if line.strip()]
+            preview = "\n".join(lines[-max_lines:])
+            updated_at = datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).astimezone().isoformat(timespec="seconds")
+            return {
+                "path": str(path),
+                "fileName": path.name,
+                "updatedAt": updated_at,
+                "size": size,
+                "preview": preview,
+            }
+        except OSError:
+            return {}
+
+    def safe_spawn_log_name_part(self, value: object) -> str:
+        return re.sub(r"[^a-zA-Z0-9_-]+", "-", str(value or "").strip()).strip("-")
+
+    def latest_spawn_log_for_agent(self, agent: dict) -> dict:
+        role = self.normalize_agent_role(agent.get("role"))
+        model = self.normalize_agent_model(agent.get("model"))
+        personal_name = self.safe_spawn_log_name_part(agent.get("personalName") or agent.get("agentName"))
+        if not role or not personal_name or not SPAWN_LOG_DIR.exists():
+            return {}
+        patterns = []
+        if model and model != "unknown":
+            patterns.append(f"*-{role}-{model}-{personal_name}.log")
+        patterns.append(f"*-{role}-*-{personal_name}.log")
+        candidates: list[Path] = []
+        for pattern in patterns:
+            candidates.extend(SPAWN_LOG_DIR.glob(pattern))
+        safe_candidates = [
+            path
+            for path in candidates
+            if path.is_file() and self.spawn_log_path_is_safe(path)
+        ]
+        if not safe_candidates:
+            return {}
+        latest = max(safe_candidates, key=lambda path: path.stat().st_mtime)
+        return self.read_spawn_log_preview(latest)
+
+    def pending_spawn_matches_active_agent(self, spawn: dict, active_agents: list[dict]) -> bool:
+        spawn_role = self.normalize_agent_role(spawn.get("role"))
+        spawn_model = self.normalize_agent_model(spawn.get("model"))
+        spawn_name = str(spawn.get("personalName") or "").strip().lower()
+        if not spawn_role or not spawn_name:
+            return False
+        for agent in active_agents:
+            if not isinstance(agent, dict):
+                continue
+            if self.normalize_agent_role(agent.get("role")) != spawn_role:
+                continue
+            if self.normalize_agent_model(agent.get("model")) != spawn_model:
+                continue
+            agent_name = str(agent.get("personalName") or agent.get("agentName") or "").strip().lower()
+            if agent_name == spawn_name:
+                return True
+        return False
+
+    def with_agent_log_state(self, state: dict) -> dict:
+        enriched = dict(state)
+        agents = []
+        for agent in state.get("agents", []) or []:
+            if not isinstance(agent, dict):
+                continue
+            enriched_agent = dict(agent)
+            latest_log = self.latest_spawn_log_for_agent(enriched_agent)
+            if latest_log:
+                enriched_agent["latestLog"] = latest_log
+            agents.append(enriched_agent)
+        active_agents = [
+            agent
+            for agent in agents
+            if agent.get("status") == "active"
+        ]
+        settings = load_dispatch_settings()
+        pending_spawns = []
+        for spawn in settings.get("pendingSpawns", []) or []:
+            if not isinstance(spawn, dict):
+                continue
+            if self.pending_spawn_matches_active_agent(spawn, active_agents):
+                continue
+            process_status = spawned_process_status(spawn)
+            process_state = str(process_status.get("state") or "unknown")
+            if process_state == "running":
+                pending_status = "spawned-running"
+            elif process_state == "exited":
+                pending_status = "spawned-exited"
+            elif process_state == "pid-reused":
+                pending_status = "spawned-pid-reused"
+            else:
+                pending_status = f"spawned-{process_state}"
+            pending = {
+                "role": self.normalize_agent_role(spawn.get("role")),
+                "model": self.normalize_agent_model(spawn.get("model")),
+                "personalName": str(spawn.get("personalName", "") or "").strip(),
+                "spawnedAt": str(spawn.get("spawnedAt", "") or "").strip(),
+                "processId": spawn.get("processId", ""),
+                "status": pending_status,
+                "processStatus": process_status,
+                "latestLog": self.read_spawn_log_preview(spawn.get("logPath")),
+            }
+            if pending["role"] in {"worker", "review"}:
+                pending_spawns.append(pending)
+        enriched["agents"] = agents
+        enriched["activeAgents"] = active_agents
+        enriched["pendingSpawns"] = pending_spawns
+        return enriched
 
     def load_board(self) -> dict:
         board = json.loads(BOARD_PATH.read_text(encoding="utf-8-sig"))
@@ -2029,8 +2336,11 @@ def run_auto_dispatch_once(server: ThreadingHTTPServer) -> None:
     settings = load_dispatch_settings()
     board = load_dispatch_board()
     agents = load_dispatch_active_agents()
+    original_pending = settings.get("pendingSpawns")
+    original_pending_text = json.dumps(original_pending if isinstance(original_pending, list) else [], sort_keys=True, separators=(",", ":"))
     pending = clean_pending_spawns(settings, now)
-    changed_settings = False
+    cleaned_pending_text = json.dumps(pending, sort_keys=True, separators=(",", ":"))
+    changed_settings = cleaned_pending_text != original_pending_text
 
     for role in ("worker", "review"):
         role_settings = settings.get(role, {})
