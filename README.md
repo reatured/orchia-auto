@@ -1,6 +1,6 @@
 # orchia-auto
 
-A reusable, project-agnostic **multi-agent workflow** for coordinating AI coding agents (Claude or Codex CLIs) on a single project. It ships a clean three-role core — **Planner**, **Worker**, **Reviewer** — backed by a small local task-board server, a JSON board, and a read-only HTML viewer.
+A reusable, project-agnostic **multi-agent workflow** for coordinating AI coding agents (Claude or Codex CLIs) on a single project. It ships a clean three-role board core — **Planner**, **Worker**, **Reviewer** — backed by a small local task-board server, a JSON board, and a read-only HTML viewer. It also includes an upstream **Web Front-End Auditor** role that writes visual audit handoffs for Planner.
 
 Copy this repo into a new project, adjust a few config values and role files, and start coordinating multiple agents on real work without them stepping on each other.
 
@@ -14,6 +14,7 @@ When you run more than one AI coding agent on the same project at the same time,
 
 It gives you a clear separation between **planning**, **doing**, and **reviewing**, so each agent has one job and one job only:
 
+- **Web Front-End Auditor** — visually inspects the running web UI and writes Markdown handoffs. Never creates or moves tasks.
 - **Planner** — turns your requirements into small, deduplicated `todo` tasks on the board. Never writes product code.
 - **Worker** — claims exactly one task at a time, implements it, and moves it to `review`. Never reviews or marks its own work done.
 - **Reviewer** — reviews completed work and either approves it to `done` or opens a follow-up `todo`. Never implements fixes.
@@ -52,7 +53,7 @@ todo → claimed → review → reviewing → done → archived
 | `done` | Accepted work (or failed work closed and replaced by a follow-up). |
 | `archived` | Accepted work hidden from the main board. |
 
-The **read-only HTML viewer** (`task-board/viewer.html`) is your window into the board. It collapses the six columns into three visual ones (**To Do**, **Review**, **Done**), shows active and pending spawned agents in a top lane strip, and keeps active-agent count and dispatch controls in the To Do and Review headers. Agent chips use **background = model** (orange Claude, blue Codex) and **border = role**. Hover a top agent tab to see the latest spawned-process log preview. Agents never read or edit the viewer; it's purely for you.
+The **read-only HTML viewer** (`task-board/viewer.html`) is your window into the board. It collapses the six columns into three visual ones (**To Do**, **Review**, **Done**), shows active and pending spawned agents in a top lane strip, and keeps active-agent count and dispatch controls in the To Do and Review headers. Agent chips use **background = model** (orange Claude, blue Codex) and **border = role**. Hover a top agent tab to see the latest spawned-process log preview. The backend also exposes a global pause state that blocks new claims and backend spawns while leaving the board as the source of truth. Agents never read or edit the viewer; it's purely for you.
 
 The board is the **lock**: a task in `claimed` reserves its files and scope for that Worker. Shared files alone don't block — same-file work can proceed when scopes differ. Before creating a task, the Planner and Reviewer scan every column for duplicates so the board never fills with overlapping work.
 
@@ -62,8 +63,8 @@ See [`workflow/workflow-overview.md`](workflow/workflow-overview.md) for the ful
 
 ## Requirements
 
-- **Python 3.10+** (standard library only — no third-party packages, no `pip install`).
-- A coding-agent CLI: **Claude** (`claude`) and/or **Codex** (`codex`). Both are supported; configure the command names in `task-board/config.json`.
+- **Python 3.9+** (standard library only — no third-party packages, no `pip install`).
+- A coding-agent CLI: **Claude** (`claude`) and/or **Codex** (`codex`). Both are supported; configure default command names in `task-board/config.json`, or update them from the viewer Settings tab after the backend starts.
 
 ---
 
@@ -103,7 +104,9 @@ Edit [`task-board/config.json`](task-board/config.json). Every project-specific 
 | `devServerUrl` | Base URL used in inspection-target examples (e.g. your local app). |
 | `host` / `port` | Where the server listens. Default `127.0.0.1:4177`. |
 | `projectRoot` | Path (relative to `task-board/`) to your actual project root. |
-| `spawn.claudeCommand` / `spawn.codexCommand` | The CLI command names on your machine. |
+| `spawn.claudeCommand` / `spawn.codexCommand` | Default CLI command names on your machine. The viewer Settings tab can override them in `task-board/agent-dispatch-settings.json`. |
+
+If you want to test the workflow inside this starter without committing runtime board state, copy the role, workflow, and task-board files into a project-local `teamwork/` folder and run `teamwork/task-board/server.py`. The default `.gitignore` excludes `teamwork/`, so local self-management boards, logs, active-agent files, and smoke-test data stay out of git.
 
 ### 3. Tailor the role files
 
@@ -115,17 +118,20 @@ Edit the files in [`roles/`](roles/) to fit your project:
 ### 4. (Optional) Tweak appearance and extend
 
 - Edit [`task-board/agent-color-schema.json`](task-board/agent-color-schema.json) to change the `personalNamePool` (the short names agents pick from) or the chip colors.
-- If you need research/audit agents that feed the Planner, follow the **"Extending the workflow"** section in [`workflow/workflow-overview.md`](workflow/workflow-overview.md). Upstream agents write Markdown handoff files; only the Planner ever creates tasks.
+- Use `roles/web-frontend-auditor.md` when you want a visual UI pass before planning. It writes handoffs under `handoffs/frontend-audits/`; only the Planner turns those handoffs into tasks.
+- If you need other research/audit agents that feed the Planner, follow the **"Extending the workflow"** section in [`workflow/workflow-overview.md`](workflow/workflow-overview.md). Upstream agents write Markdown handoff files; only the Planner ever creates tasks.
 
 ### 5. Start the backend
 
 ```bash
 # macOS / Linux / Git Bash
-python task-board/server.py
+python3 task-board/server.py
 ```
 
 ```powershell
 # Windows PowerShell
+py -3 task-board\server.py
+# If the Python launcher is unavailable, use:
 python task-board\server.py
 ```
 
@@ -137,19 +143,22 @@ Project Task Board: serving at http://127.0.0.1:4177/viewer.html
 
 Open that URL in a browser to watch the board.
 
+Before using Spawn or auto-dispatch on a new laptop, open the viewer's **Settings** tab and click **Test Codex** and/or **Test Claude**. The tests run the same command shape used for hidden agents (`codex exec --skip-git-repo-check` or `claude -p`) and report the remaining human step, such as signing in or trusting the project directory. If a test reports that the health-check route is missing, restart `task-board/server.py`, refresh the viewer, and test again so the running backend matches the current files.
+
 ### 6. Start agents
 
 Open a **separate chat per agent** and load a role with its start phrase:
 
 | Start phrase | Role | What it does |
 | --- | --- | --- |
+| `load as web front-end auditor` | Web Front-End Auditor | Visually inspects the app and writes a handoff for Planner. |
 | `load as planner` | Planner | Reads your requirements, creates `todo` tasks. |
 | `load as worker` | Worker | Claims a task, implements it, moves it to `review`. |
 | `load as reviewer` | Reviewer | Reviews completed work; approves or sends back. |
 
-A typical first run: give requirements to a **Planner** chat → start one or more **Worker** chats to claim and build → start a **Reviewer** chat to approve. Watch it all move on the viewer.
+A typical visual-polish run: start a **Web Front-End Auditor** chat against your app URL → give its handoff file to a **Planner** chat → start one or more **Worker** chats to claim and build → start a **Reviewer** chat to approve. Watch board-moving work on the viewer.
 
-> The viewer also has **Spawn** buttons and optional **auto-dispatch** to launch Workers/Reviewers as hidden CLI processes. Spawned output is written to `task-board/spawned-agent-logs/`, and the viewer uses PID checks plus log previews to show whether a spawned process is still running.
+> The viewer also has **Spawn** buttons and optional **auto-dispatch** to launch Workers/Reviewers as hidden CLI processes. Use **Pause +1h** to add one hour from `max(now, pausedUntil)`; repeated clicks accumulate time. While paused, the server rejects new Worker claims, Reviewer claims, viewer Spawn clicks, and auto-dispatch spawns. **Resume now** clears the pause, after which auto-dispatch resumes eligible paused hidden runs before starting normal new work. Hard stop applies only to backend-spawned hidden Worker/Reviewer processes and records `pausedRuns`; it does not kill manual terminal/chat agents. Use the bottom-left **Settings** tab to test and customize the local Codex and Claude Code command names used for spawning. Plain `codex` and `claude` commands are resolved from `PATH` plus common install locations such as Homebrew, `/usr/local/bin`, user-local bins, npm, and Windows Node/npm paths. Spawned output is written to `task-board/spawned-agent-logs/`, and the viewer uses PID checks plus log previews to show whether a spawned process is still running.
 
 ---
 
@@ -163,6 +172,7 @@ orchia-auto/
   AGENTS.md                     # entry point both Claude and Codex read first
   CLAUDE.md                     # one-line pointer to AGENTS.md
   roles/
+    web-frontend-auditor.md
     planner.md  worker.md  reviewer.md
   workflow/
     workflow-overview.md        # the three-role model, columns, rules
@@ -187,12 +197,14 @@ Every agent that talks to the API:
 3. **Reloads** its compact board view after each status change (`/api/worker-board` or `/api/review-board`) and uses `/api/duplicate-scan` instead of loading the whole board.
 4. Workers and Reviewers **heartbeat** after claiming/moving a task and **unregister** before ending.
 
+During a board-wide pause, `POST /api/claim-task`, `POST /api/claim-review`, and `POST /api/spawn-agent` return HTTP `423` with pause details. Agents should not bypass that response with manual JSON edits. Resume context comes from live board locks and `/api/heartbeat-agent` state first; prior spawned-agent logs are only recovery context.
+
 The server writes an append-only audit log (`task-board/task-board-api.log`, JSON Lines) and persists the board with an **atomic write** (temp file + `os.replace`), so a crash mid-write never corrupts `board.json`. See [`workflow/api-guide.md`](workflow/api-guide.md) for every endpoint with `curl` and PowerShell examples.
 
 ---
 
 ## Notes
 
-- Runtime artifacts (`*.log`, `active-agents.json`, `agent-dispatch-settings.json`, `spawned-agent-logs/`, `*.json.tmp`, `__pycache__/`) are git-ignored; the server regenerates them.
-- Works on Windows, macOS, and Linux. On Windows use `python task-board\server.py`.
+- Runtime artifacts (`*.log`, `active-agents.json`, `agent-dispatch-settings.json`, `spawned-agent-logs/`, `codex-sqlite-state/`, `*.json.tmp`, `__pycache__/`), generated handoffs (`handoffs/`, `reference-images/frontend-audits/`), and project-local self-test boards (`teamwork/`) are git-ignored; the server regenerates or owns them.
+- Works on Windows, macOS, and Linux. On macOS/Linux use `python3 task-board/server.py`; on Windows use `py -3 task-board\server.py` or `python task-board\server.py`.
 - `notion-page.md` is a paste-ready human-readable master spec — drop it into Notion or any wiki to share the workflow with your team.

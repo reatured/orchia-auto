@@ -4,13 +4,15 @@ import json
 import os
 import re
 import secrets
+import signal
+import shlex
 import shutil
 import subprocess
 import threading
 import time
 import ctypes
 from ctypes import wintypes
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -74,6 +76,7 @@ AGENT_SCHEMA_PATH = ROOT / "agent-color-schema.json"
 API_LOG_PATH = ROOT / "task-board-api.log"
 VIEWER_LOG_PATH = ROOT / "task-board-viewer.log"
 SPAWN_LOG_DIR = ROOT / "spawned-agent-logs"
+CODEX_SQLITE_STATE_DIR = ROOT / "codex-sqlite-state"
 DISPATCH_SETTINGS_PATH = ROOT / "agent-dispatch-settings.json"
 API_LOG_LOCK = threading.Lock()
 VIEWER_LOG_LOCK = threading.Lock()
@@ -82,9 +85,13 @@ DISPATCH_SETTINGS_LOCK = threading.Lock()
 ACTIVE_AGENT_STALE_SECONDS = 10 * 60
 AUTO_DISPATCH_INTERVAL_SECONDS = 5
 DISPATCH_PENDING_SECONDS = 120
+HEALTH_CHECK_TIMEOUT_SECONDS = 90
+HEALTH_CHECK_PROMPT = "Reply exactly: OK"
+PAUSE_INCREMENT_SECONDS = 60 * 60
 PID_START_TOLERANCE_SECONDS = 30
 PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
 STILL_ACTIVE = 259
+PAUSED_RUN_RETRYABLE_STATES = {"waiting", "resume-pending", "resume-failed"}
 GET_ACTIONS = {
     "/api/board": "get_board",
     "/api/worker-board": "get_worker_board",
@@ -94,6 +101,8 @@ GET_ACTIONS = {
     "/api/duplicate-scan": "get_duplicate_scan",
     "/api/agents": "get_agents",
     "/api/agent-schema": "get_agent_schema",
+    "/api/pause": "get_pause_status",
+    "/api/pause-status": "get_pause_status",
 }
 VIEWER_GET_ACTIONS = {
     "/viewer/board": "get_board",
@@ -105,6 +114,8 @@ VIEWER_GET_ACTIONS = {
     "/viewer/agents": "get_agents",
     "/viewer/agent-schema": "get_agent_schema",
     "/viewer/dispatch-settings": "get_dispatch_settings",
+    "/viewer/pause": "get_pause_status",
+    "/viewer/pause-status": "get_pause_status",
 }
 POST_ACTIONS = {
     "/api/add-task": "add_task",
@@ -122,13 +133,25 @@ POST_ACTIONS = {
     "/api/heartbeat-agent": "heartbeat_agent",
     "/api/unregister-agent": "unregister_agent",
     "/api/spawn-agent": "spawn_agent",
+    "/api/agent-health-check": "agent_health_check",
+    "/api/hard-stop": "hard_stop_spawned_agents",
+    "/api/hard-stop-spawned-agents": "hard_stop_spawned_agents",
+    "/api/pause": "pause_plus_one_hour",
+    "/api/pause-plus-one-hour": "pause_plus_one_hour",
+    "/api/resume-now": "resume_now",
 }
 VIEWER_POST_ACTIONS = {
     "/viewer/archive": "archive_task",
     "/viewer/return-to-review": "return_task_to_review",
     "/viewer/unclaim-task": "unclaim_task",
     "/viewer/spawn-agent": "spawn_agent",
+    "/viewer/agent-health-check": "agent_health_check",
     "/viewer/dispatch-settings": "update_dispatch_settings",
+    "/viewer/hard-stop": "hard_stop_spawned_agents",
+    "/viewer/hard-stop-spawned-agents": "hard_stop_spawned_agents",
+    "/viewer/pause": "pause_plus_one_hour",
+    "/viewer/pause-plus-one-hour": "pause_plus_one_hour",
+    "/viewer/resume-now": "resume_now",
 }
 SPAWNABLE_AGENT_ROLES = {"worker", "review"}
 SPAWNABLE_TOOLS = {"claude", "codex"}
@@ -179,6 +202,14 @@ AGENT_ROLE_START_PHRASES = {
 }
 
 
+class JsonResponseError(Exception):
+    def __init__(self, message: str, status: int = 400, payload: dict | None = None):
+        super().__init__(message)
+        self.status = status
+        self.payload = dict(payload or {})
+        self.payload.setdefault("error", message)
+
+
 def now_iso() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 
@@ -187,6 +218,10 @@ def default_dispatch_settings() -> dict:
     return {
         "version": 1,
         "updatedAt": "",
+        "commands": {
+            "claude": CLAUDE_COMMAND,
+            "codex": CODEX_COMMAND,
+        },
         "worker": {
             "enabled": False,
             "model": "codex",
@@ -197,6 +232,13 @@ def default_dispatch_settings() -> dict:
             "model": "codex",
             "maxAgents": 1,
         },
+        "pause": {
+            "pausedUntil": "",
+            "pausedBy": "",
+            "pausedAt": "",
+            "pauseReason": "",
+        },
+        "pausedRuns": [],
         "pendingSpawns": [],
     }
 
@@ -216,12 +258,167 @@ def normalize_max_agents(value: object, fallback: int = 1) -> int:
     return max(0, min(parsed, 8))
 
 
+def normalize_spawn_command(value: object, fallback: str) -> str:
+    command = str(value or "").strip()
+    fallback_command = str(fallback or "").strip()
+    return command or fallback_command
+
+
+def normalize_pause_state(value: object) -> dict:
+    source = value if isinstance(value, dict) else {}
+    return {
+        "pausedUntil": str(source.get("pausedUntil", "") or "").strip(),
+        "pausedBy": str(source.get("pausedBy", "") or "").strip(),
+        "pausedAt": str(source.get("pausedAt", "") or "").strip(),
+        "pauseReason": str(source.get("pauseReason", "") or "").strip(),
+    }
+
+
+def seconds_remaining_until(value: datetime, now: datetime) -> int:
+    try:
+        return max(0, int((local_process_datetime(value) - local_process_datetime(now)).total_seconds()))
+    except (TypeError, ValueError, OverflowError):
+        return 0
+
+
+def format_remaining_time(seconds: int) -> str:
+    seconds = max(0, int(seconds))
+    hours, remainder = divmod(seconds, 3600)
+    minutes, seconds = divmod(remainder, 60)
+    parts = []
+    if hours:
+        parts.append(f"{hours}h")
+    if minutes or hours:
+        parts.append(f"{minutes}m")
+    parts.append(f"{seconds}s")
+    return " ".join(parts)
+
+
+def pause_status_from_settings(settings: dict, now: datetime | None = None) -> dict:
+    pause_state = normalize_pause_state(settings.get("pause") if isinstance(settings, dict) else {})
+    current_time = now or datetime.now(timezone.utc).astimezone()
+    paused_until = parse_iso_datetime(pause_state.get("pausedUntil"))
+    remaining_seconds = 0
+    is_paused = False
+    if paused_until:
+        remaining_seconds = seconds_remaining_until(paused_until, current_time)
+        is_paused = remaining_seconds > 0
+    message = ""
+    if is_paused:
+        message = (
+            f"Task board is paused until {pause_state['pausedUntil']} "
+            f"({format_remaining_time(remaining_seconds)} remaining)."
+        )
+    return {
+        "isPaused": is_paused,
+        "pausedUntil": pause_state["pausedUntil"] if is_paused else "",
+        "pausedBy": pause_state["pausedBy"] if is_paused else "",
+        "pausedAt": pause_state["pausedAt"] if is_paused else "",
+        "pauseReason": pause_state["pauseReason"] if is_paused else "",
+        "remainingSeconds": remaining_seconds if is_paused else 0,
+        "remainingText": format_remaining_time(remaining_seconds) if is_paused else "0s",
+        "message": message,
+    }
+
+
+def active_pause_status(now: datetime | None = None) -> dict:
+    return pause_status_from_settings(load_dispatch_settings(), now=now)
+
+
+def paused_error_payload(status: dict) -> dict:
+    return {
+        "error": status.get("message") or "Task board is paused.",
+        "paused": True,
+        "isPaused": bool(status.get("isPaused")),
+        "pausedUntil": status.get("pausedUntil", ""),
+        "remainingSeconds": status.get("remainingSeconds", 0),
+        "remainingText": status.get("remainingText", "0s"),
+        "pauseReason": status.get("pauseReason", ""),
+    }
+
+
+def common_executable_search_path() -> str:
+    paths = [
+        os.environ.get("PATH", ""),
+        "/opt/homebrew/bin",
+        "/usr/local/bin",
+        str(Path.home() / ".local" / "bin"),
+        str(Path.home() / ".npm-global" / "bin"),
+        str(Path.home() / ".yarn" / "bin"),
+        str(Path.home() / ".bun" / "bin"),
+        str(Path.home() / "AppData" / "Roaming" / "npm"),
+    ]
+    local_app_data = os.environ.get("LOCALAPPDATA")
+    app_data = os.environ.get("APPDATA")
+    program_files = [
+        os.environ.get("ProgramFiles"),
+        os.environ.get("ProgramFiles(x86)"),
+        os.environ.get("ProgramW6432"),
+    ]
+    if local_app_data:
+        paths.append(str(Path(local_app_data) / "Programs" / "OpenAI" / "Codex" / "bin"))
+        paths.append(str(Path(local_app_data) / "Programs" / "nodejs"))
+    if app_data:
+        paths.append(str(Path(app_data) / "npm"))
+    for root in program_files:
+        if root:
+            paths.append(str(Path(root) / "nodejs"))
+    seen = set()
+    cleaned = []
+    for raw_path in paths:
+        for part in str(raw_path or "").split(os.pathsep):
+            path = part.strip()
+            if path and path not in seen:
+                seen.add(path)
+                cleaned.append(path)
+    return os.pathsep.join(cleaned)
+
+
+def agent_subprocess_env(tool: str = "") -> dict:
+    env = os.environ.copy()
+    if tool == "codex" and not str(env.get("CODEX_SQLITE_HOME", "") or "").strip():
+        CODEX_SQLITE_STATE_DIR.mkdir(parents=True, exist_ok=True)
+        env["CODEX_SQLITE_HOME"] = str(CODEX_SQLITE_STATE_DIR)
+    return env
+
+
+def health_check_suggestion(tool: str, status: str, error: object, output: object) -> str:
+    text = f"{error or ''}\n{output or ''}".lower()
+    if status == "not-found" or "no such file or directory" in text:
+        return f"Install {tool}, or set the full command path in Settings."
+    if "not in a trusted directory" in text or "trusted directory" in text:
+        return f"Open regular {tool} once inside the project folder and approve/trust the directory."
+    if "readonly database" in text or "read-only database" in text:
+        return "Codex state is read-only. The workflow now uses a local writable SQLite state folder; restart the backend and test again."
+    if (
+        "access token" in text
+        or "not authenticated" in text
+        or "not signed in" in text
+        or "authentication" in text
+        or "api key" in text
+        or "unauthorized" in text
+        or "login" in text
+        or "sign in" in text
+    ):
+        return f"Sign in to {tool} on this laptop, then run the health check again."
+    if status == "timeout":
+        return f"{tool} started but did not finish the tiny test prompt. Try running it once manually in Terminal."
+    return ""
+
+
 def normalize_dispatch_settings(settings: dict | None) -> dict:
     normalized = default_dispatch_settings()
     if not isinstance(settings, dict):
         return normalized
     normalized["version"] = settings.get("version") or 1
     normalized["updatedAt"] = str(settings.get("updatedAt", "") or "").strip()
+    source_commands = settings.get("commands")
+    if not isinstance(source_commands, dict):
+        source_commands = {}
+    normalized["commands"] = {
+        "claude": normalize_spawn_command(source_commands.get("claude"), CLAUDE_COMMAND),
+        "codex": normalize_spawn_command(source_commands.get("codex"), CODEX_COMMAND),
+    }
     for role in ("worker", "review"):
         source = settings.get(role)
         if not isinstance(source, dict):
@@ -231,6 +428,9 @@ def normalize_dispatch_settings(settings: dict | None) -> dict:
             "model": normalize_dispatch_model(source.get("model"), normalized[role]["model"]),
             "maxAgents": normalize_max_agents(source.get("maxAgents"), normalized[role]["maxAgents"]),
         }
+    normalized["pause"] = normalize_pause_state(settings.get("pause"))
+    paused_runs = settings.get("pausedRuns")
+    normalized["pausedRuns"] = paused_runs if isinstance(paused_runs, list) else []
     pending = settings.get("pendingSpawns")
     normalized["pendingSpawns"] = pending if isinstance(pending, list) else []
     return normalized
@@ -281,6 +481,67 @@ def filetime_to_datetime(filetime: wintypes.FILETIME) -> datetime | None:
         return datetime.fromtimestamp(unix_seconds, timezone.utc).astimezone()
     except (OSError, OverflowError, ValueError):
         return None
+
+
+def local_process_datetime(value: datetime) -> datetime:
+    local_tz = datetime.now(timezone.utc).astimezone().tzinfo
+    if value.tzinfo is None or value.tzinfo.utcoffset(value) is None:
+        return value.replace(tzinfo=local_tz)
+    return value.astimezone(local_tz)
+
+
+def process_started_before_spawn(created_at: datetime | None, spawned_at: datetime | None) -> bool:
+    if not created_at or not spawned_at:
+        return False
+    try:
+        created = local_process_datetime(created_at)
+        spawned = local_process_datetime(spawned_at)
+        return (spawned - created).total_seconds() > PID_START_TOLERANCE_SECONDS
+    except (TypeError, OverflowError, ValueError):
+        return False
+
+
+def parse_ps_lstart(value: str) -> datetime | None:
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    if not text:
+        return None
+    try:
+        parsed = datetime.strptime(text, "%a %b %d %H:%M:%S %Y")
+    except ValueError:
+        return None
+    return local_process_datetime(parsed)
+
+
+def posix_process_started_at(pid: int) -> datetime | None:
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "lstart="],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    if result.returncode != 0:
+        return None
+    return parse_ps_lstart(result.stdout)
+
+
+def posix_process_stat(pid: int) -> str:
+    try:
+        result = subprocess.run(
+            ["ps", "-p", str(pid), "-o", "stat="],
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    if result.returncode != 0:
+        return ""
+    return str(result.stdout or "").strip()
 
 
 def windows_process_status(pid: int, spawned_at: datetime | None) -> dict:
@@ -340,7 +601,7 @@ def windows_process_status(pid: int, spawned_at: datetime | None) -> dict:
                 created_at = filetime_to_datetime(creation_time)
 
             if running and created_at and spawned_at:
-                if (spawned_at - created_at).total_seconds() > PID_START_TOLERANCE_SECONDS:
+                if process_started_before_spawn(created_at, spawned_at):
                     return {
                         "processId": pid,
                         "isRunning": False,
@@ -370,16 +631,10 @@ def windows_process_status(pid: int, spawned_at: datetime | None) -> dict:
 
 
 def generic_process_status(pid: int, spawned_at: datetime | None = None) -> dict:
-    del spawned_at
     checked_at = now_iso()
+    warning = ""
     try:
         os.kill(pid, 0)
-        return {
-            "processId": pid,
-            "isRunning": True,
-            "state": "running",
-            "checkedAt": checked_at,
-        }
     except ProcessLookupError:
         return {
             "processId": pid,
@@ -388,13 +643,7 @@ def generic_process_status(pid: int, spawned_at: datetime | None = None) -> dict
             "checkedAt": checked_at,
         }
     except PermissionError:
-        return {
-            "processId": pid,
-            "isRunning": True,
-            "state": "running",
-            "checkedAt": checked_at,
-            "warning": "permission-limited",
-        }
+        warning = "permission-limited"
     except Exception as error:
         return {
             "processId": pid,
@@ -403,6 +652,50 @@ def generic_process_status(pid: int, spawned_at: datetime | None = None) -> dict
             "checkedAt": checked_at,
             "error": str(error),
         }
+
+    created_at = posix_process_started_at(pid)
+    if spawned_at and not created_at:
+        status = {
+            "processId": pid,
+            "isRunning": False,
+            "state": "unknown",
+            "checkedAt": checked_at,
+            "error": "process-start-time-unavailable",
+        }
+        if warning:
+            status["warning"] = warning
+        return status
+    if process_started_before_spawn(created_at, spawned_at):
+        return {
+            "processId": pid,
+            "isRunning": False,
+            "state": "pid-reused",
+            "checkedAt": checked_at,
+            "createdAt": created_at.isoformat(timespec="seconds") if created_at else "",
+        }
+    process_stat = posix_process_stat(pid)
+    if "Z" in process_stat.upper():
+        return {
+            "processId": pid,
+            "isRunning": False,
+            "state": "exited",
+            "checkedAt": checked_at,
+            "createdAt": created_at.isoformat(timespec="seconds") if created_at else "",
+            "processState": process_stat,
+        }
+
+    status = {
+        "processId": pid,
+        "isRunning": True,
+        "state": "running",
+        "checkedAt": checked_at,
+        "createdAt": created_at.isoformat(timespec="seconds") if created_at else "",
+    }
+    if process_stat:
+        status["processState"] = process_stat
+    if warning:
+        status["warning"] = warning
+    return status
 
 
 def spawned_process_status(spawn: object) -> dict:
@@ -427,18 +720,111 @@ def spawned_process_status(spawn: object) -> dict:
     return generic_process_status(pid, spawned_at)
 
 
-def is_recent_spawn(spawn: object, role: str, now: datetime) -> bool:
+def wait_for_spawn_exit(spawn: dict, timeout_seconds: float) -> dict:
+    deadline = time.monotonic() + max(0, timeout_seconds)
+    latest_status = spawned_process_status(spawn)
+    while time.monotonic() < deadline:
+        if not is_live_pending_spawn(spawn, process_status=latest_status):
+            return latest_status
+        time.sleep(0.1)
+        latest_status = spawned_process_status(spawn)
+    return latest_status
+
+
+def terminate_spawned_process(spawn: dict, status_before: dict | None = None) -> dict:
+    pid = parse_process_id(spawn.get("processId") if isinstance(spawn, dict) else "")
+    before = status_before if isinstance(status_before, dict) else spawned_process_status(spawn)
+    result = {
+        "processId": pid,
+        "attempted": False,
+        "terminated": False,
+        "forceKilled": False,
+        "stateBefore": before.get("state", "unknown"),
+        "stateAfter": before.get("state", "unknown"),
+        "error": "",
+    }
+    if not pid:
+        result["error"] = "missing processId"
+        return result
+    if not is_live_pending_spawn(spawn, process_status=before):
+        result["stateAfter"] = before.get("state", "unknown")
+        return result
+
+    result["attempted"] = True
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(pid), "/T"],
+                check=False,
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            after_grace = wait_for_spawn_exit(spawn, 3)
+            if is_live_pending_spawn(spawn, process_status=after_grace):
+                result["forceKilled"] = True
+                subprocess.run(
+                    ["taskkill", "/PID", str(pid), "/T", "/F"],
+                    check=False,
+                    capture_output=True,
+                    text=True,
+                    timeout=5,
+                )
+                after_grace = wait_for_spawn_exit(spawn, 3)
+            result["stateAfter"] = after_grace.get("state", "unknown")
+            result["terminated"] = not is_live_pending_spawn(spawn, process_status=after_grace)
+        except Exception as error:
+            result["error"] = str(error)
+            result["stateAfter"] = spawned_process_status(spawn).get("state", "unknown")
+        return result
+
+    try:
+        os.kill(pid, signal.SIGTERM)
+        after_grace = wait_for_spawn_exit(spawn, 3)
+        if is_live_pending_spawn(spawn, process_status=after_grace):
+            result["forceKilled"] = True
+            os.kill(pid, signal.SIGKILL)
+            after_grace = wait_for_spawn_exit(spawn, 2)
+        result["stateAfter"] = after_grace.get("state", "unknown")
+        result["terminated"] = not is_live_pending_spawn(spawn, process_status=after_grace)
+    except ProcessLookupError:
+        result["terminated"] = True
+        result["stateAfter"] = "exited"
+    except PermissionError as error:
+        result["error"] = f"permission denied: {error}"
+        result["stateAfter"] = spawned_process_status(spawn).get("state", "unknown")
+    except OSError as error:
+        result["error"] = str(error)
+        result["stateAfter"] = spawned_process_status(spawn).get("state", "unknown")
+    return result
+
+
+def is_live_pending_spawn(
+    spawn: object,
+    role: str = "",
+    now: datetime | None = None,
+    process_status: dict | None = None,
+) -> bool:
     if not isinstance(spawn, dict):
         return False
-    if str(spawn.get("role", "") or "").strip().lower() != role:
+    spawn_role = str(spawn.get("role", "") or "").strip().lower()
+    if role and spawn_role != role:
+        return False
+    if spawn_role not in SPAWNABLE_AGENT_ROLES:
         return False
     spawned_at = parse_iso_datetime(spawn.get("spawnedAt"))
     if not spawned_at:
         return False
-    process_status = spawned_process_status(spawn)
-    if process_status.get("state") in {"exited", "pid-reused"}:
+    spawned_at = local_process_datetime(spawned_at)
+    if now and (local_process_datetime(now) - spawned_at).total_seconds() > DISPATCH_PENDING_SECONDS:
         return False
-    return (now - spawned_at).total_seconds() <= DISPATCH_PENDING_SECONDS
+    status = process_status if isinstance(process_status, dict) else spawned_process_status(spawn)
+    process_state = str(status.get("state") or "").strip().lower()
+    return bool(status.get("isRunning")) and process_state == "running"
+
+
+def is_recent_spawn(spawn: object, role: str, now: datetime) -> bool:
+    return is_live_pending_spawn(spawn, role=role, now=now)
 
 
 def is_active_agent_record(agent: object, role: str, now: datetime) -> bool:
@@ -505,6 +891,9 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         except json.JSONDecodeError:
             self.log_api_error(request_at, path, action, payload, "Board file is not valid JSON", 500, method="GET", viewer=is_viewer_request)
             self._send_json_error("Board file is not valid JSON", status=500)
+        except JsonResponseError as error:
+            self.log_api_error(request_at, path, action, payload, str(error), error.status, method="GET", viewer=is_viewer_request)
+            self.send_json(error.payload, status=error.status)
         except ValueError as error:
             self.log_api_error(request_at, path, action, payload, str(error), 400, method="GET", viewer=is_viewer_request)
             self._send_json_error(str(error), status=400)
@@ -566,6 +955,9 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         except json.JSONDecodeError:
             self.log_api_error(request_at, path, action, payload, "Board file is not valid JSON", 500, viewer=is_viewer_request)
             self._send_json_error("Board file is not valid JSON", status=500)
+        except JsonResponseError as error:
+            self.log_api_error(request_at, path, action, payload, str(error), error.status, viewer=is_viewer_request)
+            self.send_json(error.payload, status=error.status)
         except ValueError as error:
             self.log_api_error(request_at, path, action, payload, str(error), 400, viewer=is_viewer_request)
             self._send_json_error(str(error), status=400)
@@ -1001,6 +1393,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
 
     def with_agent_log_state(self, state: dict) -> dict:
         enriched = dict(state)
+        now = datetime.now(timezone.utc).astimezone()
         agents = []
         for agent in state.get("agents", []) or []:
             if not isinstance(agent, dict):
@@ -1014,6 +1407,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             agent
             for agent in agents
             if agent.get("status") == "active"
+            and is_active_agent_record(agent, str(agent.get("role") or "").strip().lower(), now)
         ]
         settings = load_dispatch_settings()
         pending_spawns = []
@@ -1023,6 +1417,8 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             if self.pending_spawn_matches_active_agent(spawn, active_agents):
                 continue
             process_status = spawned_process_status(spawn)
+            if not is_live_pending_spawn(spawn, now=now, process_status=process_status):
+                continue
             process_state = str(process_status.get("state") or "unknown")
             if process_state == "running":
                 pending_status = "spawned-running"
@@ -1044,9 +1440,15 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             }
             if pending["role"] in {"worker", "review"}:
                 pending_spawns.append(pending)
+        paused_runs = [
+            run
+            for run in settings.get("pausedRuns", []) or []
+            if isinstance(run, dict)
+        ]
         enriched["agents"] = agents
         enriched["activeAgents"] = active_agents
         enriched["pendingSpawns"] = pending_spawns
+        enriched["pausedRuns"] = paused_runs
         return enriched
 
     def load_board(self) -> dict:
@@ -1181,6 +1583,28 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
     def start_phrase_for_role(self, role: str) -> str:
         return AGENT_ROLE_START_PHRASES.get(role, "")
 
+    def spawn_command_for_tool(self, tool: str) -> str:
+        settings = load_dispatch_settings()
+        commands = settings.get("commands")
+        if not isinstance(commands, dict):
+            commands = {}
+        fallback = CLAUDE_COMMAND if tool == "claude" else CODEX_COMMAND
+        return normalize_spawn_command(commands.get(tool), fallback)
+
+    def spawn_command_args(self, tool: str, command_override: object = None) -> list[str]:
+        if command_override is None:
+            command_text = self.spawn_command_for_tool(tool)
+        else:
+            command_text = normalize_spawn_command(command_override, "")
+        try:
+            parts = shlex.split(command_text, posix=os.name != "nt")
+        except ValueError as error:
+            raise ValueError(f"Invalid {tool} command: {error}") from error
+        if not parts:
+            raise ValueError(f"Missing {tool} command")
+        resolved = shutil.which(parts[0], path=common_executable_search_path()) or parts[0]
+        return [resolved, *parts[1:]]
+
     def load_agent_schema(self) -> dict:
         try:
             return json.loads(AGENT_SCHEMA_PATH.read_text(encoding="utf-8-sig"))
@@ -1193,10 +1617,409 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
     def get_dispatch_settings(self, board: dict, payload: dict) -> dict:
         return load_dispatch_settings()
 
+    def get_pause_status(self, board: dict, payload: dict) -> dict:
+        del board, payload
+        return active_pause_status()
+
+    def pause_plus_one_hour(self, board: dict, columns: dict, payload: dict) -> dict:
+        del board, columns
+        settings = load_dispatch_settings()
+        timestamp = now_iso()
+        now = datetime.now(timezone.utc).astimezone()
+        existing_until = parse_iso_datetime(normalize_pause_state(settings.get("pause")).get("pausedUntil"))
+        base_time = now
+        if existing_until and seconds_remaining_until(existing_until, now) > 0:
+            base_time = local_process_datetime(existing_until)
+        paused_until = base_time + timedelta(seconds=PAUSE_INCREMENT_SECONDS)
+        settings["pause"] = {
+            "pausedUntil": paused_until.isoformat(timespec="seconds"),
+            "pausedBy": self.agent_name(payload, "Task board viewer"),
+            "pausedAt": timestamp,
+            "pauseReason": str(
+                payload.get("pauseReason")
+                or payload.get("reason")
+                or "Manual task-board pause"
+            ).strip(),
+        }
+        settings["updatedAt"] = timestamp
+        persist_dispatch_settings(settings)
+        status = active_pause_status(now=now)
+        status["addedSeconds"] = PAUSE_INCREMENT_SECONDS
+        status["ok"] = True
+        return status
+
+    def resume_now(self, board: dict, columns: dict, payload: dict) -> dict:
+        del board, columns
+        settings = load_dispatch_settings()
+        settings["pause"] = default_dispatch_settings()["pause"]
+        settings["updatedAt"] = now_iso()
+        persist_dispatch_settings(settings)
+        status = active_pause_status()
+        status["resumedBy"] = self.agent_name(payload, "Task board viewer")
+        status["ok"] = True
+        return status
+
+    def require_not_paused(self, action: str) -> None:
+        status = active_pause_status()
+        if not status.get("isPaused"):
+            return
+        payload = paused_error_payload(status)
+        payload["action"] = action
+        raise JsonResponseError(str(payload["error"]), status=423, payload=payload)
+
+    def active_agent_for_spawn(self, spawn: dict, agents: list[dict]) -> dict | None:
+        spawn_role = self.normalize_agent_role(spawn.get("role"))
+        spawn_model = self.normalize_agent_model(spawn.get("model"))
+        spawn_name = str(spawn.get("personalName") or "").strip().lower()
+        matches = []
+        for agent in agents:
+            if not isinstance(agent, dict):
+                continue
+            if self.normalize_agent_role(agent.get("role")) != spawn_role:
+                continue
+            if self.normalize_agent_model(agent.get("model")) != spawn_model:
+                continue
+            agent_name = str(agent.get("personalName") or agent.get("agentName") or "").strip().lower()
+            if agent_name != spawn_name:
+                continue
+            matches.append(agent)
+        if len(matches) == 1:
+            return matches[0]
+        return None
+
+    def task_column_for_id(self, board: dict, task_id: str) -> str:
+        if not task_id:
+            return ""
+        try:
+            column_name, _, _, _ = self.find_task_location(self.get_columns(board), task_id)
+            return column_name
+        except (LookupError, ValueError):
+            return ""
+
+    def infer_task_from_board_lock(self, board: dict, role: str, personal_name: str) -> dict:
+        columns = self.get_columns(board)
+        if role == "worker":
+            column_name = "claimed"
+            owner_fields = ("claimedBy",)
+        elif role == "review":
+            column_name = "reviewing"
+            owner_fields = ("reviewClaimedBy", "reviewedBy")
+        else:
+            return {"currentTaskId": "", "currentColumn": "", "taskInference": "unsupported-role"}
+
+        matches = []
+        normalized_name = personal_name.strip().lower()
+        for task in columns.get(column_name, []) or []:
+            if not isinstance(task, dict):
+                continue
+            owners = {
+                str(task.get(field) or "").strip().lower()
+                for field in owner_fields
+            }
+            if normalized_name and normalized_name in owners:
+                matches.append(task)
+        if len(matches) == 1:
+            return {
+                "currentTaskId": str(matches[0].get("id") or "").strip(),
+                "currentColumn": column_name,
+                "taskInference": "board-lock",
+            }
+        if len(matches) > 1:
+            return {"currentTaskId": "", "currentColumn": column_name, "taskInference": "ambiguous-board-lock"}
+        return {"currentTaskId": "", "currentColumn": "", "taskInference": "none"}
+
+    def infer_spawn_task_context(self, board: dict, spawn: dict, agents: list[dict]) -> dict:
+        role = self.normalize_agent_role(spawn.get("role"))
+        personal_name = str(spawn.get("personalName") or "").strip()
+        active_agent = self.active_agent_for_spawn(spawn, agents)
+        if active_agent:
+            task_id = str(active_agent.get("currentTaskId") or "").strip()
+            if task_id:
+                return {
+                    "currentTaskId": task_id,
+                    "currentColumn": self.task_column_for_id(board, task_id),
+                    "taskInference": "active-agent",
+                    "activeAgentId": str(active_agent.get("agentId") or "").strip(),
+                }
+        inferred = self.infer_task_from_board_lock(board, role, personal_name)
+        inferred["activeAgentId"] = str(active_agent.get("agentId") or "").strip() if active_agent else ""
+        return inferred
+
+    def upsert_paused_run(self, paused_runs: list, entry: dict) -> None:
+        process_id = str(entry.get("processId") or "").strip()
+        log_path = str(entry.get("logPath") or "").strip()
+        for index, existing in enumerate(paused_runs):
+            if not isinstance(existing, dict):
+                continue
+            same_process = process_id and str(existing.get("processId") or "").strip() == process_id
+            same_log = log_path and str(existing.get("logPath") or "").strip() == log_path
+            if same_process or same_log:
+                paused_runs[index] = {**existing, **entry}
+                return
+        paused_runs.append(entry)
+
+    def hard_stop_spawned_agents(self, board: dict, columns: dict, payload: dict) -> dict:
+        del columns
+        pause_status = active_pause_status()
+        if not pause_status.get("isPaused"):
+            raise JsonResponseError(
+                "Hard stop requires an active board pause. Pause the board before stopping spawned agents.",
+                status=409,
+                payload={
+                    "error": "Hard stop requires an active board pause. Pause the board before stopping spawned agents.",
+                    "paused": False,
+                    "isPaused": False,
+                },
+            )
+
+        requested_role = self.normalize_agent_role(payload.get("role")) if payload.get("role") else ""
+        if requested_role and requested_role not in SPAWNABLE_AGENT_ROLES:
+            raise ValueError(f"Unsupported hard-stop role: {requested_role!r}. Allowed: {sorted(SPAWNABLE_AGENT_ROLES)}")
+
+        settings = load_dispatch_settings()
+        pending = settings.get("pendingSpawns") if isinstance(settings.get("pendingSpawns"), list) else []
+        paused_runs = settings.get("pausedRuns") if isinstance(settings.get("pausedRuns"), list) else []
+        active_state = self.load_active_agents_state()
+        agents = active_state.get("agents") if isinstance(active_state.get("agents"), list) else []
+        stopped_at = now_iso()
+        stop_reason = str(
+            payload.get("stopReason")
+            or payload.get("reason")
+            or pause_status.get("pauseReason")
+            or "Board paused by owner"
+        ).strip()
+        actor = self.agent_name(payload, "Task board viewer")
+
+        remaining_pending = []
+        targeted_runs = []
+        skipped_runs = []
+        for spawn in pending:
+            if not isinstance(spawn, dict):
+                continue
+            role = self.normalize_agent_role(spawn.get("role"))
+            if role not in SPAWNABLE_AGENT_ROLES:
+                continue
+            if requested_role and role != requested_role:
+                remaining_pending.append(spawn)
+                continue
+
+            process_status = spawned_process_status(spawn)
+            if not is_live_pending_spawn(spawn, process_status=process_status):
+                skipped_runs.append({
+                    "role": role,
+                    "model": self.normalize_agent_model(spawn.get("model")),
+                    "personalName": str(spawn.get("personalName") or "").strip(),
+                    "processId": parse_process_id(spawn.get("processId")),
+                    "logPath": str(spawn.get("logPath") or "").strip(),
+                    "status": process_status,
+                    "reason": "not-running",
+                })
+                continue
+
+            context = self.infer_spawn_task_context(board, spawn, agents)
+            paused_entry = {
+                "role": role,
+                "model": self.normalize_agent_model(spawn.get("model")),
+                "personalName": str(spawn.get("personalName") or "").strip(),
+                "processId": parse_process_id(spawn.get("processId")),
+                "logPath": str(spawn.get("logPath") or "").strip(),
+                "spawnedAt": str(spawn.get("spawnedAt") or "").strip(),
+                "stoppedAt": stopped_at,
+                "stoppedBy": actor,
+                "stopReason": stop_reason,
+                "currentTaskId": context.get("currentTaskId", ""),
+                "currentColumn": context.get("currentColumn", ""),
+                "taskInference": context.get("taskInference", ""),
+                "activeAgentId": context.get("activeAgentId", ""),
+                "statusBeforeStop": process_status,
+            }
+            stop_status = terminate_spawned_process(spawn, process_status)
+            paused_entry["stopStatus"] = stop_status
+            paused_entry["resumeReady"] = bool(stop_status.get("terminated"))
+            paused_entry["resumeState"] = "waiting" if stop_status.get("terminated") else "stop-failed"
+            self.upsert_paused_run(paused_runs, paused_entry)
+            targeted_runs.append(paused_entry)
+            if not stop_status.get("terminated"):
+                remaining_pending.append(spawn)
+
+        settings["pendingSpawns"] = remaining_pending
+        settings["pausedRuns"] = paused_runs[-100:]
+        settings["updatedAt"] = now_iso()
+        persist_dispatch_settings(settings)
+
+        stopped_count = sum(1 for run in targeted_runs if run.get("stopStatus", {}).get("terminated"))
+        if not targeted_runs:
+            message = "No running backend-spawned Worker/Reviewer processes were found."
+        else:
+            message = f"Stopped {stopped_count} of {len(targeted_runs)} backend-spawned process(es)."
+        return {
+            "ok": True,
+            "paused": True,
+            "isPaused": True,
+            "message": message,
+            "stoppedCount": stopped_count,
+            "targetedCount": len(targeted_runs),
+            "skippedCount": len(skipped_runs),
+            "pausedRuns": targeted_runs,
+            "skippedRuns": skipped_runs,
+            "remainingPendingSpawns": len(remaining_pending),
+        }
+
+    def resume_lock_context(self, board: dict, resume_run: dict) -> dict:
+        role = self.normalize_agent_role(resume_run.get("role"))
+        personal_name = str(resume_run.get("personalName") or "").strip().lower()
+        task_id = str(resume_run.get("currentTaskId") or "").strip()
+        context = {
+            "currentTaskId": task_id,
+            "currentColumn": "",
+            "currentTaskStillLocked": False,
+            "currentTaskOwner": "",
+        }
+        if not task_id:
+            return context
+        try:
+            column_name, _, _, task = self.find_task_location(self.get_columns(board), task_id)
+        except (LookupError, ValueError):
+            return context
+        context["currentColumn"] = column_name
+        if role == "worker":
+            owner = str(task.get("claimedBy") or "").strip()
+            context["currentTaskOwner"] = owner
+            context["currentTaskStillLocked"] = column_name == "claimed" and owner.lower() == personal_name
+        elif role == "review":
+            owner = str(task.get("reviewClaimedBy") or "").strip()
+            context["currentTaskOwner"] = owner
+            context["currentTaskStillLocked"] = column_name == "reviewing" and owner.lower() == personal_name
+        return context
+
+    def build_spawn_start_phrase(
+        self,
+        role: str,
+        tool: str,
+        personal_name: str,
+        backend_base_url: str,
+        board: dict,
+        resume_run: dict | None = None,
+    ) -> str:
+        base_phrase = self.start_phrase_for_role(role)
+        if not base_phrase:
+            raise ValueError(f"No start phrase configured for role {role!r}")
+
+        prompt = (
+            f"{base_phrase} and start; your personalName is {personal_name}; your model is {tool}; "
+            f"backendBaseUrl is {backend_base_url}; use this full base URL for every task-board API call; "
+            f"call {backend_base_url}/api/register-agent with personalName, model, role to receive your agentId"
+        )
+        if not isinstance(resume_run, dict):
+            return prompt
+
+        lock_context = self.resume_lock_context(board, resume_run)
+        prior_log_path = str(resume_run.get("logPath") or "").strip()
+        stopped_at = str(resume_run.get("stoppedAt") or "").strip()
+        previous_process_id = str(resume_run.get("processId") or "").strip()
+        current_task_id = lock_context.get("currentTaskId") or ""
+        current_column = lock_context.get("currentColumn") or str(resume_run.get("currentColumn") or "").strip()
+        locked_text = "true" if lock_context.get("currentTaskStillLocked") else "false"
+        prompt += (
+            f"; resumeMode is paused-run; previousProcessId is {previous_process_id}; "
+            f"priorLogPath is {prior_log_path}; stoppedAt is {stopped_at}; "
+            f"currentTaskId is {current_task_id or 'unknown'}; currentBoardColumn is {current_column or 'unknown'}; "
+            f"currentTaskStillLockedByYou is {locked_text}; "
+            "before editing, inspect the task board through the API and inspect the worktree; "
+            "the board is the source of truth and the prior log is context only. "
+            "If currentTaskStillLockedByYou is true, continue that task before claiming anything new. "
+            "If currentTaskId is unknown, missing, unlocked, or owned by someone else, reconcile from the board and prior log, "
+            "then either continue the safest matching locked task or unregister with a clear note."
+        )
+        return prompt
+
+    def agent_health_check(self, board: dict, columns: dict, payload: dict) -> dict:
+        del board, columns
+        tool = self.normalize_agent_model(payload.get("tool") or payload.get("model"))
+        if tool not in SPAWNABLE_TOOLS:
+            raise ValueError(f"Unsupported health check tool: {tool!r}. Allowed: {sorted(SPAWNABLE_TOOLS)}")
+
+        command_override = payload.get("command") if "command" in payload else None
+        command_text = (
+            normalize_spawn_command(command_override, "")
+            if command_override is not None
+            else self.spawn_command_for_tool(tool)
+        )
+        args = self.spawn_command_args(tool, command_override=command_override)
+        if tool == "codex":
+            args.extend(["exec", "--skip-git-repo-check", HEALTH_CHECK_PROMPT])
+        else:
+            args.extend(["-p", HEALTH_CHECK_PROMPT])
+
+        started = time.monotonic()
+        env = agent_subprocess_env(tool)
+        try:
+            result = subprocess.run(
+                args,
+                cwd=str(PROJECT_ROOT),
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                timeout=HEALTH_CHECK_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except FileNotFoundError as error:
+            return {
+                "ok": False,
+                "status": "not-found",
+                "tool": tool,
+                "command": command_text,
+                "error": str(error),
+                "suggestion": health_check_suggestion(tool, "not-found", error, ""),
+                "durationMs": round((time.monotonic() - started) * 1000),
+            }
+        except subprocess.TimeoutExpired as error:
+            output = error.output if isinstance(error.output, str) else ""
+            return {
+                "ok": False,
+                "status": "timeout",
+                "tool": tool,
+                "command": command_text,
+                "timeoutSeconds": HEALTH_CHECK_TIMEOUT_SECONDS,
+                "error": f"{tool} health check timed out after {HEALTH_CHECK_TIMEOUT_SECONDS} seconds",
+                "outputPreview": self.preview_text(output),
+                "suggestion": health_check_suggestion(tool, "timeout", error, output),
+                "durationMs": round((time.monotonic() - started) * 1000),
+            }
+        except (OSError, subprocess.SubprocessError) as error:
+            return {
+                "ok": False,
+                "status": "launch-error",
+                "tool": tool,
+                "command": command_text,
+                "error": str(error),
+                "suggestion": health_check_suggestion(tool, "launch-error", error, ""),
+                "durationMs": round((time.monotonic() - started) * 1000),
+            }
+
+        output = self.preview_text(result.stdout)
+        ok = result.returncode == 0
+        suggestion = "" if ok else health_check_suggestion(tool, "failed", "", output)
+        return {
+            "ok": ok,
+            "status": "ok" if ok else "failed",
+            "tool": tool,
+            "command": command_text,
+            "executable": args[0],
+            "returnCode": result.returncode,
+            "outputPreview": output,
+            "suggestion": suggestion,
+            "codexSqliteHome": str(env.get("CODEX_SQLITE_HOME", "")) if tool == "codex" else "",
+            "durationMs": round((time.monotonic() - started) * 1000),
+        }
+
     def update_dispatch_settings(self, board: dict, columns: dict, payload: dict) -> dict:
         settings = load_dispatch_settings()
         role = self.normalize_agent_role(payload.get("role"))
         roles_payload = payload.get("roles")
+        commands_payload = payload.get("commands")
         if isinstance(roles_payload, dict):
             role_updates = {
                 self.normalize_agent_role(role_name): role_value
@@ -1218,8 +2041,25 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 "maxAgents": normalize_max_agents(updates.get("maxAgents"), current.get("maxAgents", 1)),
             }
 
+        if isinstance(commands_payload, dict):
+            current_commands = settings.get("commands")
+            if not isinstance(current_commands, dict):
+                current_commands = {}
+            settings["commands"] = {
+                "claude": normalize_spawn_command(
+                    commands_payload.get("claude"),
+                    current_commands.get("claude", CLAUDE_COMMAND),
+                ),
+                "codex": normalize_spawn_command(
+                    commands_payload.get("codex"),
+                    current_commands.get("codex", CODEX_COMMAND),
+                ),
+            }
+
         if payload.get("clearPending"):
             settings["pendingSpawns"] = []
+        if payload.get("clearPausedRuns"):
+            settings["pausedRuns"] = []
 
         settings["updatedAt"] = now_iso()
         persist_dispatch_settings(settings)
@@ -1971,6 +2811,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
 
     def claim_task(self, board: dict, columns: dict, payload: dict) -> None:
         task_id = self.require_task_id(payload)
+        self.require_not_paused("claim-task")
         task = self.pop_task(columns, "todo", task_id)
         claimed = self.ensure_column(columns, "claimed")
         timestamp = now_iso()
@@ -2029,6 +2870,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
 
     def claim_review(self, board: dict, columns: dict, payload: dict) -> None:
         task_id = self.require_task_id(payload)
+        self.require_not_paused("claim-review")
         task = self.pop_task(columns, "review", task_id)
         reviewing = self.ensure_column(columns, "reviewing")
         timestamp = now_iso()
@@ -2130,10 +2972,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             raise ValueError(f"Unsupported spawn role: {role!r}. Allowed: {sorted(SPAWNABLE_AGENT_ROLES)}")
         if tool not in SPAWNABLE_TOOLS:
             raise ValueError(f"Unsupported spawn tool: {tool!r}. Allowed: {sorted(SPAWNABLE_TOOLS)}")
-
-        base_phrase = self.start_phrase_for_role(role)
-        if not base_phrase:
-            raise ValueError(f"No start phrase configured for role {role!r}")
+        self.require_not_paused("spawn-agent")
 
         explicit_name = str(payload.get("personalName") or "").strip()
         if explicit_name:
@@ -2145,19 +2984,25 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             personal_name = "agent"
 
         backend_base_url = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
-        start_phrase = (
-            f"{base_phrase} and start; your personalName is {personal_name}; your model is {tool}; "
-            f"backendBaseUrl is {backend_base_url}; use this full base URL for every task-board API call; "
-            f"call {backend_base_url}/api/register-agent with personalName, model, role to receive your agentId"
+        resume_run = payload.get("resumeRun") if isinstance(payload.get("resumeRun"), dict) else None
+        start_phrase = self.build_spawn_start_phrase(
+            role,
+            tool,
+            personal_name,
+            backend_base_url,
+            board,
+            resume_run=resume_run,
         )
 
         working_dir = str(PROJECT_ROOT)
         if tool == "codex":
-            cli_command = shutil.which(CODEX_COMMAND) or CODEX_COMMAND
-            args = [cli_command, "exec", "--skip-git-repo-check", start_phrase]
+            args = self.spawn_command_args(tool)
+            args.extend(["exec", "--skip-git-repo-check", start_phrase])
         else:
-            cli_command = shutil.which(CLAUDE_COMMAND) or CLAUDE_COMMAND
-            args = [cli_command, "-p", start_phrase]
+            args = self.spawn_command_args(tool)
+            args.extend(["-p", start_phrase])
+        cli_command = args[0]
+        cli_command_text = self.spawn_command_for_tool(tool)
 
         try:
             SPAWN_LOG_DIR.mkdir(parents=True, exist_ok=True)
@@ -2167,15 +3012,22 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             popen_flags = 0
             if hasattr(subprocess, "CREATE_NO_WINDOW"):
                 popen_flags |= subprocess.CREATE_NO_WINDOW
+            env = agent_subprocess_env(tool)
             with log_path.open("a", encoding="utf-8") as log_file:
                 log_file.write(f"Spawned {role} agent ({tool}) at {now_iso()}\n")
                 log_file.write(f"Working directory: {working_dir}\n")
                 log_file.write(f"Backend: {backend_base_url}\n")
+                if resume_run:
+                    log_file.write(f"Resume of process: {resume_run.get('processId', '')}\n")
+                    log_file.write(f"Prior log: {resume_run.get('logPath', '')}\n")
+                if tool == "codex":
+                    log_file.write(f"Codex SQLite state: {env.get('CODEX_SQLITE_HOME', '')}\n")
                 log_file.write(f"Prompt: {start_phrase}\n\n")
                 log_file.flush()
                 process = subprocess.Popen(
                     args,
                     cwd=working_dir,
+                    env=env,
                     stdin=subprocess.DEVNULL,
                     stdout=log_file,
                     stderr=subprocess.STDOUT,
@@ -2193,12 +3045,13 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "role": role,
             "tool": tool,
             "personalName": personal_name,
-            "cliCommand": Path(cli_command).name,
+            "cliCommand": cli_command_text,
             "startPhrase": start_phrase,
             "backendBaseUrl": backend_base_url,
             "processId": process.pid,
             "logPath": str(log_path),
             "workingDirectory": working_dir,
+            "resumeOfProcessId": resume_run.get("processId", "") if resume_run else "",
         }
 
     def persist_board(self, board: dict) -> None:
@@ -2286,9 +3139,7 @@ def clean_pending_spawns(settings: dict, now: datetime) -> list[dict]:
     cleaned = [
         spawn
         for spawn in pending
-        if isinstance(spawn, dict)
-        and parse_iso_datetime(spawn.get("spawnedAt"))
-        and (now - parse_iso_datetime(spawn.get("spawnedAt"))).total_seconds() <= DISPATCH_PENDING_SECONDS
+        if is_live_pending_spawn(spawn)
     ]
     settings["pendingSpawns"] = cleaned
     return cleaned
@@ -2311,7 +3162,13 @@ def choose_auto_personal_name(role: str, agents: list[dict], pending: list[dict]
     return f"{role}{secrets.token_hex(2)}"
 
 
-def spawn_via_viewer_endpoint(server: ThreadingHTTPServer, role: str, model: str, personal_name: str) -> dict:
+def spawn_via_viewer_endpoint(
+    server: ThreadingHTTPServer,
+    role: str,
+    model: str,
+    personal_name: str,
+    resume_run: dict | None = None,
+) -> dict:
     host, port = server.server_address
     url = f"http://{host}:{port}/viewer/spawn-agent"
     payload = {
@@ -2319,8 +3176,10 @@ def spawn_via_viewer_endpoint(server: ThreadingHTTPServer, role: str, model: str
         "tool": model,
         "personalName": personal_name,
         "agentName": "Auto dispatcher",
-        "spawnReason": "auto-dispatch",
+        "spawnReason": "resume-paused-run" if isinstance(resume_run, dict) else "auto-dispatch",
     }
+    if isinstance(resume_run, dict):
+        payload["resumeRun"] = resume_run
     request = Request(
         url,
         data=json.dumps(payload).encode("utf-8"),
@@ -2329,6 +3188,93 @@ def spawn_via_viewer_endpoint(server: ThreadingHTTPServer, role: str, model: str
     )
     with urlopen(request, timeout=30) as response:
         return json.loads(response.read().decode("utf-8") or "{}")
+
+
+def paused_run_is_waiting(run: object) -> bool:
+    if not isinstance(run, dict):
+        return False
+    role = str(run.get("role") or "").strip().lower()
+    model = str(run.get("model") or "").strip().lower()
+    personal_name = str(run.get("personalName") or "").strip()
+    if role not in SPAWNABLE_AGENT_ROLES or model not in SPAWNABLE_TOOLS or not personal_name:
+        return False
+    resume_state = str(run.get("resumeState") or "waiting").strip().lower()
+    if resume_state not in PAUSED_RUN_RETRYABLE_STATES:
+        return False
+    if run.get("resumeReady") is False:
+        return False
+    return True
+
+
+def resume_paused_runs(
+    server: ThreadingHTTPServer,
+    settings: dict,
+    pending: list[dict],
+    now: datetime,
+) -> bool:
+    paused_runs = settings.get("pausedRuns")
+    if not isinstance(paused_runs, list):
+        paused_runs = []
+        settings["pausedRuns"] = paused_runs
+    changed = False
+    for run in paused_runs:
+        if not paused_run_is_waiting(run):
+            continue
+        role = str(run.get("role") or "").strip().lower()
+        model = normalize_dispatch_model(run.get("model"), "codex")
+        personal_name = str(run.get("personalName") or "").strip()
+        attempt_at = now_iso()
+        run["lastResumeAttemptAt"] = attempt_at
+        try:
+            result = spawn_via_viewer_endpoint(server, role, model, personal_name, resume_run=run)
+            pending_entry = {
+                "role": role,
+                "model": model,
+                "personalName": personal_name,
+                "spawnedAt": now_iso(),
+                "processId": result.get("processId", ""),
+                "logPath": result.get("logPath", ""),
+                "resumeOfProcessId": run.get("processId", ""),
+                "resumeOfLogPath": run.get("logPath", ""),
+            }
+            pending.append(pending_entry)
+            run["resumeState"] = "resumed"
+            run["resumedAt"] = pending_entry["spawnedAt"]
+            run["resumedProcessId"] = result.get("processId", "")
+            run["resumedLogPath"] = result.get("logPath", "")
+            run["lastResumeError"] = ""
+            run["lastResumeFailedAt"] = ""
+            settings["pendingSpawns"] = pending
+            changed = True
+            append_dispatch_log({
+                "action": "resume-paused-run",
+                "status": "success",
+                "httpStatus": 200,
+                "role": role,
+                "model": model,
+                "personalName": personal_name,
+                "processId": result.get("processId", ""),
+                "taskIds": [str(run.get("currentTaskId") or "").strip()] if run.get("currentTaskId") else [],
+                "error": "",
+            })
+        except Exception as error:
+            run["resumeState"] = "resume-failed"
+            run["lastResumeError"] = str(error)
+            run["lastResumeFailedAt"] = now_iso()
+            changed = True
+            append_dispatch_log({
+                "action": "resume-paused-run",
+                "status": "error",
+                "httpStatus": 500,
+                "role": role,
+                "model": model,
+                "personalName": personal_name,
+                "taskIds": [str(run.get("currentTaskId") or "").strip()] if run.get("currentTaskId") else [],
+                "error": str(error),
+            })
+    if changed:
+        settings["pausedRuns"] = paused_runs
+    return changed
 
 
 def run_auto_dispatch_once(server: ThreadingHTTPServer) -> None:
@@ -2341,6 +3287,15 @@ def run_auto_dispatch_once(server: ThreadingHTTPServer) -> None:
     pending = clean_pending_spawns(settings, now)
     cleaned_pending_text = json.dumps(pending, sort_keys=True, separators=(",", ":"))
     changed_settings = cleaned_pending_text != original_pending_text
+
+    if pause_status_from_settings(settings, now=now).get("isPaused"):
+        if changed_settings:
+            settings["updatedAt"] = now_iso()
+            persist_dispatch_settings(settings)
+        return
+
+    if resume_paused_runs(server, settings, pending, now):
+        changed_settings = True
 
     for role in ("worker", "review"):
         role_settings = settings.get(role, {})

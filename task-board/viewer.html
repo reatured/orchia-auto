@@ -22,6 +22,11 @@
       --archive-tab-width: 40px;
       --workflow-tab-height: 132px;
       --workflow-tab-width: 40px;
+      --settings-tab-height: 118px;
+      --settings-tab-width: 40px;
+      --side-tab-gutter: 64px;
+      --shell-edge-gap: 16px;
+      --viewport-client-width: 100vw;
       --shadow: 0 14px 34px rgba(25, 24, 22, 0.08);
     }
 
@@ -43,8 +48,9 @@
     }
 
     .shell {
-      width: min(1480px, calc(100vw - 32px));
-      margin: 0 auto;
+      width: min(1480px, calc(var(--viewport-client-width) - var(--side-tab-gutter) - var(--shell-edge-gap)));
+      margin-left: max(var(--side-tab-gutter), calc((var(--viewport-client-width) - 1480px) / 2));
+      margin-right: var(--shell-edge-gap);
       padding: 24px 0 84px;
     }
 
@@ -77,6 +83,84 @@
       justify-content: flex-end;
       gap: 8px;
       flex-wrap: wrap;
+    }
+
+    .pause-control {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      min-height: 36px;
+      max-width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.78);
+      padding: 5px 6px 5px 10px;
+      box-shadow: 0 1px 0 rgba(25, 24, 22, 0.04);
+    }
+
+    .pause-control.is-paused {
+      border-color: #d3aa6c;
+      background: #fff8ec;
+    }
+
+    .pause-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.2;
+    }
+
+    .pause-indicator {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--done);
+      flex: 0 0 auto;
+    }
+
+    .pause-control.is-paused .pause-indicator {
+      background: #a85a28;
+    }
+
+    .pause-label {
+      color: var(--ink);
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .pause-until {
+      white-space: nowrap;
+    }
+
+    .pause-countdown {
+      min-width: 52px;
+      border: 1px solid #d7c7ab;
+      border-radius: 999px;
+      background: #ffffff;
+      color: #665333;
+      padding: 2px 7px;
+      text-align: center;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .pause-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex: 0 0 auto;
+    }
+
+    .pause-button {
+      min-height: 28px;
+      padding: 4px 8px;
+      font-size: 12px;
+      line-height: 1;
+      white-space: nowrap;
     }
 
     .button,
@@ -300,6 +384,169 @@
 
     .workflow-board.is-open .workflow-tray {
       transform: translateX(0);
+    }
+
+    .settings-board {
+      position: fixed;
+      inset: auto auto 0 0;
+      z-index: 12;
+      pointer-events: none;
+      isolation: isolate;
+    }
+
+    .settings-tab {
+      pointer-events: auto;
+      position: fixed;
+      left: 0;
+      bottom: 22px;
+      width: var(--settings-tab-width);
+      min-height: var(--settings-tab-height);
+      border: 1px solid var(--line);
+      border-left: 0;
+      border-radius: 0 8px 8px 0;
+      background: var(--panel);
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 6px;
+      font-size: 13px;
+      font-weight: 760;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      z-index: 15;
+    }
+
+    .settings-tab:hover {
+      border-color: #aaa197;
+      background: #fbfaf7;
+    }
+
+    .settings-tab .dot {
+      --lane-color: var(--todo);
+    }
+
+    .settings-tray {
+      pointer-events: auto;
+      position: fixed;
+      left: 0;
+      bottom: 0;
+      width: min(460px, calc(100vw - var(--settings-tab-width)));
+      max-height: min(72vh, 520px);
+      background: rgba(246, 244, 239, 0.98);
+      transform: translateX(calc(-100% - 8px));
+      transition: transform 220ms ease;
+      z-index: 14;
+      overflow: auto;
+      padding: 16px 16px 16px calc(var(--settings-tab-width) + 14px);
+      box-sizing: border-box;
+      box-shadow: 18px 0 42px rgba(25, 24, 22, 0.16);
+    }
+
+    .settings-board.is-open .settings-tray {
+      transform: translateX(0);
+    }
+
+    .settings-panel {
+      border: 1px solid var(--line);
+      border-top: 5px solid var(--todo);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: var(--shadow);
+      padding: 14px;
+      min-width: 0;
+    }
+
+    .settings-panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .settings-panel h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .settings-fields {
+      display: grid;
+      gap: 12px;
+    }
+
+    .settings-field {
+      display: grid;
+      gap: 6px;
+      min-width: 0;
+    }
+
+    .settings-field label {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+
+    .settings-command-input {
+      width: 100%;
+      min-height: 38px;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 8px 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 13px;
+      line-height: 1.3;
+    }
+
+    .settings-command-input:focus {
+      border-color: color-mix(in srgb, var(--todo) 58%, var(--line));
+      outline: none;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--todo) 14%, transparent);
+    }
+
+    .settings-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 14px;
+      flex-wrap: wrap;
+    }
+
+    .settings-save-button,
+    .settings-health-button {
+      min-height: 34px;
+      border: 1px solid color-mix(in srgb, var(--todo) 44%, var(--line));
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--todo) 12%, #ffffff);
+      color: color-mix(in srgb, var(--todo) 82%, #191816);
+      padding: 7px 12px;
+      cursor: pointer;
+      font-weight: 760;
+    }
+
+    .settings-save-button:hover,
+    .settings-save-button:focus-visible,
+    .settings-health-button:hover,
+    .settings-health-button:focus-visible {
+      border-color: color-mix(in srgb, var(--todo) 62%, var(--line));
+      background: color-mix(in srgb, var(--todo) 20%, #ffffff);
+      outline: none;
+    }
+
+    .settings-save-button:disabled,
+    .settings-health-button:disabled {
+      cursor: progress;
+      opacity: 0.62;
     }
 
     .workflow-panel {
@@ -816,6 +1063,7 @@
     }
 
     .board.is-done-focus .lane:not(.done) .lane-header {
+      display: flex;
       height: 148px;
       min-height: 148px;
       flex-direction: column;
@@ -844,17 +1092,24 @@
     }
 
     .board.is-done-focus .lane:not(.done) .lane-actions {
+      display: flex;
       flex-direction: column;
       justify-content: flex-end;
       gap: 0;
       width: 100%;
     }
 
+    .board.is-done-focus .lane:not(.done) .lane-dispatch,
     .board.is-done-focus .lane:not(.done) .agent-summary,
     .board.is-done-focus .lane:not(.done) .spawn-group,
     .board.is-done-focus .lane:not(.done) .lane-agent-strip,
     .board.is-done-focus .lane:not(.done) .dispatch-controls {
       display: none;
+    }
+
+    .board.is-done-focus .lane:not(.done) .lane-tools {
+      justify-content: center;
+      width: 100%;
     }
 
     .board.is-done-focus .lane:not(.done) .count {
@@ -891,7 +1146,8 @@
     .lane:has(.agent-summary:hover),
     .lane:has(.agent-summary:focus-within),
     .lane:has(.agent-run-tab-wrap:hover),
-    .lane:has(.agent-run-tab-wrap:focus-within) {
+    .lane:has(.agent-run-tab-wrap:focus-within),
+    .lane:has(.agent-run-tab-wrap.is-pinned) {
       z-index: 20;
     }
 
@@ -937,7 +1193,7 @@
       font-size: 11px;
       font-weight: 760;
       line-height: 1;
-      cursor: default;
+      cursor: pointer;
       box-shadow: 0 6px 14px rgba(25, 24, 22, 0.06);
     }
 
@@ -1004,7 +1260,8 @@
     }
 
     .agent-run-tab-wrap:hover .agent-run-popover,
-    .agent-run-tab-wrap:focus-within .agent-run-popover {
+    .agent-run-tab-wrap:focus-within .agent-run-popover,
+    .agent-run-tab-wrap.is-pinned .agent-run-popover {
       display: block;
     }
 
@@ -1068,31 +1325,59 @@
     .lane-actions {
       display: flex;
       align-items: center;
+      justify-content: flex-end;
       flex-wrap: wrap;
       gap: 8px;
       flex: 0 0 auto;
+      min-width: 0;
     }
 
-    .lane.has-agent-controls .lane-header {
-      align-items: flex-start;
+    .lane-dispatch {
+      display: inline-flex;
+      align-items: center;
       flex-wrap: wrap;
-      gap: 8px 10px;
-    }
-
-    .lane.has-agent-controls .lane-title {
-      flex: 1 1 100%;
-    }
-
-    .lane.has-agent-controls .lane-actions {
-      flex: 1 1 100%;
-      width: 100%;
-      justify-content: flex-start;
       gap: 6px;
       min-width: 0;
     }
 
-    .lane.has-agent-controls .lane-actions > .count {
-      margin-left: auto;
+    .lane-tools {
+      display: inline-flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex: 0 0 auto;
+      min-width: max-content;
+    }
+
+    .lane.has-agent-controls .lane-header {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      grid-template-areas:
+        "title tools"
+        "dispatch dispatch";
+      align-items: center;
+      gap: 8px 10px;
+      padding-bottom: 12px;
+    }
+
+    .lane.has-agent-controls .lane-title {
+      grid-area: title;
+      min-height: 30px;
+    }
+
+    .lane.has-agent-controls .lane-actions {
+      display: contents;
+    }
+
+    .lane.has-agent-controls .lane-dispatch {
+      grid-area: dispatch;
+      width: 100%;
+      align-content: flex-start;
+    }
+
+    .lane.has-agent-controls .lane-tools {
+      grid-area: tools;
+      align-self: start;
     }
 
     .agent-summary {
@@ -1190,6 +1475,24 @@
     .spawn-button:disabled {
       cursor: progress;
       opacity: 0.6;
+    }
+
+    .dispatch-controls.is-paused {
+      opacity: 0.72;
+    }
+
+    .dispatch-controls.is-paused .dispatch-select:disabled,
+    .dispatch-controls.is-paused .dispatch-max:disabled,
+    .spawn-button.is-paused:disabled {
+      cursor: not-allowed;
+    }
+
+    .dispatch-controls.is-paused .dispatch-select:disabled,
+    .dispatch-controls.is-paused .dispatch-max:disabled,
+    .spawn-button.is-paused:disabled {
+      background: #f4f1e9;
+      border-color: #d7c7ab;
+      color: #665333;
     }
 
     .agent-popover {
@@ -1762,8 +2065,15 @@
     }
 
     @media (max-width: 680px) {
+      :root {
+        --side-tab-gutter: 54px;
+        --shell-edge-gap: 10px;
+      }
+
       .shell {
-        width: min(100vw - 20px, 640px);
+        width: calc(var(--viewport-client-width) - var(--side-tab-gutter) - var(--shell-edge-gap));
+        margin-left: var(--side-tab-gutter);
+        margin-right: var(--shell-edge-gap);
         padding-top: 16px;
         padding-bottom: 68px;
       }
@@ -1775,6 +2085,16 @@
       .toolbar {
         justify-content: flex-start;
         margin-top: 14px;
+      }
+
+      .pause-control {
+        width: 100%;
+        justify-content: flex-start;
+      }
+
+      .pause-state {
+        flex: 1 1 160px;
+        flex-wrap: wrap;
       }
 
       .board {
@@ -1803,9 +2123,21 @@
         top: calc(50% - 148px);
       }
 
+      .settings-tab {
+        bottom: 16px;
+      }
+
       .workflow-tray {
         padding-left: 10px;
         padding-right: 10px;
+      }
+
+      .settings-tray {
+        width: calc(100vw - 10px);
+        max-height: 76vh;
+        padding-left: 10px;
+        padding-right: 10px;
+        padding-bottom: calc(16px + var(--settings-tab-height));
       }
 
       .workflow-state-line,
@@ -1852,6 +2184,12 @@
         </div>
       </div>
       <div class="toolbar">
+        <div class="pause-control" id="pauseControl" aria-live="polite">
+          <div class="pause-state">
+            <span class="pause-indicator" aria-hidden="true"></span>
+            <span class="pause-label">Pause status loading</span>
+          </div>
+        </div>
         <button class="button" type="button" id="reloadButton">Reload JSON</button>
         <button class="button" type="button" id="autoRefreshButton" aria-pressed="false">Auto refresh: Off</button>
         <label class="file-label">
@@ -1866,6 +2204,7 @@
     <section class="board" id="board" aria-label="Agent task board"></section>
     <section class="workflow-board" id="workflowBoard" aria-label="Workflow graph"></section>
     <section class="archive-board" id="archiveBoard" aria-label="Archived task board"></section>
+    <section class="settings-board" id="settingsBoard" aria-label="Settings"></section>
   </main>
 
   <script>
@@ -1894,6 +2233,10 @@
       pendingSpawns: []
     };
     const fallbackDispatchSettings = {
+      commands: {
+        claude: "claude",
+        codex: "codex"
+      },
       worker: {
         enabled: false,
         model: "codex",
@@ -1904,7 +2247,23 @@
         model: "codex",
         maxAgents: 1
       },
+      pause: {
+        pausedUntil: "",
+        pausedBy: "",
+        pausedAt: "",
+        pauseReason: ""
+      },
       pendingSpawns: []
+    };
+    const fallbackPauseStatus = {
+      isPaused: false,
+      pausedUntil: "",
+      pausedBy: "",
+      pausedAt: "",
+      pauseReason: "",
+      remainingSeconds: 0,
+      remainingText: "0s",
+      message: ""
     };
     const fallbackAgentSchema = {
       modelBackground: {
@@ -1925,10 +2284,12 @@
     const boardEl = document.getElementById("board");
     const workflowEl = document.getElementById("workflowBoard");
     const archiveEl = document.getElementById("archiveBoard");
+    const settingsEl = document.getElementById("settingsBoard");
     const statusEl = document.getElementById("status");
     const boardNameEl = document.getElementById("boardName");
     const updatedAtEl = document.getElementById("updatedAt");
     const sourceNameEl = document.getElementById("sourceName");
+    const pauseControlEl = document.getElementById("pauseControl");
     const reloadButton = document.getElementById("reloadButton");
     const autoRefreshButton = document.getElementById("autoRefreshButton");
     const fileInput = document.getElementById("fileInput");
@@ -1937,12 +2298,26 @@
     let workflowDetailKey = "";
     let archiveTrayOpen = false;
     let doneFocusOpen = false;
+    let settingsPanelOpen = false;
     let currentBoard = fallbackBoard;
     let currentSourceLabel = "fallback";
     let currentAgents = fallbackAgents;
     let currentDispatchSettings = fallbackDispatchSettings;
+    let currentPauseStatus = fallbackPauseStatus;
     let autoRefreshTimer = null;
     let autoRefreshInFlight = false;
+    let agentLogRefreshTimer = null;
+    let agentLogRefreshInFlight = false;
+    let pauseCountdownTimer = null;
+    let pauseActionInFlight = false;
+    let pinnedAgentRunKey = "";
+
+    function syncViewportClientWidth() {
+      document.documentElement.style.setProperty(
+        "--viewport-client-width",
+        `${document.documentElement.clientWidth || window.innerWidth}px`
+      );
+    }
 
     function escapeText(value) {
       return String(value ?? "")
@@ -2035,27 +2410,155 @@
     }
 
     function activeAgentsForRole(role) {
-      const agents = Array.isArray(currentAgents.activeAgents)
-        ? currentAgents.activeAgents
-        : Array.isArray(currentAgents.agents)
-          ? currentAgents.agents.filter((agent) => agent?.status === "active")
+      return activeAgentsForRoleFromState(currentAgents, role);
+    }
+
+    function activeAgentsForRoleFromState(agentsState, role) {
+      const agents = Array.isArray(agentsState?.activeAgents)
+        ? agentsState.activeAgents
+        : Array.isArray(agentsState?.agents)
+          ? agentsState.agents.filter((agent) => agent?.status === "active")
           : [];
       return agents.filter((agent) => String(agent.role || "").toLowerCase() === role);
     }
 
+    function isLivePendingSpawn(spawn) {
+      const status = String(spawn?.status || "").toLowerCase();
+      const processState = String(spawn?.processStatus?.state || "").toLowerCase();
+      const terminalStates = ["exited", "pid-reused", "unknown", "missing-pid"];
+      if (terminalStates.some((state) => status.includes(state) || processState === state)) {
+        return false;
+      }
+      if (status.includes("running") || processState === "running") {
+        return true;
+      }
+      return !status && !processState;
+    }
+
     function pendingSpawnsForRole(role) {
-      const pending = Array.isArray(currentAgents.pendingSpawns)
-        ? currentAgents.pendingSpawns
+      return pendingSpawnsForRoleFromState(currentAgents, role);
+    }
+
+    function pendingSpawnsForRoleFromState(agentsState, role) {
+      const pending = Array.isArray(agentsState?.pendingSpawns)
+        ? agentsState.pendingSpawns
         : Array.isArray(currentDispatchSettings.pendingSpawns)
           ? currentDispatchSettings.pendingSpawns
           : [];
-      return pending.filter((spawn) => String(spawn.role || "").toLowerCase() === role);
+      return pending.filter((spawn) =>
+        String(spawn.role || "").toLowerCase() === role && isLivePendingSpawn(spawn)
+      );
     }
 
     function shortTime(value) {
       const parsed = Date.parse(value || "");
       if (Number.isNaN(parsed)) return "";
       return new Date(parsed).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+    }
+
+    function formatDuration(seconds) {
+      const totalSeconds = Math.max(0, Math.ceil(Number(seconds) || 0));
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const remainingSeconds = totalSeconds % 60;
+      if (hours > 0) return `${hours}h ${minutes}m ${remainingSeconds}s`;
+      if (minutes > 0) return `${minutes}m ${remainingSeconds}s`;
+      return `${remainingSeconds}s`;
+    }
+
+    function remainingPauseSeconds(status) {
+      const pausedUntil = String(status?.pausedUntil || "").trim();
+      const parsedUntil = Date.parse(pausedUntil);
+      if (!Number.isNaN(parsedUntil)) {
+        return Math.max(0, Math.ceil((parsedUntil - Date.now()) / 1000));
+      }
+      const parsedRemaining = Number.parseInt(status?.remainingSeconds, 10);
+      return Number.isNaN(parsedRemaining) ? 0 : Math.max(0, parsedRemaining);
+    }
+
+    function normalizePauseStatus(status) {
+      const source = status && typeof status === "object" ? status : {};
+      const remainingSeconds = remainingPauseSeconds(source);
+      const isPaused = Boolean(source.isPaused || source.pausedUntil) && remainingSeconds > 0;
+      return {
+        ...fallbackPauseStatus,
+        ...source,
+        isPaused,
+        pausedUntil: isPaused ? String(source.pausedUntil || "").trim() : "",
+        pausedBy: isPaused ? String(source.pausedBy || "").trim() : "",
+        pausedAt: isPaused ? String(source.pausedAt || "").trim() : "",
+        pauseReason: isPaused ? String(source.pauseReason || "").trim() : "",
+        remainingSeconds: isPaused ? remainingSeconds : 0,
+        remainingText: isPaused ? formatDuration(remainingSeconds) : "0s",
+        message: String(source.message || "").trim()
+      };
+    }
+
+    function pauseUntilText(status) {
+      if (!status?.pausedUntil) return "";
+      const timeText = shortTime(status.pausedUntil);
+      return timeText ? `Until ${timeText}` : `Until ${status.pausedUntil}`;
+    }
+
+    function pausedControlMessage(prefix = "Task board paused") {
+      const untilText = pauseUntilText(currentPauseStatus);
+      const countdown = currentPauseStatus?.remainingText || "";
+      return [prefix, untilText, countdown].filter(Boolean).join(" | ");
+    }
+
+    function clearPauseCountdownTimer() {
+      if (!pauseCountdownTimer) return;
+      window.clearInterval(pauseCountdownTimer);
+      pauseCountdownTimer = null;
+    }
+
+    function updatePauseCountdownText() {
+      if (!currentPauseStatus.isPaused) return;
+      const remainingSeconds = remainingPauseSeconds(currentPauseStatus);
+      if (remainingSeconds <= 0) {
+        clearPauseCountdownTimer();
+        refreshPauseStatus({ silent: true }).catch(() => {
+          currentPauseStatus = normalizePauseStatus({ isPaused: false });
+          renderPauseControl();
+          renderBoard(currentBoard, currentSourceLabel);
+        });
+        return;
+      }
+      currentPauseStatus = normalizePauseStatus({
+        ...currentPauseStatus,
+        remainingSeconds
+      });
+      const countdownEl = pauseControlEl.querySelector("[data-pause-countdown]");
+      if (countdownEl) {
+        countdownEl.textContent = currentPauseStatus.remainingText;
+      }
+    }
+
+    function renderPauseControl(status = currentPauseStatus) {
+      currentPauseStatus = normalizePauseStatus(status);
+      const paused = currentPauseStatus.isPaused;
+      const untilText = pauseUntilText(currentPauseStatus);
+      const pauseButtonDisabled = pauseActionInFlight ? "disabled" : "";
+      const resumeButton = paused
+        ? `<button class="button pause-button" type="button" data-pause-action="resume" ${pauseButtonDisabled}>Resume now</button>`
+        : "";
+      pauseControlEl.classList.toggle("is-paused", paused);
+      pauseControlEl.innerHTML = `
+        <div class="pause-state">
+          <span class="pause-indicator" aria-hidden="true"></span>
+          <span class="pause-label">${paused ? "Paused" : "Not paused"}</span>
+          ${paused && untilText ? `<span class="pause-until">${escapeText(untilText)}</span>` : ""}
+          ${paused ? `<span class="pause-countdown" data-pause-countdown>${escapeText(currentPauseStatus.remainingText)}</span>` : ""}
+        </div>
+        <div class="pause-actions">
+          <button class="button pause-button" type="button" data-pause-action="pause" ${pauseButtonDisabled}>Pause +1h</button>
+          ${resumeButton}
+        </div>
+      `;
+      clearPauseCountdownTimer();
+      if (paused) {
+        pauseCountdownTimer = window.setInterval(updatePauseCountdownText, 1000);
+      }
     }
 
     function agentSchemaModel(model) {
@@ -2098,6 +2601,64 @@
       const notes = String(entry?.notes || "").trim();
       if (notes) return notes;
       return "No log output recorded yet.";
+    }
+
+    function agentRunKey(entry, state) {
+      const role = String(entry?.role || "").trim().toLowerCase();
+      const model = String(entry?.model || "").trim().toLowerCase();
+      const name = String(entry?.personalName || entry?.agentName || "agent").trim().toLowerCase();
+      const stableId = state === "pending"
+        ? String(entry?.processId || entry?.logPath || entry?.spawnedAt || "").trim()
+        : String(entry?.agentId || entry?.currentTaskId || "").trim();
+      return [state, role, model, name, stableId].join("|");
+    }
+
+    function agentRunEntriesForState(agentsState) {
+      return ["worker", "review"].flatMap((role) => [
+        ...activeAgentsForRoleFromState(agentsState, role).map((entry) => ({
+          entry,
+          state: "registered",
+          key: agentRunKey(entry, "registered"),
+        })),
+        ...pendingSpawnsForRoleFromState(agentsState, role).map((entry) => ({
+          entry,
+          state: "pending",
+          key: agentRunKey(entry, "pending"),
+        })),
+      ]);
+    }
+
+    function agentRunSignature(agentsState) {
+      return agentRunEntriesForState(agentsState)
+        .map(({ entry, state, key }) => {
+          const displayState = state === "pending"
+            ? pendingSpawnDisplayState(entry)
+            : { className: "is-registered", stateLabel: "registered live" };
+          return [key, displayState.className, displayState.stateLabel].join(":");
+        })
+        .join("||");
+    }
+
+    function applyPinnedAgentRunState() {
+      let foundPinned = false;
+      document.querySelectorAll("[data-agent-run-key]").forEach((wrap) => {
+        const key = wrap.getAttribute("data-agent-run-key") || "";
+        const isPinned = Boolean(pinnedAgentRunKey && key === pinnedAgentRunKey);
+        wrap.classList.toggle("is-pinned", isPinned);
+        const button = wrap.querySelector(".agent-run-tab");
+        if (button) {
+          button.setAttribute("aria-expanded", isPinned ? "true" : "false");
+        }
+        if (isPinned) foundPinned = true;
+      });
+      if (pinnedAgentRunKey && !foundPinned) {
+        pinnedAgentRunKey = "";
+      }
+    }
+
+    function togglePinnedAgentRun(key) {
+      pinnedAgentRunKey = pinnedAgentRunKey === key ? "" : key;
+      applyPinnedAgentRunState();
     }
 
     function agentRunMeta(entry, stateLabel) {
@@ -2146,9 +2707,11 @@
       const displayName = name || "agent";
       const meta = agentRunMeta(entry, stateLabel);
       const logText = agentRunLogText(entry);
+      const key = agentRunKey(entry, state);
+      const isPinned = pinnedAgentRunKey === key;
       return `
-        <div class="agent-run-tab-wrap">
-          <button class="agent-run-tab ${displayState.className}" type="button" aria-label="${escapeText(displayName)} ${escapeText(stateLabel)} agent log">
+        <div class="agent-run-tab-wrap${isPinned ? " is-pinned" : ""}" data-agent-run-key="${escapeText(key)}">
+          <button class="agent-run-tab ${displayState.className}" type="button" aria-expanded="${isPinned ? "true" : "false"}" aria-label="${escapeText(displayName)} ${escapeText(stateLabel)} agent log">
             <span class="agent-run-dot" aria-hidden="true"></span>
             <span class="agent-run-name">${escapeText(displayName)}</span>
           </button>
@@ -2159,6 +2722,37 @@
           </div>
         </div>
       `;
+    }
+
+    function updateAgentRunPopovers(agentsState) {
+      const entriesByKey = new Map(
+        agentRunEntriesForState(agentsState).map(({ entry, state, key }) => [key, { entry, state }])
+      );
+      document.querySelectorAll("[data-agent-run-key]").forEach((wrap) => {
+        const key = wrap.getAttribute("data-agent-run-key") || "";
+        const match = entriesByKey.get(key);
+        if (!match) return;
+        const { entry, state } = match;
+        const displayState = state === "pending"
+          ? pendingSpawnDisplayState(entry)
+          : { className: "is-registered", stateLabel: "registered live" };
+        const displayName = String(entry?.personalName || entry?.agentName || "agent").trim() || "agent";
+        const button = wrap.querySelector(".agent-run-tab");
+        const nameEl = wrap.querySelector(".agent-run-name");
+        const titleEl = wrap.querySelector(".agent-run-popover-title");
+        const metaEl = wrap.querySelector(".agent-run-popover-meta");
+        const logEl = wrap.querySelector(".agent-run-log");
+        if (button) {
+          button.className = `agent-run-tab ${displayState.className}`;
+          button.setAttribute("aria-label", `${displayName} ${displayState.stateLabel} agent log`);
+          button.setAttribute("aria-expanded", key === pinnedAgentRunKey ? "true" : "false");
+        }
+        if (nameEl) nameEl.textContent = displayName;
+        if (titleEl) titleEl.textContent = displayName;
+        if (metaEl) metaEl.textContent = agentRunMeta(entry, displayState.stateLabel);
+        if (logEl) logEl.textContent = agentRunLogText(entry);
+      });
+      applyPinnedAgentRunState();
     }
 
     function laneAgentStripMarkup(role) {
@@ -2219,15 +2813,27 @@
       const codexSelected = dispatch.model === "codex" ? "selected" : "";
       const claudeSelected = dispatch.model === "claude" ? "selected" : "";
       const autoLabel = dispatch.enabled ? "Auto: On" : "Auto: Off";
+      const paused = Boolean(currentPauseStatus?.isPaused);
+      const pausedClass = paused ? " is-paused" : "";
+      const pausedAttr = paused ? "disabled aria-disabled=\"true\"" : "";
+      const pauseTitle = paused
+        ? pausedControlMessage(`${roleLabel} dispatch is paused`)
+        : "";
+      const spawnTitle = paused
+        ? pauseTitle
+        : `Spawn one ${roleLabel} agent with the selected model`;
+      const autoTitle = paused
+        ? pauseTitle
+        : `Automatically spawn ${roleLabel} agents when work exists and active count is below max`;
       return `
-        <span class="dispatch-controls" role="group" aria-label="${escapeText(roleLabel)} dispatch controls">
-          <select class="dispatch-select" data-dispatch-model="${safeRole}" title="${escapeText(roleLabel)} model">
+        <span class="dispatch-controls${pausedClass}" role="group" aria-label="${escapeText(roleLabel)} dispatch controls">
+          <select class="dispatch-select" data-dispatch-model="${safeRole}" title="${escapeText(roleLabel)} model" ${pausedAttr}>
             <option value="codex" ${codexSelected}>Codex</option>
             <option value="claude" ${claudeSelected}>Claude</option>
           </select>
-          <input class="dispatch-max" type="number" min="0" max="8" step="1" value="${escapeText(dispatch.maxAgents)}" data-dispatch-max="${safeRole}" title="Maximum active ${escapeText(roleLabel)} agents">
-          <button class="spawn-button" type="button" data-spawn-agent="${safeRole}" title="Spawn one ${escapeText(roleLabel)} agent with the selected model">Spawn</button>
-          <button class="spawn-button auto-dispatch-toggle" type="button" data-auto-dispatch-role="${safeRole}" aria-pressed="${dispatch.enabled ? "true" : "false"}" title="Automatically spawn ${escapeText(roleLabel)} agents when work exists and active count is below max">${autoLabel}</button>
+          <input class="dispatch-max" type="number" min="0" max="8" step="1" value="${escapeText(dispatch.maxAgents)}" data-dispatch-max="${safeRole}" title="Maximum active ${escapeText(roleLabel)} agents" ${pausedAttr}>
+          <button class="spawn-button${pausedClass}" type="button" data-spawn-agent="${safeRole}" title="${escapeText(spawnTitle)}" ${pausedAttr}>${paused ? "Paused" : "Spawn"}</button>
+          <button class="spawn-button auto-dispatch-toggle${pausedClass}" type="button" data-auto-dispatch-role="${safeRole}" aria-pressed="${dispatch.enabled ? "true" : "false"}" title="${escapeText(autoTitle)}" ${pausedAttr}>${paused ? "Auto paused" : autoLabel}</button>
         </span>
       `;
     }
@@ -2449,22 +3055,87 @@
       const doneCount = workflowCount(normalized, "done");
       const archivedCount = workflowCount(normalized, "archived");
       return {
+        "frontend-auditor": {
+          kind: "Upstream agent",
+          title: "Web Front-End Auditor",
+          color: "#4f7f77",
+          summary: "Visually inspects the running web UI before planning and writes a Markdown handoff. It never creates tasks or mutates the board.",
+          sections: {
+            "Start Phrase": [
+              "load as web front-end auditor"
+            ],
+            Context: [
+              "Runs before Planner when the owner wants a visual layout pass.",
+              "Uses the owner-provided app URL, or devServerUrl from task-board/config.json when no URL is given.",
+              "Checks key screens and states across mobile, tablet, and desktop viewports."
+            ],
+            Reads: [
+              "workflow/workflow-overview.md and roles/web-frontend-auditor.md at startup.",
+              "The running web app through a browser.",
+              "task-board/config.json only to find devServerUrl when the owner did not provide a target URL."
+            ],
+            Goal: [
+              "Find concrete visual issues before Planner creates implementation tasks.",
+              "Capture overflow, clipping, overlap, broken wrapping, unintended scrolling, hidden controls, and responsive regressions."
+            ],
+            Behaviors: [
+              "Inspect visible UI with browser tools, screenshots, viewport changes, and interactions where useful.",
+              "Record reproduction steps, expected behavior, actual behavior, evidence, likely areas, and suggested acceptance criteria.",
+              "Write one Markdown handoff per audit."
+            ],
+            Writes: [
+              "handoffs/frontend-audits/YYYYMMDD-HHMMSS-short-scope.md.",
+              "reference-images/frontend-audits/ only when screenshots are needed as evidence."
+            ],
+            "Role Boundary": [
+              "Never create tasks.",
+              "Never claim tasks or move board cards.",
+              "Never edit product code or review completed work."
+            ]
+          }
+        },
+        "frontend-handoff": {
+          kind: "Handoff artifact",
+          title: "Front-End Audit Handoff",
+          color: "#8c6f40",
+          summary: "Markdown evidence from an upstream visual audit. Planner reads it and decides which findings become deduplicated todo tasks.",
+          sections: {
+            Location: [
+              "handoffs/frontend-audits/"
+            ],
+            Contents: [
+              "Target URL, audit scope, auditor, created timestamp, and overall result.",
+              "Inspected targets with URLs or routes, viewports, and interactions.",
+              "Findings with severity, reproduction, expected behavior, actual behavior, evidence, likely files or areas, suggested task wording, and suggested acceptance criteria."
+            ],
+            "Planner Use": [
+              "Planner reads the handoff as input, not as a task list to copy blindly.",
+              "Planner creates only useful, actionable, deduplicated todo tasks.",
+              "Generated tasks should record the handoff path in sourceHandoffs."
+            ],
+            Guardrails: [
+              "The handoff itself does not reserve files or board scope.",
+              "Duplicate checks still happen against todo, claimed, review, reviewing, done, and archived before task creation."
+            ]
+          }
+        },
         "planning-agent": {
           kind: "Agent",
           title: "Planner",
           color: "#476f8f",
-          summary: "Turns the owner's requirements into deduplicated task-board todo cards. It does not implement or review.",
+          summary: "Turns the owner's requirements and upstream handoffs into deduplicated task-board todo cards. It does not implement or review.",
           sections: {
             "Start Phrase": [
               "load as planner"
             ],
             Context: [
-              "Consumes the owner's direct requirements.",
+              "Consumes the owner's direct requirements and upstream handoff files.",
               "Current todo count: " + todoCount + ".",
               "Checks todo, claimed, review, reviewing, done, and archived before creating or changing tasks."
             ],
             Reads: [
               "The owner's requirements from chat.",
+              "Web Front-End Auditor handoffs from handoffs/frontend-audits/ when the owner points to one.",
               "The full task board through GET /api/board when the backend is running."
             ],
             "Backend Data Seen": [
@@ -2479,7 +3150,8 @@
             ],
             Behaviors: [
               "Clarify scope into concrete requirements, acceptance criteria, relevant files, and inspection expectations.",
-              "Convert the owner's requirements into todo tasks only when they are actionable.",
+              "Convert the owner's requirements and handoff findings into todo tasks only when they are actionable.",
+              "Record handoff paths in sourceHandoffs for tasks created from audit findings.",
               "Use /api/add-task and /api/update-task when the backend is running; direct JSON edits are fallback only."
             ],
             Writes: [
@@ -2488,7 +3160,7 @@
             ],
             "Duplicate Rules": [
               "Before creating or materially changing a task, scan todo, claimed, review, reviewing, done, and archived.",
-              "Check title, scope, files, acceptance criteria, relatedTaskIds, dependsOn, and sourceReviewTaskId.",
+              "Check title, scope, files, acceptance criteria, relatedTaskIds, dependsOn, sourceHandoffs, and sourceReviewTaskId.",
               "Update or reference an existing matching task instead of creating a duplicate."
             ],
             "Role Boundary": [
@@ -2510,6 +3182,7 @@
           sections: {
             Context: [
               "Tasks arrive here from the Planner or Reviewer follow-ups.",
+              "Planner-created tasks may include sourceHandoffs when they came from an upstream audit.",
               "Each task needs a real title, requirements, acceptance criteria, and files when known."
             ],
             Goal: [
@@ -2821,7 +3494,7 @@
             ],
             "Check Against": [
               "title, scope, files, project area, requirements, acceptance criteria",
-              "relatedTaskIds, dependsOn, sourceReviewTaskId"
+              "relatedTaskIds, dependsOn, sourceHandoffs, sourceReviewTaskId"
             ],
             "Result": [
               "Update or link an existing task when it already covers the work; create a new task only when the scope is distinct."
@@ -2866,7 +3539,9 @@
 
     function workflowGraphMarkup(normalized) {
       const steps = {
-        planning: { key: "planning-agent", kind: "Agent", label: "Planner", color: "#476f8f", meta: "Turns requirements into clean todo cards." },
+        auditor: { key: "frontend-auditor", kind: "Upstream agent", label: "Web Front-End Auditor", color: "#4f7f77", meta: "Finds visual UI issues before planning." },
+        handoff: { key: "frontend-handoff", kind: "Artifact", label: "Audit Handoff", color: "#8c6f40", meta: "Markdown findings for Planner." },
+        planning: { key: "planning-agent", kind: "Agent", label: "Planner", color: "#476f8f", meta: "Turns requirements and handoffs into todo cards." },
         worker: { key: "worker-agent", kind: "Agent", label: "Worker", color: "var(--claimed)", meta: "Claims todo work, implements it, and requests review." },
         reviewer: { key: "review-agent", kind: "Agent", label: "Reviewer", color: "#7f6cae", meta: "Claims review work, validates it, and decides outcome." }
       };
@@ -2881,6 +3556,14 @@
       const activeReviewCount = activeAgentsForRole("review").length;
       const mainFlow = `
         <div class="workflow-agent-flow" aria-label="Agent workflow map">
+          <div class="workflow-agent-row">
+            ${workflowNode(steps.auditor)}
+          </div>
+          ${workflowAgentEdge("visual findings")}
+          <div class="workflow-agent-row">
+            ${workflowNode(steps.handoff)}
+          </div>
+          ${workflowAgentEdge("planning input")}
           <div class="workflow-agent-row">
             ${workflowNode(steps.planning, todoCount)}
           </div>
@@ -2900,7 +3583,7 @@
           <div class="workflow-panel-header">
             <div>
               <h2>Agent Workflow Map</h2>
-              <p>Each clickable block is an agent. Open one to see its context, goal, behavior, permissions, and hard rules.</p>
+              <p>Each clickable block is an agent or handoff artifact. Open one to see its context, goal, behavior, permissions, and hard rules.</p>
             </div>
             ${workflowCloseButton()}
           </div>
@@ -3075,6 +3758,52 @@
       }
     }
 
+    async function loadPauseStatus() {
+      try {
+        return normalizePauseStatus(await loadJson("/viewer/pause-status?agentName=Task%20board%20viewer"));
+      } catch (error) {
+        return normalizePauseStatus(currentDispatchSettings?.pause || fallbackPauseStatus);
+      }
+    }
+
+    async function refreshPauseStatus(options = {}) {
+      const previousPaused = currentPauseStatus.isPaused;
+      currentPauseStatus = await loadPauseStatus();
+      renderPauseControl();
+      if (previousPaused !== currentPauseStatus.isPaused) {
+        renderBoard(currentBoard, currentSourceLabel);
+      }
+      if (!options.silent) {
+        statusEl.textContent = currentPauseStatus.isPaused
+          ? pausedControlMessage("Task board paused")
+          : "Task board pause cleared.";
+      }
+      return currentPauseStatus;
+    }
+
+    async function runPauseAction(action) {
+      if (pauseActionInFlight) return;
+      const isResume = action === "resume";
+      pauseActionInFlight = true;
+      renderPauseControl();
+      statusEl.textContent = isResume ? "Resuming task board..." : "Pausing task board for one hour...";
+      try {
+        const endpoint = isResume ? "/viewer/resume-now" : "/viewer/pause-plus-one-hour";
+        const payload = isResume ? {} : { pauseReason: "Owner clicked Pause +1h in viewer" };
+        currentPauseStatus = normalizePauseStatus(await postJson(endpoint, payload));
+        renderBoard(currentBoard, currentSourceLabel);
+        statusEl.textContent = currentPauseStatus.isPaused
+          ? pausedControlMessage(isResume ? "Task board paused" : "Task board pause extended")
+          : "Task board pause cleared.";
+      } catch (error) {
+        statusEl.textContent = `${isResume ? "Resume" : "Pause"} failed: ${error.message}`;
+        await refreshPauseStatus({ silent: true }).catch(() => {});
+      } finally {
+        pauseActionInFlight = false;
+        renderPauseControl();
+      }
+    }
+
     function dispatchSettingsForRole(role) {
       const settings = currentDispatchSettings?.[role] || fallbackDispatchSettings[role] || {};
       const maxAgents = Number.parseInt(settings.maxAgents, 10);
@@ -3082,6 +3811,15 @@
         enabled: Boolean(settings.enabled),
         model: settings.model === "claude" ? "claude" : "codex",
         maxAgents: Number.isNaN(maxAgents) ? 1 : Math.max(0, Math.min(maxAgents, 8))
+      };
+    }
+
+    function commandSettings() {
+      const commands = currentDispatchSettings?.commands || fallbackDispatchSettings.commands || {};
+      const fallbackCommands = fallbackDispatchSettings.commands;
+      return {
+        claude: String(commands.claude || fallbackCommands.claude || "claude").trim() || "claude",
+        codex: String(commands.codex || fallbackCommands.codex || "codex").trim() || "codex"
       };
     }
 
@@ -3099,6 +3837,115 @@
       return currentDispatchSettings;
     }
 
+    async function saveCommandSettings(commands, triggerButton) {
+      const payload = {
+        commands: {
+          claude: String(commands.claude || "").trim(),
+          codex: String(commands.codex || "").trim()
+        }
+      };
+      if (!payload.commands.claude || !payload.commands.codex) {
+        throw new Error("Both commands are required.");
+      }
+      const previousLabel = triggerButton ? triggerButton.textContent : "";
+      if (triggerButton) {
+        triggerButton.disabled = true;
+        triggerButton.textContent = "Saving...";
+      }
+      try {
+        const settings = await postJson("/viewer/dispatch-settings", payload);
+        currentDispatchSettings = settings && typeof settings === "object" ? settings : currentDispatchSettings;
+        renderSettingsPanel();
+        return currentDispatchSettings;
+      } finally {
+        if (triggerButton) {
+          triggerButton.disabled = false;
+          triggerButton.textContent = previousLabel;
+        }
+      }
+    }
+
+    function agentToolLabel(tool) {
+      if (tool === "claude") return "Claude Code";
+      if (tool === "codex") return "Codex";
+      return tool || "Agent";
+    }
+
+    function isMissingHealthCheckRoute(error) {
+      const status = Number(error?.status || 0);
+      const message = String(error?.message || error || "");
+      return status === 404 || /\bHTTP 404\b/i.test(message) || /Unknown endpoint/i.test(message);
+    }
+
+    async function runAgentHealthCheck(tool, command, triggerButton) {
+      const label = agentToolLabel(tool);
+      const previousLabel = triggerButton ? triggerButton.textContent : "";
+      if (triggerButton) {
+        triggerButton.disabled = true;
+        triggerButton.textContent = "Testing...";
+      }
+      statusEl.textContent = `Testing ${label} command...`;
+      try {
+        const result = await postJson("/viewer/agent-health-check", { tool, command });
+        const seconds = result?.durationMs ? ` in ${(Number(result.durationMs) / 1000).toFixed(1)}s` : "";
+        const output = String(result?.outputPreview || "").trim();
+        const failureDetail = output ? ` Output: ${output}` : "";
+        const suggestion = String(result?.suggestion || "").trim();
+        const nextStep = suggestion ? ` Next step: ${suggestion}` : "";
+        if (result?.ok) {
+          statusEl.textContent = `${label} health check passed${seconds}.`;
+        } else {
+          const error = String(result?.error || result?.status || "command exited with an error").trim();
+          statusEl.textContent = `${label} health check failed${seconds}: ${error}.${nextStep}${failureDetail}`;
+        }
+      } catch (error) {
+        if (isMissingHealthCheckRoute(error)) {
+          statusEl.textContent = `${label} health check is not available from the running backend. Restart task-board/server.py, refresh this page, and run the test again.`;
+        } else {
+          statusEl.textContent = `${label} health check failed: ${error.message}`;
+        }
+      } finally {
+        if (triggerButton) {
+          triggerButton.disabled = false;
+          triggerButton.textContent = previousLabel;
+        }
+      }
+    }
+
+    function renderSettingsPanel() {
+      const commands = commandSettings();
+      settingsEl.classList.toggle("is-open", settingsPanelOpen);
+      settingsEl.innerHTML = `
+        <button class="settings-tab" type="button" data-settings-toggle aria-expanded="${settingsPanelOpen ? "true" : "false"}" aria-controls="settings-panel">
+          <span class="dot" aria-hidden="true"></span>
+          <span>Settings</span>
+        </button>
+        <div class="settings-tray" id="settings-panel" aria-hidden="${settingsPanelOpen ? "false" : "true"}">
+          <form class="settings-panel" data-settings-form>
+            <div class="settings-panel-header">
+              <h2>Settings</h2>
+              <button class="icon-button" type="button" data-settings-close aria-label="Close settings" title="Close settings">&times;</button>
+            </div>
+            <div class="settings-fields">
+              <div class="settings-field">
+                <label for="settingsCodexCommand">Codex command</label>
+                <input class="settings-command-input" id="settingsCodexCommand" name="codex" type="text" value="${escapeText(commands.codex)}" autocomplete="off" autocapitalize="none" spellcheck="false">
+              </div>
+              <div class="settings-field">
+                <label for="settingsClaudeCommand">Claude Code command</label>
+                <input class="settings-command-input" id="settingsClaudeCommand" name="claude" type="text" value="${escapeText(commands.claude)}" autocomplete="off" autocapitalize="none" spellcheck="false">
+              </div>
+            </div>
+            <div class="settings-actions">
+              <button class="settings-health-button" type="button" data-health-check-tool="codex">Test Codex</button>
+              <button class="settings-health-button" type="button" data-health-check-tool="claude">Test Claude</button>
+              <button class="settings-save-button" type="submit">Save</button>
+            </div>
+          </form>
+        </div>
+      `;
+    }
+
     function postJson(url, payload) {
       const requestPayload = {
         agentName: "owner via task board viewer",
@@ -3111,7 +3958,12 @@
           body: JSON.stringify(requestPayload)
         }).then(async (response) => {
           const data = await response.json().catch(() => ({}));
-          if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+          if (!response.ok) {
+            const error = new Error(data.error || `HTTP ${response.status}`);
+            error.status = response.status;
+            error.payload = data;
+            throw error;
+          }
           return data;
         });
       }
@@ -3132,7 +3984,10 @@
             resolve(data);
             return;
           }
-          reject(new Error(data.error || `HTTP ${request.status}`));
+          const error = new Error(data.error || `HTTP ${request.status}`);
+          error.status = request.status;
+          error.payload = data;
+          reject(error);
         };
         request.onerror = () => reject(new Error("Could not persist board action"));
         request.send(JSON.stringify(requestPayload));
@@ -3143,6 +3998,11 @@
       const roleLabel = role === "worker" ? "Worker Agent" : role === "review" ? "Review Agent" : `${role} agent`;
       const toolLabel = tool === "claude" ? "Claude" : tool === "codex" ? "Codex" : tool;
       const previousLabel = triggerButton ? triggerButton.textContent : "";
+      if (currentPauseStatus.isPaused) {
+        statusEl.textContent = pausedControlMessage(`${roleLabel} spawning is paused`);
+        await refreshPauseStatus({ silent: true }).catch(() => {});
+        return;
+      }
       if (triggerButton) {
         triggerButton.disabled = true;
         triggerButton.textContent = "Spawning...";
@@ -3155,6 +4015,9 @@
         const logText = result?.logPath ? ` Log: ${result.logPath}.` : "";
         statusEl.textContent = `Spawned ${roleLabel} in ${toolLabel} non-interactively.${processText}${logText} Start phrase: "${phrase}"`;
       } catch (error) {
+        if (error.status === 423 || error.payload?.paused) {
+          await refreshPauseStatus({ silent: true }).catch(() => {});
+        }
         statusEl.textContent = `Spawn failed (${roleLabel} / ${toolLabel}): ${error.message}`;
       } finally {
         if (triggerButton) {
@@ -3242,11 +4105,12 @@
           <div class="lane-header">
             <div class="lane-title"><span class="dot"></span><span>${escapeText(label)}</span></div>
             <div class="lane-actions">
-              ${agentSummary}
-              ${spawnButtons}
-              <span class="count">${tasks.length}</span>
-              <button class="icon-button lane-toggle" type="button" data-lane-toggle="${escapeText(key)}" aria-label="${laneToggleLabel}" title="${laneToggleLabel}" ${tasks.length ? "" : "disabled"}>${allCollapsed ? "+" : "-"}</button>
-              ${extraActions}
+              ${options.agentRole ? `<div class="lane-dispatch">${agentSummary}${spawnButtons}</div>` : ""}
+              <div class="lane-tools">
+                <span class="count">${tasks.length}</span>
+                <button class="icon-button lane-toggle" type="button" data-lane-toggle="${escapeText(key)}" aria-label="${laneToggleLabel}" title="${laneToggleLabel}" ${tasks.length ? "" : "disabled"}>${allCollapsed ? "+" : "-"}</button>
+                ${extraActions}
+              </div>
             </div>
           </div>
           <div class="lane-body">${body}</div>
@@ -3255,10 +4119,12 @@
     }
 
     function renderBoard(board, sourceLabel, agentsState = currentAgents) {
+      syncViewportClientWidth();
       const normalized = normalizeBoard(board);
       currentBoard = normalized;
       currentSourceLabel = sourceLabel;
       currentAgents = agentsState && typeof agentsState === "object" ? agentsState : fallbackAgents;
+      renderPauseControl();
       boardNameEl.textContent = normalized.boardName || "Project Task Board";
       updatedAtEl.textContent = `Updated: ${normalized.updatedAt || "unknown"}`;
       sourceNameEl.textContent = `Source: ${sourceLabel}`;
@@ -3305,6 +4171,9 @@
           })}
         </div>
       `;
+      renderSettingsPanel();
+      applyPinnedAgentRunState();
+      syncViewportClientWidth();
     }
 
     function toggleArchiveTray(forceOpen) {
@@ -3337,6 +4206,15 @@
       renderBoard(currentBoard, currentSourceLabel);
     }
 
+    function toggleSettingsPanel(forceOpen) {
+      if (typeof forceOpen === "boolean") {
+        settingsPanelOpen = forceOpen;
+      } else {
+        settingsPanelOpen = !settingsPanelOpen;
+      }
+      renderSettingsPanel();
+    }
+
     async function copyTextToClipboard(text) {
       if (navigator.clipboard && window.isSecureContext) {
         await navigator.clipboard.writeText(text);
@@ -3358,9 +4236,23 @@
     }
 
     boardEl.addEventListener("click", (event) => {
+      const agentRunButton = event.target.closest(".agent-run-tab");
+      if (agentRunButton) {
+        const wrapper = agentRunButton.closest("[data-agent-run-key]");
+        if (wrapper) {
+          togglePinnedAgentRun(wrapper.getAttribute("data-agent-run-key") || "");
+        }
+        return;
+      }
+
       const autoDispatchButton = event.target.closest("[data-auto-dispatch-role]");
       if (autoDispatchButton) {
         const role = autoDispatchButton.dataset.autoDispatchRole;
+        if (currentPauseStatus.isPaused) {
+          statusEl.textContent = pausedControlMessage(`${role === "worker" ? "Worker" : "Review"} auto dispatch is paused`);
+          refreshPauseStatus({ silent: true }).catch(() => {});
+          return;
+        }
         const current = dispatchSettingsForRole(role);
         autoDispatchButton.disabled = true;
         saveDispatchSettings(role, { enabled: !current.enabled })
@@ -3379,6 +4271,11 @@
       const spawnButton = event.target.closest("[data-spawn-agent]");
       if (spawnButton) {
         const role = spawnButton.dataset.spawnAgent;
+        if (currentPauseStatus.isPaused) {
+          statusEl.textContent = pausedControlMessage(`${role === "worker" ? "Worker" : "Review"} spawning is paused`);
+          refreshPauseStatus({ silent: true }).catch(() => {});
+          return;
+        }
         const tool = spawnButton.dataset.spawnTool || dispatchSettingsForRole(role).model;
         spawnAgent(role, tool, spawnButton);
         return;
@@ -3483,6 +4380,66 @@
       returnTaskToReview(taskId, feedback);
     });
 
+    settingsEl.addEventListener("click", (event) => {
+      const toggleButton = event.target.closest("[data-settings-toggle]");
+      if (toggleButton) {
+        toggleSettingsPanel();
+        return;
+      }
+
+      const closeButton = event.target.closest("[data-settings-close]");
+      if (closeButton) {
+        toggleSettingsPanel(false);
+        return;
+      }
+
+      const healthButton = event.target.closest("[data-health-check-tool]");
+      if (healthButton) {
+        const tool = healthButton.dataset.healthCheckTool;
+        const form = healthButton.closest("[data-settings-form]");
+        const input = form?.elements?.[tool];
+        const command = String(input?.value || "").trim();
+        if (!command) {
+          statusEl.textContent = `Add a ${agentToolLabel(tool)} command before testing.`;
+          input?.focus();
+          return;
+        }
+        runAgentHealthCheck(tool, command, healthButton);
+      }
+    });
+
+    settingsEl.addEventListener("submit", (event) => {
+      const form = event.target.closest("[data-settings-form]");
+      if (!form) return;
+
+      event.preventDefault();
+      const submitButton = form.querySelector(".settings-save-button");
+      const codexInput = form.elements.codex;
+      const claudeInput = form.elements.claude;
+      const codex = String(codexInput?.value || "").trim();
+      const claude = String(claudeInput?.value || "").trim();
+
+      if (!codex) {
+        statusEl.textContent = "Add a Codex command before saving settings.";
+        codexInput?.focus();
+        return;
+      }
+      if (!claude) {
+        statusEl.textContent = "Add a Claude Code command before saving settings.";
+        claudeInput?.focus();
+        return;
+      }
+
+      statusEl.textContent = "Saving settings...";
+      saveCommandSettings({ codex, claude }, submitButton)
+        .then(() => {
+          statusEl.textContent = "Settings saved.";
+        })
+        .catch((error) => {
+          statusEl.textContent = `Settings update failed: ${error.message}`;
+        });
+    });
+
     workflowEl.addEventListener("click", (event) => {
       const workflowToggleButton = event.target.closest("[data-workflow-toggle]");
       if (workflowToggleButton) {
@@ -3542,6 +4499,11 @@
       if (event.key === "Escape" && workflowDetailKey) {
         workflowDetailKey = "";
         renderBoard(currentBoard, currentSourceLabel);
+        return;
+      }
+      if (event.key === "Escape" && pinnedAgentRunKey) {
+        pinnedAgentRunKey = "";
+        applyPinnedAgentRunState();
       }
     });
 
@@ -3595,12 +4557,14 @@
         statusEl.textContent = "Loading board.json...";
       }
       try {
-        const [board, agents] = await Promise.all([
+        const [board, agents, , , pauseStatus] = await Promise.all([
           loadJson("board.json"),
           loadAgents(),
           loadAgentSchema(),
-          loadDispatchSettings()
+          loadDispatchSettings(),
+          loadPauseStatus()
         ]);
+        currentPauseStatus = pauseStatus;
         renderBoard(board, "board.json", agents);
         statusEl.textContent = silent
           ? `Auto refreshed ${new Date().toLocaleTimeString()}.`
@@ -3613,6 +4577,30 @@
         renderBoard(fallbackBoard, "fallback");
         statusEl.textContent = "Could not auto-load board.json. Use Load JSON file if the browser blocks local file access.";
       }
+    }
+
+    async function refreshAgentLogs() {
+      if (agentLogRefreshInFlight) return;
+      agentLogRefreshInFlight = true;
+      try {
+        const nextAgents = await loadAgents();
+        const normalizedAgents = nextAgents && typeof nextAgents === "object" ? nextAgents : fallbackAgents;
+        const beforeSignature = agentRunSignature(currentAgents);
+        const afterSignature = agentRunSignature(normalizedAgents);
+        currentAgents = normalizedAgents;
+        if (beforeSignature !== afterSignature) {
+          renderBoard(currentBoard, currentSourceLabel, currentAgents);
+        } else {
+          updateAgentRunPopovers(currentAgents);
+        }
+      } finally {
+        agentLogRefreshInFlight = false;
+      }
+    }
+
+    function startAgentLogRefresh() {
+      if (agentLogRefreshTimer) return;
+      agentLogRefreshTimer = window.setInterval(refreshAgentLogs, 1000);
     }
 
     function setAutoRefresh(enabled) {
@@ -3657,7 +4645,17 @@
 
     reloadButton.addEventListener("click", () => loadDefaultBoard());
     autoRefreshButton.addEventListener("click", () => setAutoRefresh(!autoRefreshTimer));
-    loadDefaultBoard();
+    pauseControlEl.addEventListener("click", (event) => {
+      const actionButton = event.target.closest("[data-pause-action]");
+      if (!actionButton) return;
+      runPauseAction(actionButton.dataset.pauseAction);
+    });
+    window.addEventListener("resize", syncViewportClientWidth);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener("resize", syncViewportClientWidth);
+    }
+    syncViewportClientWidth();
+    loadDefaultBoard().finally(startAgentLogRefresh);
   </script>
 </body>
 </html>

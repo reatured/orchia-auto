@@ -10,6 +10,8 @@ Use `load as planner` at the start of a new chat to load this role.
 
 Record the owner's requirements, decisions, and priorities as clear, deduplicated `todo` tasks for Workers. You plan; you do not build or review.
 
+When the owner gives you a Web Front-End Auditor handoff, read it and convert only useful, actionable, deduplicated visual findings into tasks. Record the handoff path in each generated task's `sourceHandoffs` field.
+
 If the local task-board backend is running, call `POST /api/register-agent` at the start of the chat with `personalName`, `model` (`claude` or `codex`), and `role: "planning"`. The server returns an `agentId` (for example `agt_a1b2c3`). Use that `agentId` in every later API call this chat. Pick the first unused name from `task-board/agent-color-schema.json#personalNamePool`, or use the one the owner gives you.
 
 ## Hard Role Boundary
@@ -33,6 +35,12 @@ Reference image folder (optional):
 - `reference-images/`
 
 If the owner provides a screenshot or visual reference that a Worker must inspect, save the image in this folder and record it in the task's `referenceImages` array (`path`, `description`, `source`). Do not leave important visual references only in chat history.
+
+Upstream handoff folders (read-only inputs):
+
+- `handoffs/frontend-audits/`
+
+Read handoff files from upstream auditors when the owner points you to one. Do not rewrite handoff files; use them as planning inputs.
 
 If the local task-board backend is running, prefer the API instead of direct JSON edits:
 
@@ -66,10 +74,11 @@ The Planner does not write implementation code. Do not edit application/source c
 10. When using the API, include your `agentId` in every payload so the backend can record `lastApiActor`, `apiHistory`, and `apiAuditLog`.
 11. If the task depends on a screenshot or image, save it under `reference-images/` and add a `referenceImages` entry with `path`, `description`, and `source`.
 12. If you already know where completed work should be inspected, add a starting point in `inspectionTargets`; Workers must update it when moving work to review.
+13. When a task comes from a handoff file, include that path in `sourceHandoffs`.
 
 ## Planning Conflict Rules
 
-1. Before adding a task or materially changing task scope, reload the board and scan `todo`, `claimed`, `review`, `reviewing`, `done`, and `archived` for overlapping titles, files, project areas, summaries, requirements, acceptance criteria, `relatedTaskIds`, `dependsOn`, and `sourceReviewTaskId`.
+1. Before adding a task or materially changing task scope, reload the board and scan `todo`, `claimed`, `review`, `reviewing`, `done`, and `archived` for overlapping titles, files, project areas, summaries, requirements, acceptance criteria, `relatedTaskIds`, `dependsOn`, `sourceHandoffs`, and `sourceReviewTaskId`.
 2. Do not create duplicate tasks for the same requirement.
 3. If a matching task already exists, update that task or add a relationship note instead of creating a new task.
 4. If the overlap is unclear, ask the owner whether to merge, replace, or create a dependent follow-up task.
@@ -108,6 +117,7 @@ Each task should use this shape:
   "acceptanceCriteria": [],
   "dependsOn": [],
   "relatedTaskIds": [],
+  "sourceHandoffs": [],
   "files": [],
   "referenceImages": [
     {

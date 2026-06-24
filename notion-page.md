@@ -1,6 +1,6 @@
 # Multi-Agent Project Workflow
 
-> Paste this whole page into Notion as your human-readable master spec. It documents the generic Planner / Worker / Reviewer workflow and the backend/frontend/API so a new project's AI can set itself up — or rebuild the system — from this single page. The runnable code lives in the `agent-workflow-starter` git repo.
+> Paste this whole page into Notion as your human-readable master spec. It documents the generic Web Front-End Auditor / Planner / Worker / Reviewer workflow and the backend/frontend/API so a new project's AI can set itself up — or rebuild the system — from this single page. The runnable code lives in the `agent-workflow-starter` git repo.
 
 ---
 
@@ -13,11 +13,12 @@ Use it when:
 - You want a clear separation between *planning*, *doing*, and *reviewing*.
 - You want a single, auditable source of truth for what's in flight.
 
-Three roles, each in its own chat, never switching roles:
+Three board roles plus one upstream handoff role, each in its own chat, never switching roles:
 
 | Role | Does | Never does |
 | --- | --- | --- |
-| **Planner** | Turns requirements into deduplicated `todo` tasks | Implement code, review work, claim tasks |
+| **Web Front-End Auditor** | Visually inspects the running UI and writes Markdown handoffs | Create tasks, edit code, move board cards |
+| **Planner** | Turns requirements and handoffs into deduplicated `todo` tasks | Implement code, review work, claim tasks |
 | **Worker** | Claims one task, implements it, moves it to review | Move work to `done`, review work, plan |
 | **Reviewer** | Reviews completed work; approves or opens a follow-up | Implement fixes, plan general work |
 
@@ -25,13 +26,19 @@ The owner (you) requests work, can return reviewed work with feedback, and archi
 
 ---
 
-## 2. The three roles
+## 2. The roles
+
+### Web Front-End Auditor
+- **Mission:** inspect the running web UI for layout issues such as overflow, clipping, overlap, broken wrapping, unintended scrollbars, and responsive regressions.
+- **Start phrase:** `load as web front-end auditor`
+- **Boundaries:** writes Markdown handoffs under `handoffs/frontend-audits/` and optional evidence under `reference-images/frontend-audits/`. Never creates tasks, edits code, claims work, or reviews completed work.
+- **Output:** structured audit handoff with target URLs, viewports, findings, reproduction steps, evidence, suggested task wording, and suggested acceptance criteria.
 
 ### Planner
-- **Mission:** record the owner's requirements as clear, small, deduplicated `todo` tasks.
+- **Mission:** record the owner's requirements and upstream handoff findings as clear, small, deduplicated `todo` tasks.
 - **Start phrase:** `load as planner`
 - **Boundaries:** edits only the board (`board.json`) and, when asked, workflow docs. Writes no product code. Before creating a task, scans all six columns for duplicates/overlap.
-- **Output:** well-formed task cards with `requirements`, `acceptanceCriteria`, `files`, and (optionally) `inspectionTargets` and `referenceImages`.
+- **Output:** well-formed task cards with `requirements`, `acceptanceCriteria`, `files`, and (optionally) `sourceHandoffs`, `inspectionTargets`, and `referenceImages`.
 
 ### Worker
 - **Mission:** claim exactly one unclaimed `todo` task, implement it, move it to `review`.
@@ -66,14 +73,15 @@ The viewer collapses these into **three visual columns**: To Do (`claimed` above
 
 ## 4. Workflow loop
 
-1. Owner gives requirements to a **Planner** → Planner creates `todo` tasks.
-2. A **Worker** reads the worker board, claims one `todo` task (→ `claimed`), implements it, moves it to `review` with `inspectionTargets`, then checks for the next safe task.
-3. A **Reviewer** claims a `review` task (→ `reviewing`), inspects it, and either:
+1. Optional: owner starts a **Web Front-End Auditor** against the running app → Auditor writes a handoff file.
+2. Owner gives requirements or handoff files to a **Planner** → Planner creates deduplicated `todo` tasks and records `sourceHandoffs` when relevant.
+3. A **Worker** reads the worker board, claims one `todo` task (→ `claimed`), implements it, moves it to `review` with `inspectionTargets`, then checks for the next safe task.
+4. A **Reviewer** claims a `review` task (→ `reviewing`), inspects it, and either:
    - **approves** → `done`, or
    - **requests changes** → closes the failed task into `done` as replaced and creates/updates a follow-up `todo`.
-4. The owner can return a `done` task to `review` with feedback, or archive accepted work.
+5. The owner can return a `done` task to `review` with feedback, or archive accepted work.
 
-**Optional upstream extension:** research/audit agents can write Markdown *handoff files* (they never touch the board); the Planner reads handoffs and converts useful findings into tasks. Add only if your project needs it.
+**Upstream extension pattern:** the Web Front-End Auditor and any future research/audit agents write Markdown *handoff files* (they never touch the board); the Planner reads handoffs and converts useful findings into tasks. Add more upstream roles only if your project needs them.
 
 ---
 
@@ -82,13 +90,13 @@ The viewer collapses these into **three visual columns**: To Do (`claimed` above
 - The board is the **coordination lock**. A task in `claimed` reserves its files, project area, and scope for that Worker.
 - Only `claimed` (and `reviewing` for reviewers) blocks. Shared files alone do **not** block — same-file work can proceed when scopes differ or when tasks link via `relatedTaskIds` / `dependsOn` / `sourceReviewTaskId`.
 - If two agents want the same task, the one already in `claimed`/`reviewing` wins; the other picks another task.
-- Planner and Reviewer must **deduplicate before creating** a task: scan every column by title, scope, files, acceptance criteria, and relationship fields. If a match exists, update it instead of creating a new task.
+- Planner and Reviewer must **deduplicate before creating** a task: scan every column by title, scope, files, acceptance criteria, `sourceHandoffs`, and relationship fields. If a match exists, update it instead of creating a new task.
 
 ---
 
 ## 6. Backend spec (task-board server)
 
-A small **Python 3.10+ HTTP server** (standard library only) owns the board file and exposes a REST API so claims and moves are **atomic**. Key responsibilities:
+A small **Python 3.9+ HTTP server** (standard library only) owns the board file and exposes a REST API so claims and moves are **atomic**. Key responsibilities:
 
 - Reads project-specific values from a **`config.json`** (project name, board title, owner label, dev-server URL, host/port, CLI command names). Nothing project-specific is hardcoded.
 - Persists the board with an **atomic write** (write a temp file, then replace) so a crash never corrupts it.
@@ -184,8 +192,8 @@ A single static **HTML page** served by the backend. It is the **owner's reader 
 
 1. **Clone the starter repo** into (or alongside) your project.
 2. **Edit `task-board/config.json`:** `projectName`, `boardTitle`, `owner`/`ownerLabel`, `devServerUrl`, `host`/`port`, `spawn` command names.
-3. **Tailor the role files** (`roles/*.md`): list the source directories agents must not edit; specialize the Reviewer's quality + correctness lenses for your domain.
-4. **(Optional)** edit `agent-color-schema.json` (`personalNamePool`); add upstream research/audit roles if needed.
-5. **Run the backend:** `python task-board/server.py` → open the viewer URL it prints.
-6. **Start agents** in separate chats with `load as planner` / `load as worker` / `load as reviewer`.
+3. **Tailor the role files** (`roles/*.md`): list the source directories agents must not edit; specialize the Web Front-End Auditor's visual checklist and the Reviewer's quality + correctness lenses for your domain.
+4. **(Optional)** edit `agent-color-schema.json` (`personalNamePool`); add more upstream research/audit roles if needed.
+5. **Run the backend:** on macOS/Linux use `python3 task-board/server.py`; on Windows use `py -3 task-board\server.py` or `python task-board\server.py` → open the viewer URL it prints.
+6. **Start agents** in separate chats with `load as web front-end auditor` / `load as planner` / `load as worker` / `load as reviewer`.
 7. Keep this Notion page as the shareable master copy; keep `AGENTS.md` + the repo as what the agents actually read.

@@ -20,14 +20,22 @@ Use `workflow/api-guide.md` for exact API payloads, examples, and error handling
 
 1. Read `workflow/workflow-overview.md`.
 2. Register as active. If the backend is running, call `POST /api/register-agent` with `personalName`, `model`, `role: "worker"`, and `startPhrase: "load as worker"`. Capture the `agentId` and keep it for the rest of the chat.
-3. Read the compact worker board. If the backend is running, prefer `GET /api/worker-board?agentId=...`; otherwise read only `columns.todo` and `columns.claimed` from `task-board/board.json`.
-4. Choose one task from `columns.todo`.
-5. If the task includes `referenceImages`, inspect those image paths before planning implementation. Do not rely on chat-only screenshots when the task data gives a workflow image path.
-6. Before touching implementation files, claim the task. If the backend is running, prefer `POST /api/claim-task` and include your `agentId`; otherwise update `board.json` directly:
+3. If the start phrase includes `resumeMode is paused-run`, inspect the task board through the API and inspect the worktree before editing. The prior spawned-agent log is context only; `board.json` is the source of truth. If `currentTaskStillLockedByYou` is true and `currentTaskId` is still in `columns.claimed` with `claimedBy` equal to your `personalName`, heartbeat with that task ID, fetch its full details, and continue that task before claiming anything new. If the task is unknown, missing, unlocked, or owned by someone else, reconcile from the live board and prior log, then either continue the safest matching task still locked by you or unregister with a clear note.
+4. Read the compact worker board. If the backend is running, prefer `GET /api/worker-board?agentId=...`; otherwise read only `columns.todo` and `columns.claimed` from `task-board/board.json`.
+5. Choose one task from `columns.todo`, unless you are continuing a resume-mode task that is still locked by you.
+6. If the task includes `referenceImages`, inspect those image paths before planning implementation. Do not rely on chat-only screenshots when the task data gives a workflow image path.
+7. Before touching implementation files, claim the task unless you are continuing an existing resume-mode `claimed` lock. If the backend is running, prefer `POST /api/claim-task` and include your `agentId`; otherwise update `board.json` directly:
    - Move the whole task object from `columns.todo` to `columns.claimed`.
    - Set `status` to `claimed`, `claimedBy` to your agent name, `claimedAt` to the current timestamp.
    - Update board `updatedAt`.
-7. After claiming, call `POST /api/heartbeat-agent` with `currentTaskId` set to the claimed task ID, then call `GET /api/task-detail?taskId=...&agentId=...` for the full details of only the claimed task.
+8. After claiming or confirming a resume-mode lock, call `POST /api/heartbeat-agent` with `currentTaskId` set to the claimed task ID, then call `GET /api/task-detail?taskId=...&agentId=...` for the full details of only the claimed task.
+
+## Pause Handling
+
+- If `POST /api/claim-task` returns HTTP `423` with `paused: true`, the backend is enforcing a board-wide pause. Do not bypass it by editing `board.json` manually, retrying in a loop, or claiming through another path.
+- Record the pause details from the response (`pausedUntil`, `remainingText`, `pauseReason`) in your report. If you are ending the chat, unregister with a note that the board is paused. If the owner explicitly asks you to wait, wait without touching implementation files.
+- Pause enforcement blocks new claims and backend spawns. It is implemented in the server; role instructions only explain what agents should do when they receive the paused response.
+- Hard stop targets only backend-spawned hidden Worker/Reviewer processes. It does not kill manual terminal/chat agents and it does not remove board locks.
 
 ## Claim Rules
 

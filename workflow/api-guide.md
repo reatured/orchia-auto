@@ -52,9 +52,15 @@ $base = "http://127.0.0.1:4177"
 | `GET /api/duplicate-scan?taskId=...` | Server-side duplicate scan; matching candidates only. |
 | `GET /api/agents` | Active registered agents plus pending spawned processes, PID status, and latest log previews. |
 | `GET /api/agent-schema` | Color/role/name schema for rendering chips. |
+| `GET /api/pause-status` or `GET /api/pause` | Read board-wide pause status and remaining time. |
 | `POST /api/register-agent` | Register at chat start; returns `agentId`. |
 | `POST /api/heartbeat-agent` | Refresh presence + current task ID. |
 | `POST /api/unregister-agent` | Remove an active agent before the chat ends. |
+| `POST /api/spawn-agent` | Launch one hidden Worker/Reviewer process with the configured CLI. |
+| `POST /api/agent-health-check` | Test a configured CLI command with the same command shape used for spawning. |
+| `POST /api/pause-plus-one-hour` or `POST /api/pause` | Add one hour to the board-wide pause. |
+| `POST /api/resume-now` | Clear the active board-wide pause. |
+| `POST /api/hard-stop-spawned-agents` or `POST /api/hard-stop` | Stop running backend-spawned Worker/Reviewer processes during an active pause. |
 | `POST /api/add-task` | Create one new task in `todo`. |
 | `POST /api/update-task` | Update allowed task fields without changing ID or status. |
 | `POST /api/claim-task` | Move one task `todo` → `claimed`. |
@@ -102,17 +108,94 @@ curl -s "$BASE/api/worker-board?agentId=$agentId"
 curl -s "$BASE/api/review-board?agentId=$agentId"
 curl -s "$BASE/api/task-detail?taskId=TASK-YYYYMMDD-001&agentId=$agentId"
 curl -s "$BASE/api/duplicate-scan?taskId=TASK-YYYYMMDD-001&agentId=$agentId&includeArchived=true&limit=25"
+curl -s "$BASE/api/pause-status?agentId=$agentId"
 ```
 ```powershell
 Invoke-RestMethod -Uri "$base/api/worker-board?agentId=$agentId"
 Invoke-RestMethod -Uri "$base/api/review-board?agentId=$agentId"
 Invoke-RestMethod -Uri "$base/api/task-detail?taskId=TASK-YYYYMMDD-001&agentId=$agentId"
 Invoke-RestMethod -Uri "$base/api/duplicate-scan?taskId=TASK-YYYYMMDD-001&agentId=$agentId&includeArchived=true&limit=25"
+Invoke-RestMethod -Uri "$base/api/pause-status?agentId=$agentId"
 ```
 
 `GET /api/worker-board` and `GET /api/review-board` return only the role's active columns as compact summaries; they omit `done`, `archived`, the top-level `tasks` index, `apiAuditLog`, and policy text. After choosing a task, load full details with `GET /api/task-detail`.
 
-`GET /api/agents` is mainly for the owner-facing viewer and diagnostics. Registered agents appear in `activeAgents`. Hidden spawned processes that have not registered yet appear in `pendingSpawns` with `processId`, `processStatus.state` (`running`, `exited`, `pid-reused`, or `unknown`), and `latestLog.preview`. Workers and Reviewers should not use this endpoint to choose tasks; use `/api/worker-board` or `/api/review-board`.
+`GET /api/agents` is mainly for the owner-facing viewer and diagnostics. Registered agents appear in `activeAgents`. Hidden spawned processes that have not registered yet appear in `pendingSpawns` with `processId`, `processStatus.state` (`running`, `exited`, `pid-reused`, or `unknown`), and `latestLog.preview`. Hard-stopped spawned processes that are eligible for resume appear in `pausedRuns`. Workers and Reviewers should not use this endpoint to choose tasks; use `/api/worker-board` or `/api/review-board`.
+
+## Spawn And Health Check APIs
+
+The viewer Settings tab uses the health-check endpoint before Spawn or auto-dispatch. A restarted backend exposes both `/api/agent-health-check` and `/viewer/agent-health-check`; if the viewer receives HTTP 404 from `/viewer/agent-health-check`, the running backend is older than the HTML and should be restarted.
+
+```bash
+curl -s -X POST "$BASE/api/agent-health-check" -H "Content-Type: application/json" \
+  -d '{"agentId":"'$agentId'","tool":"codex","command":"codex"}'
+curl -s -X POST "$BASE/api/agent-health-check" -H "Content-Type: application/json" \
+  -d '{"agentId":"'$agentId'","tool":"claude","command":"claude"}'
+```
+
+Health checks return JSON with `ok`, `status`, `tool`, `command`, `durationMs`, and, when useful, `error`, `outputPreview`, and `suggestion`. Codex checks run `codex exec --skip-git-repo-check "Reply exactly: OK"`; Claude Code checks run `claude -p "Reply exactly: OK"`. Plain `codex` and `claude` command names are resolved from `PATH` plus common install locations including Homebrew, `/usr/local/bin`, user-local bins, npm, and Windows Node/npm paths. When `CODEX_SQLITE_HOME` is not already set, Codex health checks and spawned Codex agents use `task-board/codex-sqlite-state/` as a writable state folder.
+
+## Pause, Hard Stop, Resume APIs
+
+Pause state is stored in `task-board/agent-dispatch-settings.json` under `pause`. Use `GET /api/pause-status` or `GET /api/pause` to read it:
+
+```bash
+curl -s "$BASE/api/pause-status?agentId=$agentId"
+```
+```powershell
+Invoke-RestMethod -Uri "$base/api/pause-status?agentId=$agentId"
+```
+
+The status response includes `isPaused`, `pausedUntil`, `pausedBy`, `pausedAt`, `pauseReason`, `remainingSeconds`, `remainingText`, and `message`. When the pause is expired or absent, `isPaused` is `false`, pause metadata is blank, and remaining time is zero.
+
+```bash
+# Pause +1h. Repeated calls add one hour from max(now, current pausedUntil).
+curl -s -X POST "$BASE/api/pause-plus-one-hour" -H "Content-Type: application/json" \
+  -d '{"agentId":"'$agentId'","pauseReason":"Rate-limit cooldown"}'
+# Alias:
+curl -s -X POST "$BASE/api/pause" -H "Content-Type: application/json" \
+  -d '{"agentId":"'$agentId'","reason":"Rate-limit cooldown"}'
+```
+```powershell
+Invoke-RestMethod -Uri "$base/api/pause-plus-one-hour" -Method Post -ContentType "application/json" `
+  -Body (@{ agentId = $agentId; pauseReason = "Rate-limit cooldown" } | ConvertTo-Json)
+```
+
+Pause responses return the same status fields plus `ok: true` and `addedSeconds: 3600`. The backend calculates the new `pausedUntil` from `max(now, current pausedUntil) + 1 hour`, so Pause +1h accumulates one hour per click instead of replacing the current pause.
+
+```bash
+curl -s -X POST "$BASE/api/resume-now" -H "Content-Type: application/json" \
+  -d '{"agentId":"'$agentId'"}'
+```
+```powershell
+Invoke-RestMethod -Uri "$base/api/resume-now" -Method Post -ContentType "application/json" `
+  -Body (@{ agentId = $agentId } | ConvertTo-Json)
+```
+
+`POST /api/resume-now` clears the active pause and returns `ok: true`, `isPaused: false`, zero remaining time, and `resumedBy`. It does not directly edit tasks. After the board is unpaused, auto-dispatch resumes eligible `pausedRuns` before normal new Worker/Reviewer spawning. If the viewer still appears paused after an expired or resumed pause, reload the viewer and confirm `GET /api/pause-status` returns `isPaused: false`.
+
+```bash
+# Requires an active pause. Optional role may be "worker" or "review".
+curl -s -X POST "$BASE/api/hard-stop-spawned-agents" -H "Content-Type: application/json" \
+  -d '{"agentId":"'$agentId'","role":"worker","stopReason":"Rate-limit cooldown"}'
+```
+```powershell
+Invoke-RestMethod -Uri "$base/api/hard-stop-spawned-agents" -Method Post -ContentType "application/json" `
+  -Body (@{ agentId = $agentId; role = "worker"; stopReason = "Rate-limit cooldown" } | ConvertTo-Json)
+```
+
+Hard stop returns `ok`, `paused`, `isPaused`, `message`, `stoppedCount`, `targetedCount`, `skippedCount`, `pausedRuns`, `skippedRuns`, and `remainingPendingSpawns`. It only targets backend-spawned hidden Worker/Reviewer processes in `pendingSpawns`; it does not kill manual terminal/chat agents and it does not unclaim tasks. If the board is not paused, it returns HTTP `409`.
+
+Each `pausedRuns` entry records resume context such as `role`, `model`, `personalName`, `processId`, `logPath`, `spawnedAt`, `stoppedAt`, `stoppedBy`, `stopReason`, inferred `currentTaskId`, `currentColumn`, `taskInference`, `activeAgentId`, `statusBeforeStop`, `stopStatus`, `resumeReady`, and `resumeState`. On the next unpaused auto-dispatch pass, waiting entries are spawned first with a resume-mode start phrase that includes `resumeMode is paused-run`, the previous process/log fields, and whether the current task is still locked by that personal name.
+
+There is no separate checkpoint endpoint. The checkpoint for resume is board state plus active-agent state: task claim fields, review claim fields, `/api/register-agent`, `/api/heartbeat-agent` with `currentTaskId`, pending-spawn metadata, and the prior spawned-agent log. Logs help the resumed agent recover context, but `board.json` remains the source of truth.
+
+If a resume spawn fails, the corresponding `pausedRuns` entry records `resumeState: "resume-failed"`, `lastResumeError`, and `lastResumeFailedAt`; check `task-board/task-board-viewer.log` for the auto-dispatch audit entry and check the prior spawned log path for the interrupted run. After deciding those entries are stale, the owner can clear them through the viewer Settings tab or:
+
+```powershell
+Invoke-RestMethod -Uri "$base/viewer/dispatch-settings" -Method Post -ContentType "application/json" `
+  -Body (@{ clearPausedRuns = $true } | ConvertTo-Json)
+```
 
 ## Planner APIs
 
@@ -242,12 +325,20 @@ Invoke-RestMethod -Uri "$base/viewer/unclaim-task" -Method Post -ContentType "ap
 # Control auto-dispatch
 Invoke-RestMethod -Uri "$base/viewer/dispatch-settings" -Method Post -ContentType "application/json" `
   -Body (@{ role = "worker"; enabled = $true; model = "codex"; maxAgents = 2 } | ConvertTo-Json)
+# Update spawn command names
+Invoke-RestMethod -Uri "$base/viewer/dispatch-settings" -Method Post -ContentType "application/json" `
+  -Body (@{ commands = @{ codex = "codex"; claude = "cc" } } | ConvertTo-Json)
+# Test command setup from the viewer Settings equivalent
+Invoke-RestMethod -Uri "$base/viewer/agent-health-check" -Method Post -ContentType "application/json" `
+  -Body (@{ agentName = "owner via task board viewer"; tool = "codex"; command = "codex" } | ConvertTo-Json)
 ```
 
 ## Error Handling
 
 - `400` means the payload is invalid or the requested transition is not allowed.
 - `404` means the task ID was not found in the expected column.
+- `409` from hard stop means the board is not currently paused; pause first, then hard stop spawned agents if needed.
+- `423` from `POST /api/claim-task`, `POST /api/claim-review`, or `POST /api/spawn-agent` means the board is paused. The viewer Spawn button uses the same spawn path. The response includes `paused: true`, `pausedUntil`, `remainingSeconds`, `remainingText`, and `pauseReason`; do not bypass it by editing `board.json` manually.
 - If a claim call fails, reload the role-specific board view (`GET /api/worker-board` or `GET /api/review-board`); another agent may have claimed the task first.
 - Do not edit around failed claims by manually moving tasks unless the owner explicitly asks.
 - If the backend is unavailable, fall back to direct `board.json` edits using the same role rules.

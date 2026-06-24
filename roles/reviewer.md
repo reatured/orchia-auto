@@ -41,17 +41,25 @@ If a fix is needed, the Reviewer records the issue in `board.json`, creates or u
 1. Read `workflow/workflow-overview.md`.
 2. Read `roles/reviewer.md`.
 3. Register as active. If the backend is running, call `POST /api/register-agent` with `personalName`, `model`, `role: "review"`, and `startPhrase: "load as reviewer"`. Capture the `agentId` and keep it for the rest of the chat.
-4. Read the compact review board. If the backend is running, prefer `GET /api/review-board?agentId=...`; otherwise read only `columns.review` and `columns.reviewing` from `task-board/board.json`.
-5. Identify the specific task in `columns.review` and the owner's review question.
-6. Move the target task to `columns.reviewing`, set `status: "reviewing"`, `reviewClaimedBy`, and `reviewClaimedAt`. If the backend is running, prefer `POST /api/claim-review` and include your `agentId`; otherwise update `board.json` directly.
-7. After claiming, call `POST /api/heartbeat-agent` with `currentTaskId` set to the review task ID, then call `GET /api/task-detail?taskId=...&agentId=...` for the full details of only the claimed review task.
-8. Inspect the relevant result (page, output, behavior, state, or interaction) using whatever tool fits the project.
+4. If the start phrase includes `resumeMode is paused-run`, inspect the task board through the API and inspect the worktree before judging or editing board state. The prior spawned-agent log is context only; `board.json` is the source of truth. If `currentTaskStillLockedByYou` is true and `currentTaskId` is still in `columns.reviewing` with `reviewClaimedBy` equal to your `personalName`, heartbeat with that task ID, fetch its full details, and continue that review before claiming anything new. If the task is unknown, missing, unlocked, or owned by someone else, reconcile from the live board and prior log, then either continue the safest matching review still locked by you or unregister with a clear note.
+5. Read the compact review board. If the backend is running, prefer `GET /api/review-board?agentId=...`; otherwise read only `columns.review` and `columns.reviewing` from `task-board/board.json`.
+6. Identify the specific task in `columns.review` and the owner's review question, unless you are continuing a resume-mode task that is still locked by you.
+7. If you are not continuing an existing resume-mode `reviewing` lock, move the target task to `columns.reviewing`, set `status: "reviewing"`, `reviewClaimedBy`, and `reviewClaimedAt`. If the backend is running, prefer `POST /api/claim-review` and include your `agentId`; otherwise update `board.json` directly.
+8. After claiming or confirming a resume-mode lock, call `POST /api/heartbeat-agent` with `currentTaskId` set to the review task ID, then call `GET /api/task-detail?taskId=...&agentId=...` for the full details of only the claimed review task.
+9. Inspect the relevant result (page, output, behavior, state, or interaction) using whatever tool fits the project.
 
 If the task includes `inspectionTargets`, use those as the primary places to inspect before deciding.
 
 Claim only tasks currently in `columns.review`. A task already in `columns.reviewing` is claimed by another Reviewer; do not claim it, review it, move it, or duplicate its review work unless the owner explicitly reassigns it.
 
 If the task includes `ownerFeedback`, `returnedToReviewAt`, or notes beginning with `Owner feedback for re-review`, treat that feedback as the owner's active review question. Use it as a primary input when deciding whether to create or update follow-up `todo` tasks.
+
+## Pause Handling
+
+- If `POST /api/claim-review` returns HTTP `423` with `paused: true`, the backend is enforcing a board-wide pause. Do not bypass it by editing `board.json` manually, retrying in a loop, or claiming through another path.
+- Record the pause details from the response (`pausedUntil`, `remainingText`, `pauseReason`) in your report. If you are ending the chat, unregister with a note that the board is paused. If the owner explicitly asks you to wait, wait without modifying review state.
+- Pause enforcement blocks new review claims and backend spawns. It is implemented in the server; role instructions only explain what agents should do when they receive the paused response.
+- Hard stop targets only backend-spawned hidden Worker/Reviewer processes. It does not kill manual terminal/chat agents and it does not remove board locks.
 
 ## Review Standard
 
