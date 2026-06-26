@@ -3,18 +3,25 @@
 *.json.tmp
 task-board/active-agents.json
 task-board/agent-dispatch-settings.json
+task-board/handoff-state.json
 task-board/codex-sqlite-state/
 task-board/spawned-agent-logs/
 task-board/planner-chat/
 task-board/task-board-api.log
 task-board/task-board-viewer.log
 
+# Tool-local assistant state
+.qwen/
+
 # Project-local self-test/runtime workflow copies
 teamwork/
 
 # Generated upstream handoff notes
 handoffs/
-reference-images/frontend-audits/
+reference-images/
+
+# Local reference material from specific projects
+reference/
 
 # Python bytecode cache
 __pycache__/

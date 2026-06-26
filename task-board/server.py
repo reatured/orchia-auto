@@ -84,11 +84,26 @@ PLANNER_CHAT_DIR = ROOT / "planner-chat"
 PLANNER_CHAT_SESSION_PATH = PLANNER_CHAT_DIR / "session.json"
 PLANNER_CHAT_LOG_DIR = PLANNER_CHAT_DIR / "logs"
 PLANNER_CHAT_OUTPUT_LIMIT = 20000
+HANDOFF_STATE_PATH = ROOT / "handoff-state.json"
+HANDOFF_SOURCES = {
+    "frontend-audits": PROJECT_ROOT / "handoffs" / "frontend-audits",
+}
+SERVER_STARTED_AT = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+SERVER_STARTED_MONOTONIC = time.monotonic()
+BOARD_LOCK = threading.RLock()
+HANDOFF_STATE_LOCK = threading.Lock()
 API_LOG_LOCK = threading.Lock()
 VIEWER_LOG_LOCK = threading.Lock()
 ACTIVE_AGENTS_LOCK = threading.Lock()
 DISPATCH_SETTINGS_LOCK = threading.Lock()
 PLANNER_CHAT_LOCK = threading.Lock()
+AGENT_LOG_STATE_CACHE_LOCK = threading.Lock()
+AGENT_LOG_STATE_BUILD_LOCK = threading.Lock()
+AGENT_LOG_STATE_CACHE_TTL_SECONDS = 3.0
+AGENT_LOG_STATE_CACHE = {
+    "expiresAt": 0.0,
+    "state": None,
+}
 ACTIVE_AGENT_STALE_SECONDS = 10 * 60
 AUTO_DISPATCH_INTERVAL_SECONDS = 5
 DISPATCH_PENDING_SECONDS = 120
@@ -108,9 +123,16 @@ GET_ACTIONS = {
     "/api/duplicate-scan": "get_duplicate_scan",
     "/api/agents": "get_agents",
     "/api/agent-schema": "get_agent_schema",
+    "/api/agent-logs": "get_agent_logs",
+    "/api/agent-log-content": "get_agent_log_content",
     "/api/pause": "get_pause_status",
     "/api/pause-status": "get_pause_status",
     "/api/planner-chat": "planner_chat_poll",
+    "/api/handoffs": "list_handoffs",
+    "/api/handoff-content": "read_handoff",
+    "/api/next-worker-task": "next_worker_task",
+    "/api/next-review-task": "next_review_task",
+    "/api/system-status": "get_system_status",
 }
 VIEWER_GET_ACTIONS = {
     "/viewer/board": "get_board",
@@ -121,10 +143,15 @@ VIEWER_GET_ACTIONS = {
     "/viewer/duplicate-scan": "get_duplicate_scan",
     "/viewer/agents": "get_agents",
     "/viewer/agent-schema": "get_agent_schema",
+    "/viewer/agent-logs": "get_agent_logs",
+    "/viewer/agent-log-content": "get_agent_log_content",
     "/viewer/dispatch-settings": "get_dispatch_settings",
     "/viewer/pause": "get_pause_status",
     "/viewer/pause-status": "get_pause_status",
     "/viewer/planner-chat": "planner_chat_poll",
+    "/viewer/handoffs": "list_handoffs",
+    "/viewer/handoff-content": "read_handoff",
+    "/viewer/system-status": "get_system_status",
 }
 POST_ACTIONS = {
     "/api/add-task": "add_task",
@@ -151,6 +178,27 @@ POST_ACTIONS = {
     "/api/resume-now": "resume_now",
     "/api/planner-chat-send": "planner_chat_send",
     "/api/planner-chat-clear": "planner_chat_clear",
+    "/api/process-handoff": "process_handoff",
+    "/api/retry-handoff": "retry_handoff",
+    "/api/ignore-handoff": "ignore_handoff",
+    "/api/claim-next-worker": "claim_next_worker",
+    "/api/claim-next-review": "claim_next_review",
+}
+BOARD_WRITE_ACTIONS = {
+    "add_task",
+    "update_task",
+    "delete_task",
+    "archive_task",
+    "return_task_to_review",
+    "claim_task",
+    "unclaim_task",
+    "terminate_agent",
+    "move_to_review",
+    "claim_review",
+    "approve_review",
+    "request_changes",
+    "claim_next_worker",
+    "claim_next_review",
 }
 VIEWER_POST_ACTIONS = {
     "/viewer/archive": "archive_task",
@@ -167,10 +215,15 @@ VIEWER_POST_ACTIONS = {
     "/viewer/resume-now": "resume_now",
     "/viewer/planner-chat-send": "planner_chat_send",
     "/viewer/planner-chat-clear": "planner_chat_clear",
+    "/viewer/process-handoff": "process_handoff",
+    "/viewer/retry-handoff": "retry_handoff",
+    "/viewer/ignore-handoff": "ignore_handoff",
 }
 SPAWNABLE_AGENT_ROLES = {"worker", "review"}
 SPAWNABLE_TOOLS = {"claude", "codex", "qwen"}
 BOARD_COLUMN_ORDER = ["todo", "claimed", "review", "reviewing", "done", "archived"]
+PRIORITY_ORDER = {"high": 0, "normal": 1, "low": 2}
+TASK_TERMINAL_COLUMNS = {"done", "archived"}
 COMPACT_BOARD_OMITTED_KEYS = [
     "workflowDocs",
     "readerView",
@@ -402,6 +455,85 @@ def agent_subprocess_env(tool: str = "") -> dict:
     return env
 
 
+def _qwen_process_isolation_kwargs() -> dict:
+    """Return Popen kwargs that isolate Qwen child processes from backend signals.
+
+    On POSIX, start_new_session=True puts the child in a new session and process
+    group so backend SIGINT/SIGTERM (e.g. Ctrl-C in the backend terminal) does
+    not propagate to spawned Qwen agents or their formatter subprocesses.
+    Hard-stop sends SIGTERM directly to the child PID, so explicit termination
+    still works regardless of process-group isolation.
+
+    Returns an empty dict on Windows where process groups work differently.
+    """
+    if os.name == "nt":
+        return {}
+    return {"start_new_session": True}
+
+
+def _signal_name(returncode: int) -> str:
+    """Return a human-readable signal name for a negative return code."""
+    sig_num = -returncode
+    try:
+        return signal.Signals(sig_num).name
+    except (ValueError, AttributeError):
+        return f"signal {sig_num}"
+
+
+def _run_qwen_formatter_pipe(
+    qwen_proc: "subprocess.Popen",
+    log_fh,
+    fmt_script: str,
+):
+    """Pipe Qwen stream-json stdout through the formatter, logging exit status.
+
+    Runs in a daemon thread started by the caller.  Both the Qwen process and the
+    formatter are launched with process-session isolation so backend Ctrl-C does
+    not propagate.  Explicit hard-stop still targets the Qwen PID directly.
+
+    After both processes exit, writes a clear final-status block to the log so the
+    owner does not have to infer from a dangling traceback.
+    """
+    isolation = _qwen_process_isolation_kwargs()
+    fmt_proc = None
+    try:
+        fmt_proc = subprocess.Popen(
+            [sys.executable, "-u", fmt_script],
+            stdin=qwen_proc.stdout,
+            stdout=log_fh,
+            stderr=log_fh,
+            **isolation,
+        )
+        fmt_proc.wait()
+    except Exception:
+        pass
+    finally:
+        try:
+            qwen_proc.stdout.close()
+        except Exception:
+            pass
+
+    qwen_rc = qwen_proc.wait()
+    qwen_status = f"return code {qwen_rc}" if qwen_rc >= 0 else f"{_signal_name(qwen_rc)} (code {qwen_rc})"
+    fmt_rc = fmt_proc.returncode if fmt_proc is not None else None
+    fmt_status = (
+        f"return code {fmt_rc}" if fmt_rc is not None and fmt_rc >= 0
+        else (f"{_signal_name(fmt_rc)} (code {fmt_rc})" if fmt_rc is not None else "unknown")
+    )
+
+    try:
+        log_fh.write(f"\n--- Process exit status ---\n")
+        log_fh.write(f"qwen:      {qwen_status}\n")
+        log_fh.write(f"formatter: {fmt_status}\n")
+        log_fh.flush()
+    except Exception:
+        pass
+    try:
+        log_fh.close()
+    except Exception:
+        pass
+
+
 def health_check_suggestion(tool: str, status: str, error: object, output: object) -> str:
     text = f"{error or ''}\n{output or ''}".lower()
     if status == "not-found" or "no such file or directory" in text:
@@ -469,10 +601,313 @@ def load_dispatch_settings() -> dict:
         return normalize_dispatch_settings(raw)
 
 
+def clear_agent_log_state_cache() -> None:
+    with AGENT_LOG_STATE_CACHE_LOCK:
+        AGENT_LOG_STATE_CACHE["expiresAt"] = 0.0
+        AGENT_LOG_STATE_CACHE["state"] = None
+
+
 def persist_dispatch_settings(settings: dict) -> None:
     normalized = normalize_dispatch_settings(settings)
     with DISPATCH_SETTINGS_LOCK:
-        DISPATCH_SETTINGS_PATH.write_text(json.dumps(normalized, indent=2) + "\n", encoding="utf-8")
+        temp_path = DISPATCH_SETTINGS_PATH.with_suffix(".json.tmp")
+        temp_path.write_text(json.dumps(normalized, indent=2) + "\n", encoding="utf-8")
+        os.replace(temp_path, DISPATCH_SETTINGS_PATH)
+    clear_agent_log_state_cache()
+
+
+# --- Handoff state management ---
+
+def load_handoff_state() -> dict:
+    with HANDOFF_STATE_LOCK:
+        if not HANDOFF_STATE_PATH.exists():
+            return {"version": 1, "handoffs": []}
+        try:
+            data = json.loads(HANDOFF_STATE_PATH.read_text(encoding="utf-8-sig"))
+        except json.JSONDecodeError:
+            return {"version": 1, "handoffs": []}
+    if not isinstance(data, dict):
+        return {"version": 1, "handoffs": []}
+    if not isinstance(data.get("handoffs"), list):
+        data["handoffs"] = []
+    return data
+
+
+def save_handoff_state(state: dict) -> None:
+    if not isinstance(state, dict):
+        state = {"version": 1, "handoffs": []}
+    if not isinstance(state.get("handoffs"), list):
+        state["handoffs"] = []
+    state["version"] = 1
+    state["updatedAt"] = now_iso()
+    with HANDOFF_STATE_LOCK:
+        temp_path = HANDOFF_STATE_PATH.with_suffix(".json.tmp")
+        temp_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
+        os.replace(temp_path, HANDOFF_STATE_PATH)
+
+
+def safe_handoff_path(source: str, filename: str) -> Path | None:
+    base_dir = HANDOFF_SOURCES.get(source)
+    if not base_dir:
+        return None
+    if not filename or "\\" in filename:
+        return None
+    relative_path = Path(filename)
+    if relative_path.is_absolute() or any(part in {"", ".", ".."} for part in relative_path.parts):
+        return None
+    resolved = (base_dir / relative_path).resolve()
+    base_resolved = base_dir.resolve()
+    if resolved != base_resolved and base_resolved not in resolved.parents:
+        return None
+    if resolved.suffix.lower() != ".md":
+        return None
+    return resolved
+
+
+def handoff_relative_path(source: str, filename: str) -> str:
+    return f"handoffs/{source}/{filename}"
+
+
+def scan_handoff_files(source: str) -> list[dict]:
+    base_dir = HANDOFF_SOURCES.get(source)
+    if not base_dir or not base_dir.is_dir():
+        return []
+    files = []
+    try:
+        for entry in sorted(base_dir.iterdir()):
+            if entry.is_file() and entry.suffix == ".md":
+                stat = entry.stat()
+                files.append({
+                    "filename": entry.name,
+                    "source": source,
+                    "path": f"handoffs/{source}/{entry.name}",
+                    "size": stat.st_size,
+                    "modifiedAt": datetime.fromtimestamp(stat.st_mtime, timezone.utc).astimezone().isoformat(timespec="seconds"),
+                    "createdAt": datetime.fromtimestamp(stat.st_ctime, timezone.utc).astimezone().isoformat(timespec="seconds"),
+                })
+    except OSError:
+        pass
+    return files
+
+
+def handoff_tasks_from_board(board: dict, handoff_path: str) -> list[dict]:
+    columns = board.get("columns") if isinstance(board, dict) else {}
+    if not isinstance(columns, dict):
+        return []
+    task_refs = []
+    for column_name in BOARD_COLUMN_ORDER:
+        column = columns.get(column_name)
+        if not isinstance(column, list):
+            continue
+        for task in column:
+            if not isinstance(task, dict):
+                continue
+            sources = task.get("sourceHandoffs")
+            if isinstance(sources, str):
+                sources = [sources]
+            if not isinstance(sources, list):
+                continue
+            normalized_sources = [str(item or "").strip() for item in sources]
+            if handoff_path not in normalized_sources:
+                continue
+            task_id = str(task.get("id") or "").strip()
+            if not task_id:
+                continue
+            task_refs.append({
+                "taskId": task_id,
+                "title": str(task.get("title") or "").strip(),
+                "status": str(task.get("status") or column_name).strip(),
+                "column": column_name,
+            })
+    return task_refs
+
+
+def safe_handoff_log_tail(log_path: object, limit: int = 4000) -> str:
+    log_text = str(log_path or "").strip()
+    if not log_text:
+        return ""
+    max_bytes = max(1024, int(limit * 4))
+    try:
+        resolved = Path(log_text).resolve()
+        root = SPAWN_LOG_DIR.resolve()
+        if root not in resolved.parents or not resolved.is_file():
+            return ""
+        size = resolved.stat().st_size
+        with resolved.open("rb") as log_file:
+            if size > max_bytes:
+                log_file.seek(size - max_bytes)
+            raw = log_file.read(max_bytes)
+    except OSError:
+        return ""
+    content = raw.decode("utf-8", errors="replace")
+    return content[-limit:]
+
+
+def handoff_log_succeeded(log_tail: str) -> bool:
+    lowered = log_tail.lower()
+    return (
+        "result (success)" in lowered
+        or '"subtype":"success"' in lowered.replace(" ", "")
+        or "subtype': 'success" in lowered
+    )
+
+
+def handoff_log_error_summary(log_tail: str) -> str:
+    for line in reversed(log_tail.splitlines()):
+        text = line.strip()
+        if not text:
+            continue
+        lowered = text.lower()
+        if "error" in lowered or "failed" in lowered or "traceback" in lowered:
+            return text[:220]
+    return ""
+
+
+def latest_handoff_status(log_tail: str, status: str) -> str:
+    for line in reversed(log_tail.splitlines()):
+        text = line.strip()
+        if not text:
+            continue
+        lowered = text.lower()
+        if lowered.startswith(("thinking", "result", "[ok]", "error", "warning")):
+            return text[:180]
+    labels = {
+        "new": "New handoff",
+        "queued": "Waiting for Planner",
+        "planner-working": "Planner is running",
+        "processed": "Planner finished with tasks",
+        "skipped": "No actionable findings",
+        "failed": "Planner failed",
+    }
+    return labels.get(status, status)
+
+
+def refresh_handoff_entry(entry: dict, board: dict) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    changed = False
+    timestamp = now_iso()
+    handoff_path = str(entry.get("path") or "").strip()
+    task_refs = handoff_tasks_from_board(board, handoff_path)
+    task_ids = [ref["taskId"] for ref in task_refs]
+    if entry.get("taskIds") != task_ids:
+        entry["taskIds"] = task_ids
+        changed = True
+    if entry.get("tasks") != task_refs:
+        entry["tasks"] = task_refs
+        changed = True
+
+    status = str(entry.get("status") or "new").strip().lower()
+    log_tail = safe_handoff_log_tail(entry.get("logPath"))
+    latest_status = latest_handoff_status(log_tail, status)
+    if latest_status and entry.get("latestStatus") != latest_status:
+        entry["latestStatus"] = latest_status
+        changed = True
+
+    if status not in {"queued", "planner-working"}:
+        return changed
+
+    process_id = parse_process_id(entry.get("processId"))
+    if not process_id:
+        if status == "planner-working":
+            entry["status"] = "failed"
+            entry["error"] = entry.get("error") or "Planner marked running without a process ID."
+            entry["updatedAt"] = timestamp
+            changed = True
+        return changed
+
+    proc_status = spawned_process_status({
+        "processId": process_id,
+        "spawnedAt": entry.get("spawnedAt"),
+    })
+    process_state = str(proc_status.get("state") or "").strip().lower()
+    if entry.get("processState") != process_state:
+        entry["processState"] = process_state
+        changed = True
+    if entry.get("processCheckedAt") != proc_status.get("checkedAt"):
+        entry["processCheckedAt"] = proc_status.get("checkedAt", "")
+        changed = True
+    if proc_status.get("isRunning"):
+        if status != "planner-working":
+            entry["status"] = "planner-working"
+            entry["updatedAt"] = timestamp
+            changed = True
+        return changed
+
+    if process_state == "exited":
+        if handoff_log_succeeded(log_tail):
+            entry["status"] = "processed" if task_refs else "skipped"
+            entry["error"] = "" if task_refs else "Planner completed without creating source-linked tasks."
+        else:
+            entry["status"] = "failed"
+            entry["error"] = handoff_log_error_summary(log_tail) or "Planner process exited without a success result."
+        entry["processedAt"] = entry.get("processedAt") or timestamp
+        entry["updatedAt"] = timestamp
+        return True
+
+    entry["status"] = "failed"
+    entry["error"] = entry.get("error") or f"Planner process {process_id} {process_state or 'unknown'}."
+    entry["updatedAt"] = timestamp
+    return True
+
+
+def refresh_handoff_state(state: dict, board: dict) -> bool:
+    changed = False
+    if not isinstance(state, dict):
+        return False
+    for entry in state.get("handoffs", []):
+        if isinstance(entry, dict) and refresh_handoff_entry(entry, board):
+            changed = True
+    return changed
+
+
+def handoff_has_running_planner(state: dict, exclude_path: str = "") -> bool:
+    for entry in state.get("handoffs", []):
+        if not isinstance(entry, dict):
+            continue
+        if exclude_path and entry.get("path") == exclude_path:
+            continue
+        status = str(entry.get("status") or "").strip().lower()
+        if status == "planner-working":
+            return True
+    return False
+
+
+def handoff_has_queued_before(state: dict, handoff_path: str, created_at: str) -> bool:
+    queued_created_at = str(created_at or "")
+    for entry in state.get("handoffs", []):
+        if not isinstance(entry, dict) or entry.get("path") == handoff_path:
+            continue
+        if str(entry.get("status") or "").strip().lower() != "queued":
+            continue
+        other_created_at = str(entry.get("createdAt") or "")
+        if not queued_created_at or not other_created_at or other_created_at <= queued_created_at:
+            return True
+    return False
+
+
+def handoff_status_from_state(entry: dict) -> dict:
+    status = str(entry.get("status") or "new").strip().lower()
+    process_id = entry.get("processId")
+    return {
+        "filename": entry.get("filename", ""),
+        "source": entry.get("source", ""),
+        "path": entry.get("path", ""),
+        "status": status,
+        "model": entry.get("model", ""),
+        "personalName": entry.get("personalName", ""),
+        "processId": process_id,
+        "processState": entry.get("processState", ""),
+        "processCheckedAt": entry.get("processCheckedAt", ""),
+        "logPath": entry.get("logPath", ""),
+        "taskIds": entry.get("taskIds") or [],
+        "tasks": entry.get("tasks") or [],
+        "error": entry.get("error", ""),
+        "latestStatus": entry.get("latestStatus", ""),
+        "createdAt": entry.get("createdAt", ""),
+        "updatedAt": entry.get("updatedAt", ""),
+        "processedAt": entry.get("processedAt", ""),
+    }
 
 
 def parse_iso_datetime(value: object) -> datetime | None:
@@ -845,7 +1280,8 @@ def is_live_pending_spawn(
 
 
 def is_recent_spawn(spawn: object, role: str, now: datetime) -> bool:
-    return is_live_pending_spawn(spawn, role=role, now=now)
+    del now
+    return is_live_pending_spawn(spawn, role=role)
 
 
 def is_active_agent_record(agent: object, role: str, now: datetime) -> bool:
@@ -862,6 +1298,29 @@ def is_active_agent_record(agent: object, role: str, now: datetime) -> bool:
 
 
 class TaskBoardHandler(SimpleHTTPRequestHandler):
+    def log_message(self, format: str, *args: object) -> None:
+        message = format % args
+        client = self.client_address[0] if self.client_address else "-"
+        print(
+            f"[task-board http] {client} - {self.log_date_time_string()} {message}",
+            file=sys.stderr,
+            flush=True,
+        )
+
+    def log_request(self, code: int | str = "-", size: int | str = "-") -> None:
+        if self.should_log_default_access(code):
+            self.log_message('"%s" %s %s', self.requestline, str(code), str(size))
+
+    def should_log_default_access(self, code: int | str) -> bool:
+        try:
+            status = int(code)
+        except (TypeError, ValueError):
+            status = 0
+        if status < 400:
+            return False
+        path = urlsplit(self.path).path.rstrip("/") or "/"
+        return not path.startswith("/api/") and not path.startswith("/viewer/")
+
     def _send_json_error(self, message: str, status: int) -> None:
         try:
             self.send_json({"error": message}, status=status)
@@ -965,9 +1424,15 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             return
 
         try:
-            board = self.load_board()
-            columns = self.get_columns(board)
-            result = getattr(self, action)(board, columns, payload) or {}
+            if action in BOARD_WRITE_ACTIONS:
+                with BOARD_LOCK:
+                    board = self.load_board()
+                    columns = self.get_columns(board)
+                    result = getattr(self, action)(board, columns, payload) or {}
+            else:
+                board = self.load_board()
+                columns = self.get_columns(board)
+                result = getattr(self, action)(board, columns, payload) or {}
             self.log_api_success(request_at, path, action, payload, result, viewer=is_viewer_request)
             self.send_json(result)
         except FileNotFoundError:
@@ -1327,6 +1792,118 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         state = self.load_active_agents_state()
         return self.with_agent_log_state(state)
 
+    def parse_spawn_log_filename(self, filename: str) -> dict:
+        match = re.match(
+            r"^(\d{8})-(\d{6})-(\w+)-(\w+)-(.+)\.log$", filename
+        )
+        if not match:
+            return {}
+        date_part, time_part, role, model, name = match.groups()
+        timestamp = f"{date_part[:4]}-{date_part[4:6]}-{date_part[6:8]}T{time_part[:2]}:{time_part[2:4]}:{time_part[4:6]}"
+        return {
+            "date": date_part,
+            "time": time_part,
+            "timestamp": timestamp,
+            "role": role,
+            "model": model,
+            "personalName": name,
+        }
+
+    def get_agent_logs(self, board: dict, payload: dict) -> dict:
+        if not SPAWN_LOG_DIR.exists():
+            return {
+                "logs": [],
+                "agents": [],
+                "pendingSpawns": [],
+                "pausedRuns": [],
+                "totalLogCount": 0,
+                "truncated": False,
+                "limit": 0,
+            }
+        limit = self.query_int(payload, "limit", 250, 1, 500)
+        log_files: list[dict] = []
+        log_entries: list[tuple[float, Path, os.stat_result]] = []
+        for entry in SPAWN_LOG_DIR.iterdir():
+            if not entry.is_file() or not entry.name.endswith(".log"):
+                continue
+            if not self.spawn_log_dir_entry_is_safe(entry):
+                continue
+            try:
+                stat = entry.stat()
+            except OSError:
+                continue
+            log_entries.append((stat.st_mtime, entry, stat))
+        sorted_entries = sorted(log_entries, key=lambda item: item[0], reverse=True)
+        total_log_count = len(sorted_entries)
+        for _, entry, stat in sorted_entries[:limit]:
+            parsed = self.parse_spawn_log_filename(entry.name)
+            modified_at = datetime.fromtimestamp(stat.st_mtime, timezone.utc).astimezone().isoformat(timespec="seconds")
+            log_entry: dict = {
+                "fileName": entry.name,
+                "size": stat.st_size,
+                "modifiedAt": modified_at,
+            }
+            if parsed:
+                log_entry.update(parsed)
+            log_files.append(log_entry)
+        state = self.load_active_agents_state()
+        enriched = self.with_agent_log_state(state)
+        agents_summary = []
+        for agent in enriched.get("agents", []):
+            if not isinstance(agent, dict):
+                continue
+            agents_summary.append({
+                "agentId": agent.get("agentId", ""),
+                "personalName": agent.get("personalName", ""),
+                "model": self.normalize_agent_model(agent.get("model")),
+                "role": self.normalize_agent_role(agent.get("role")),
+                "status": agent.get("status", ""),
+                "currentTaskId": agent.get("currentTaskId", ""),
+                "registeredAt": agent.get("registeredAt", ""),
+                "lastHeartbeatAt": agent.get("lastHeartbeatAt", ""),
+                "notes": agent.get("notes", ""),
+                "latestLog": agent.get("latestLog", {}),
+            })
+        pending = enriched.get("pendingSpawns", [])
+        paused_runs = enriched.get("pausedRuns", [])
+        return {
+            "logs": log_files,
+            "agents": agents_summary,
+            "pendingSpawns": pending if isinstance(pending, list) else [],
+            "pausedRuns": paused_runs if isinstance(paused_runs, list) else [],
+            "totalLogCount": total_log_count,
+            "truncated": total_log_count > len(log_files),
+            "limit": limit,
+        }
+
+    def get_agent_log_content(self, board: dict, payload: dict) -> dict:
+        filename = str(payload.get("fileName") or "").strip()
+        if not filename:
+            raise JsonResponseError("fileName is required", status=400)
+        if "/" in filename or "\\" in filename or ".." in filename or filename.startswith("."):
+            raise JsonResponseError("Invalid fileName", status=400)
+        path = SPAWN_LOG_DIR / filename
+        if not self.spawn_log_path_is_safe(path):
+            raise JsonResponseError("Invalid fileName", status=400)
+        if not path.is_file():
+            raise JsonResponseError("Log file not found", status=404)
+        try:
+            stat = path.stat()
+            content = path.read_text(encoding="utf-8", errors="replace")
+            modified_at = datetime.fromtimestamp(stat.st_mtime, timezone.utc).astimezone().isoformat(timespec="seconds")
+            parsed = self.parse_spawn_log_filename(filename)
+            result: dict = {
+                "fileName": filename,
+                "size": stat.st_size,
+                "modifiedAt": modified_at,
+                "content": content,
+            }
+            if parsed:
+                result.update(parsed)
+            return result
+        except OSError as error:
+            raise JsonResponseError(f"Could not read log file: {error}", status=500)
+
     def spawn_log_path_is_safe(self, path: Path) -> bool:
         try:
             resolved = path.resolve()
@@ -1334,6 +1911,42 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             return resolved == root or root in resolved.parents
         except OSError:
             return False
+
+    def spawn_log_dir_entry_is_safe(self, path: Path) -> bool:
+        return path.parent == SPAWN_LOG_DIR and not path.is_symlink()
+
+    def build_latest_spawn_log_index(self) -> dict:
+        exact: dict[tuple[str, str, str], tuple[float, Path]] = {}
+        role_name: dict[tuple[str, str], tuple[float, Path]] = {}
+        if not SPAWN_LOG_DIR.exists():
+            return {"exact": {}, "roleName": {}}
+        for entry in SPAWN_LOG_DIR.iterdir():
+            if not entry.is_file() or not entry.name.endswith(".log"):
+                continue
+            if not self.spawn_log_dir_entry_is_safe(entry):
+                continue
+            parsed = self.parse_spawn_log_filename(entry.name)
+            if not parsed:
+                continue
+            role = self.normalize_agent_role(parsed.get("role"))
+            model = self.normalize_agent_model(parsed.get("model"))
+            personal_name = self.safe_spawn_log_name_part(parsed.get("personalName")).lower()
+            if not role or not personal_name:
+                continue
+            try:
+                modified_at = entry.stat().st_mtime
+            except OSError:
+                continue
+            exact_key = (role, model, personal_name)
+            role_name_key = (role, personal_name)
+            if modified_at > exact.get(exact_key, (-1.0, entry))[0]:
+                exact[exact_key] = (modified_at, entry)
+            if modified_at > role_name.get(role_name_key, (-1.0, entry))[0]:
+                role_name[role_name_key] = (modified_at, entry)
+        return {
+            "exact": {key: value[1] for key, value in exact.items()},
+            "roleName": {key: value[1] for key, value in role_name.items()},
+        }
 
     def read_spawn_log_preview(self, log_path: object, max_bytes: int = 6000, max_lines: int = 18) -> dict:
         raw_path = str(log_path or "").strip()
@@ -1371,12 +1984,33 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
     def safe_spawn_log_name_part(self, value: object) -> str:
         return re.sub(r"[^a-zA-Z0-9_-]+", "-", str(value or "").strip()).strip("-")
 
-    def latest_spawn_log_for_agent(self, agent: dict) -> dict:
+    def latest_spawn_log_for_agent(
+        self,
+        agent: dict,
+        log_index: dict | None = None,
+        preview_cache: dict[str, dict] | None = None,
+    ) -> dict:
         role = self.normalize_agent_role(agent.get("role"))
         model = self.normalize_agent_model(agent.get("model"))
-        personal_name = self.safe_spawn_log_name_part(agent.get("personalName") or agent.get("agentName"))
+        personal_name = self.safe_spawn_log_name_part(agent.get("personalName") or agent.get("agentName")).lower()
         if not role or not personal_name or not SPAWN_LOG_DIR.exists():
             return {}
+        if isinstance(log_index, dict):
+            exact_index = log_index.get("exact") if isinstance(log_index.get("exact"), dict) else {}
+            role_name_index = log_index.get("roleName") if isinstance(log_index.get("roleName"), dict) else {}
+            latest_path = None
+            if model and model != "unknown":
+                latest_path = exact_index.get((role, model, personal_name))
+            if latest_path is None:
+                latest_path = role_name_index.get((role, personal_name))
+            if latest_path is None:
+                return {}
+            cache_key = str(latest_path)
+            if preview_cache is not None:
+                if cache_key not in preview_cache:
+                    preview_cache[cache_key] = self.read_spawn_log_preview(latest_path)
+                return dict(preview_cache[cache_key])
+            return self.read_spawn_log_preview(latest_path)
         patterns = []
         if model and model != "unknown":
             patterns.append(f"*-{role}-{model}-{personal_name}.log")
@@ -1413,16 +2047,52 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         return False
 
     def with_agent_log_state(self, state: dict) -> dict:
+        now_monotonic = time.monotonic()
+        with AGENT_LOG_STATE_CACHE_LOCK:
+            cached = AGENT_LOG_STATE_CACHE.get("state")
+            expires_at = float(AGENT_LOG_STATE_CACHE.get("expiresAt") or 0)
+            if isinstance(cached, dict) and expires_at > now_monotonic:
+                return cached
+
+        with AGENT_LOG_STATE_BUILD_LOCK:
+            now_monotonic = time.monotonic()
+            with AGENT_LOG_STATE_CACHE_LOCK:
+                cached = AGENT_LOG_STATE_CACHE.get("state")
+                expires_at = float(AGENT_LOG_STATE_CACHE.get("expiresAt") or 0)
+                if isinstance(cached, dict) and expires_at > now_monotonic:
+                    return cached
+
+            enriched = self.build_agent_log_state(state)
+            with AGENT_LOG_STATE_CACHE_LOCK:
+                AGENT_LOG_STATE_CACHE["state"] = enriched
+                AGENT_LOG_STATE_CACHE["expiresAt"] = time.monotonic() + AGENT_LOG_STATE_CACHE_TTL_SECONDS
+            return enriched
+
+    def build_agent_log_state(self, state: dict) -> dict:
         enriched = dict(state)
         now = datetime.now(timezone.utc).astimezone()
+        settings = load_dispatch_settings()
+        latest_log_index = self.build_latest_spawn_log_index()
+        preview_cache: dict[str, dict] = {}
+        pending_spawn_records = [
+            s for s in (settings.get("pendingSpawns", []) or [])
+            if isinstance(s, dict)
+        ]
         agents = []
         for agent in state.get("agents", []) or []:
             if not isinstance(agent, dict):
                 continue
             enriched_agent = dict(agent)
-            latest_log = self.latest_spawn_log_for_agent(enriched_agent)
+            latest_log = self.latest_spawn_log_for_agent(enriched_agent, latest_log_index, preview_cache)
             if latest_log:
                 enriched_agent["latestLog"] = latest_log
+            if not str(enriched_agent.get("spawnedAt") or "").strip():
+                for spawn in pending_spawn_records:
+                    if self.pending_spawn_matches_active_agent(spawn, [enriched_agent]):
+                        spawned_at = str(spawn.get("spawnedAt") or "").strip()
+                        if spawned_at:
+                            enriched_agent["spawnedAt"] = spawned_at
+                        break
             agents.append(enriched_agent)
         active_agents = [
             agent
@@ -1430,15 +2100,14 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             if agent.get("status") == "active"
             and is_active_agent_record(agent, str(agent.get("role") or "").strip().lower(), now)
         ]
-        settings = load_dispatch_settings()
         pending_spawns = []
-        for spawn in settings.get("pendingSpawns", []) or []:
+        for spawn in pending_spawn_records:
             if not isinstance(spawn, dict):
                 continue
             if self.pending_spawn_matches_active_agent(spawn, active_agents):
                 continue
             process_status = spawned_process_status(spawn)
-            if not is_live_pending_spawn(spawn, now=now, process_status=process_status):
+            if not is_live_pending_spawn(spawn, process_status=process_status):
                 continue
             process_state = str(process_status.get("state") or "unknown")
             if process_state == "running":
@@ -1472,10 +2141,45 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         enriched["pausedRuns"] = paused_runs
         return enriched
 
+    def agent_presence_summary(self) -> dict:
+        state = self.load_active_agents_state()
+        now = datetime.now(timezone.utc).astimezone()
+        settings = load_dispatch_settings()
+        agents = [
+            agent for agent in state.get("agents", [])
+            if isinstance(agent, dict)
+        ]
+        active_agents = [
+            agent for agent in agents
+            if agent.get("status") == "active"
+            and is_active_agent_record(agent, str(agent.get("role") or "").strip().lower(), now)
+        ]
+        pending_spawn_records = [
+            spawn for spawn in (settings.get("pendingSpawns", []) or [])
+            if isinstance(spawn, dict)
+        ]
+        pending_spawns = []
+        for spawn in pending_spawn_records:
+            if self.pending_spawn_matches_active_agent(spawn, active_agents):
+                continue
+            if is_live_pending_spawn(spawn):
+                pending_spawns.append(spawn)
+        paused_runs = [
+            run for run in (settings.get("pausedRuns", []) or [])
+            if isinstance(run, dict)
+        ]
+        return {
+            "agents": agents,
+            "activeAgents": active_agents,
+            "pendingSpawns": pending_spawns,
+            "pausedRuns": paused_runs,
+        }
+
     def load_board(self) -> dict:
-        board = json.loads(BOARD_PATH.read_text(encoding="utf-8-sig"))
-        self.normalize_board_columns(board)
-        return board
+        with BOARD_LOCK:
+            board = json.loads(BOARD_PATH.read_text(encoding="utf-8-sig"))
+            self.normalize_board_columns(board)
+            return board
 
     def load_active_agents_state(self) -> dict:
         with ACTIVE_AGENTS_LOCK:
@@ -1541,6 +2245,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             }
             temp_path.write_text(json.dumps(persisted_state, indent=2) + "\n", encoding="utf-8")
             os.replace(temp_path, ACTIVE_AGENTS_PATH)
+        clear_agent_log_state_cache()
 
     def clear_active_agents_for_task(self, task_id: str, role: str, timestamp: str, note: str) -> None:
         state = self.load_active_agents_state()
@@ -1648,6 +2353,254 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
     def get_pause_status(self, board: dict, payload: dict) -> dict:
         del board, payload
         return active_pause_status()
+
+    def read_recent_jsonl_entries(self, path: Path, limit: int = 40, max_bytes: int = 160000) -> list[dict]:
+        if limit <= 0 or not path.exists() or not path.is_file():
+            return []
+        try:
+            size = path.stat().st_size
+            with path.open("rb") as log_file:
+                if size > max_bytes:
+                    log_file.seek(size - max_bytes)
+                    raw = log_file.read(max_bytes)
+                else:
+                    raw = log_file.read()
+        except OSError:
+            return []
+        text = raw.decode("utf-8", errors="replace")
+        if size > max_bytes:
+            text = text.split("\n", 1)[-1]
+        entries: list[dict] = []
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                entry = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(entry, dict):
+                entries.append(entry)
+        return entries[-limit:]
+
+    def recent_log_summary(self) -> dict:
+        entries = []
+        for label, path in (("api", API_LOG_PATH), ("viewer", VIEWER_LOG_PATH)):
+            for entry in self.read_recent_jsonl_entries(path, limit=50):
+                entry = dict(entry)
+                entry["log"] = label
+                entries.append(entry)
+        entries.sort(key=lambda entry: str(entry.get("at") or ""))
+        recent = entries[-50:]
+        errors = [
+            entry for entry in recent
+            if str(entry.get("status") or "").strip().lower() == "error"
+        ]
+        latest_error = errors[-1] if errors else {}
+        latest_entry = recent[-1] if recent else {}
+        return {
+            "recentCount": len(recent),
+            "errorCount": len(errors),
+            "latestAt": latest_entry.get("at", ""),
+            "latestAction": latest_entry.get("action", ""),
+            "latestError": {
+                "at": latest_error.get("at", ""),
+                "path": latest_error.get("path", ""),
+                "action": latest_error.get("action", ""),
+                "httpStatus": latest_error.get("httpStatus", ""),
+                "agentName": latest_error.get("agentName", ""),
+                "error": latest_error.get("error", ""),
+                "log": latest_error.get("log", ""),
+            } if latest_error else {},
+            "recentErrors": [
+                {
+                    "at": entry.get("at", ""),
+                    "path": entry.get("path", ""),
+                    "action": entry.get("action", ""),
+                    "httpStatus": entry.get("httpStatus", ""),
+                    "agentName": entry.get("agentName", ""),
+                    "error": entry.get("error", ""),
+                    "log": entry.get("log", ""),
+                }
+                for entry in errors[-5:]
+            ],
+        }
+
+    def board_health_summary(self, board: dict) -> dict:
+        columns = self.get_columns(board)
+        counts = {
+            column_name: len(column) if isinstance(column, list) else 0
+            for column_name, column in columns.items()
+        }
+        for column_name in BOARD_COLUMN_ORDER:
+            counts.setdefault(column_name, 0)
+
+        ids_by_task: dict[str, list[str]] = {}
+        malformed_tasks = 0
+        dependency_edges: list[tuple[str, str]] = []
+        for column_name, column in columns.items():
+            if not isinstance(column, list):
+                continue
+            for task in column:
+                if not isinstance(task, dict) or not self.is_valid_task(task):
+                    malformed_tasks += 1
+                    continue
+                task_id = str(task.get("id") or "").strip()
+                ids_by_task.setdefault(task_id, []).append(column_name)
+                depends_on = task.get("dependsOn")
+                if isinstance(depends_on, list):
+                    for dep_id in depends_on:
+                        dep_text = str(dep_id or "").strip()
+                        if dep_text:
+                            dependency_edges.append((task_id, dep_text))
+
+        duplicate_task_ids = [
+            {"taskId": task_id, "columns": locations}
+            for task_id, locations in sorted(ids_by_task.items())
+            if len(locations) > 1
+        ]
+        missing_dependencies = [
+            {"taskId": task_id, "missingTaskId": dep_id}
+            for task_id, dep_id in dependency_edges
+            if dep_id not in ids_by_task
+        ]
+        active_locks = {
+            "claimed": counts.get("claimed", 0),
+            "reviewing": counts.get("reviewing", 0),
+        }
+        warnings = []
+        if duplicate_task_ids:
+            warnings.append(f"{len(duplicate_task_ids)} duplicate task id(s)")
+        if malformed_tasks:
+            warnings.append(f"{malformed_tasks} malformed task record(s)")
+        if missing_dependencies:
+            warnings.append(f"{len(missing_dependencies)} missing dependency reference(s)")
+        return {
+            "counts": counts,
+            "activeLocks": active_locks,
+            "totalTasks": sum(counts.values()),
+            "duplicateTaskIds": duplicate_task_ids[:20],
+            "malformedTasks": malformed_tasks,
+            "missingDependencies": missing_dependencies[:20],
+            "warningCount": len(warnings),
+            "warnings": warnings,
+        }
+
+    def handoff_summary(self, board: dict) -> dict:
+        state = load_handoff_state()
+        if refresh_handoff_state(state, board):
+            save_handoff_state(state)
+        status_counts: dict[str, int] = {}
+        for entry in state.get("handoffs", []):
+            if not isinstance(entry, dict):
+                continue
+            status = str(entry.get("status") or "new").strip().lower() or "new"
+            status_counts[status] = status_counts.get(status, 0) + 1
+        discovered = 0
+        for source in HANDOFF_SOURCES:
+            discovered += len(scan_handoff_files(source))
+        return {
+            "discoveredFiles": discovered,
+            "tracked": sum(status_counts.values()),
+            "statusCounts": status_counts,
+            "actionable": (
+                status_counts.get("new", 0)
+                + status_counts.get("queued", 0)
+                + status_counts.get("failed", 0)
+            ),
+            "running": status_counts.get("planner-working", 0),
+        }
+
+    def get_system_status(self, board: dict, payload: dict) -> dict:
+        del payload
+        checked_at = now_iso()
+        now = datetime.now(timezone.utc).astimezone()
+        settings = load_dispatch_settings()
+        pause = pause_status_from_settings(settings, now=now)
+        agent_state = self.agent_presence_summary()
+        agents = [
+            agent for agent in agent_state.get("agents", [])
+            if isinstance(agent, dict)
+        ]
+        active_agents = [
+            agent for agent in agent_state.get("activeAgents", [])
+            if isinstance(agent, dict)
+        ]
+        stale_agents = [
+            agent for agent in agents
+            if str(agent.get("status") or "").strip().lower() == "stale"
+        ]
+        pending_spawns = [
+            spawn for spawn in agent_state.get("pendingSpawns", [])
+            if isinstance(spawn, dict)
+        ]
+        paused_runs = [
+            run for run in agent_state.get("pausedRuns", [])
+            if isinstance(run, dict)
+        ]
+        board_health = self.board_health_summary(board)
+        handoffs = self.handoff_summary(board)
+        logs = self.recent_log_summary()
+
+        warning_items = []
+        if board_health["warningCount"]:
+            warning_items.extend(board_health["warnings"])
+        if stale_agents:
+            warning_items.append(f"{len(stale_agents)} stale agent record(s)")
+        if logs["errorCount"]:
+            warning_items.append(f"{logs['errorCount']} recent API/viewer error(s)")
+        failed_handoffs = int(handoffs.get("statusCounts", {}).get("failed", 0))
+        if failed_handoffs:
+            warning_items.append(f"{failed_handoffs} failed handoff(s)")
+
+        status = "ok"
+        if logs["errorCount"] or board_health["duplicateTaskIds"] or board_health["malformedTasks"]:
+            status = "attention"
+        elif pause.get("isPaused") or warning_items:
+            status = "watch"
+
+        dispatch = {}
+        for role in ("worker", "review"):
+            role_settings = settings.get(role) if isinstance(settings.get(role), dict) else {}
+            dispatch[role] = {
+                "enabled": bool(role_settings.get("enabled")),
+                "model": normalize_dispatch_model(role_settings.get("model"), "codex"),
+                "maxAgents": normalize_max_agents(role_settings.get("maxAgents"), 1),
+                "activeAgents": len([
+                    agent for agent in active_agents
+                    if str(agent.get("role") or "").strip().lower() == role
+                ]),
+                "pendingSpawns": len([
+                    spawn for spawn in pending_spawns
+                    if str(spawn.get("role") or "").strip().lower() == role
+                ]),
+            }
+
+        return {
+            "ok": status == "ok",
+            "status": status,
+            "checkedAt": checked_at,
+            "server": {
+                "startedAt": SERVER_STARTED_AT,
+                "uptimeSeconds": max(0, int(time.monotonic() - SERVER_STARTED_MONOTONIC)),
+                "host": SERVER_HOST,
+                "port": SERVER_PORT,
+                "projectRoot": str(PROJECT_ROOT),
+            },
+            "board": board_health,
+            "pause": pause,
+            "agents": {
+                "total": len(agents),
+                "active": len(active_agents),
+                "stale": len(stale_agents),
+                "pendingSpawns": len(pending_spawns),
+                "pausedRuns": len(paused_runs),
+            },
+            "dispatch": dispatch,
+            "handoffs": handoffs,
+            "logs": logs,
+            "warnings": warning_items[:12],
+        }
 
     def pause_plus_one_hour(self, board: dict, columns: dict, payload: dict) -> dict:
         del board, columns
@@ -2310,8 +3263,53 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             with log_lock:
                 with log_path.open("a", encoding="utf-8") as log_file:
                     log_file.write(json.dumps(entry, ensure_ascii=False, separators=(",", ":")) + "\n")
+            self.log_terminal_api_entry(entry, viewer=viewer)
         except Exception as error:
             self.log_error("Unable to append API log: %s", error)
+
+    def log_terminal_api_entry(self, entry: dict, viewer: bool = False) -> None:
+        if not self.should_log_terminal_api_entry(entry, viewer=viewer):
+            return
+        status = str(entry.get("status") or "").strip().lower()
+        pieces = [
+            f"[task-board {'viewer' if viewer else 'api'}]",
+            str(entry.get("at") or now_iso()),
+            str(entry.get("method") or "").upper() or "-",
+            str(entry.get("path") or "-"),
+            status or "-",
+            str(entry.get("httpStatus") or "-"),
+        ]
+        action = str(entry.get("action") or "").strip()
+        if action:
+            pieces.append(f"action={action}")
+        agent_name = str(entry.get("agentName") or "").strip()
+        if agent_name:
+            pieces.append(f"agent={agent_name}")
+        task_ids = entry.get("taskIds")
+        if isinstance(task_ids, list):
+            tasks = ",".join(str(task_id) for task_id in task_ids if str(task_id or "").strip())
+            if tasks:
+                pieces.append(f"tasks={self.terminal_preview(tasks, 160)}")
+        error = str(entry.get("error") or "").strip()
+        if error:
+            pieces.append(f"error={self.terminal_preview(error)}")
+        stream = sys.stderr if status == "error" else sys.stdout
+        print(" ".join(pieces), file=stream, flush=True)
+
+    def should_log_terminal_api_entry(self, entry: dict, viewer: bool = False) -> bool:
+        status = str(entry.get("status") or "").strip().lower()
+        if status == "error":
+            return True
+        method = str(entry.get("method") or "").strip().upper()
+        if method != "GET":
+            return True
+        return False
+
+    def terminal_preview(self, text: str, limit: int = 180) -> str:
+        collapsed = re.sub(r"\s+", " ", str(text or "")).strip()
+        if len(collapsed) <= limit:
+            return collapsed
+        return collapsed[: max(0, limit - 3)] + "..."
 
     def log_api_success(self, at: str, path: str, action: str, payload: dict, result: object, method: str = "POST", viewer: bool = False) -> None:
         task_ids = self.result_task_ids(result) or self.payload_task_ids(payload)
@@ -2421,6 +3419,14 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             raise ValueError("Task title cannot be Untitled")
         if self.task_exists(columns, task_id):
             raise ValueError(f"Task {task_id} already exists")
+        raw_depends_on = payload.get("dependsOn")
+        if isinstance(raw_depends_on, list) and raw_depends_on:
+            for dep_id in raw_depends_on:
+                dep_id_str = str(dep_id or "").strip()
+                if not dep_id_str:
+                    raise ValueError("dependsOn entries must be non-blank task IDs")
+                if dep_id_str == task_id:
+                    raise ValueError(f"Task cannot depend on itself: {task_id}")
 
         return {
             "id": task_id,
@@ -2768,6 +3774,8 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             else:
                 task[field] = value
 
+        self.validate_depends_on(task_id, task.get("dependsOn"), columns)
+
         timestamp = now_iso()
         agent_name = self.agent_name(payload, "Task board API")
         self.append_note(task, str(payload.get("notesAppend", "") or ""))
@@ -2948,28 +3956,41 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             self.persist_active_agents_state(active_state)
 
         unclaimed_task_id = ""
+        unclaimed_destination = ""
         if task_id:
-            claimed = columns.get("claimed") if isinstance(columns, dict) else None
-            claimed_tasks = claimed.get("tasks") if isinstance(claimed, dict) else []
-            for i, task in enumerate(claimed_tasks):
-                if not isinstance(task, dict):
-                    continue
-                if str(task.get("taskId") or "").strip() == task_id:
-                    todo = self.ensure_column(columns, "todo")
-                    removed = claimed_tasks.pop(i)
+            try:
+                column_name, column, task_index, task = self.find_task_location(columns, task_id)
+            except (LookupError, ValueError):
+                column_name, column, task_index, task = "", [], -1, {}
+
+            if column_name in {"claimed", "reviewing"} and isinstance(task, dict) and task_index >= 0:
+                removed = column.pop(task_index)
+                removed["unclaimedBy"] = actor
+                removed["unclaimedAt"] = timestamp
+
+                if column_name == "reviewing":
+                    destination = self.ensure_column(columns, "review")
+                    removed["status"] = "review"
+                    removed["reviewClaimedBy"] = ""
+                    removed["reviewClaimedAt"] = ""
+                    self.append_note(removed, f"Unclaimed from reviewing ({timestamp}) by {actor}: {reason}")
+                    self.clear_active_agents_for_task(task_id, "review", timestamp, reason)
+                    unclaimed_destination = "review"
+                else:
+                    destination = self.ensure_column(columns, "todo")
                     removed["status"] = "todo"
                     removed["claimedBy"] = ""
                     removed["claimedAt"] = ""
-                    removed["unclaimedBy"] = actor
-                    removed["unclaimedAt"] = timestamp
                     self.append_note(removed, f"Unclaimed ({timestamp}) by {actor}: {reason}")
-                    self.record_task_api_action(removed, "unclaim-task", actor, timestamp)
-                    self.record_board_api_action(board, "unclaim-task", actor, timestamp, task_id)
-                    self.update_board_timestamp(board, timestamp)
-                    todo.insert(0, removed)
-                    self.persist_board(board)
-                    unclaimed_task_id = task_id
-                    break
+                    self.clear_active_agents_for_task(task_id, "worker", timestamp, reason)
+                    unclaimed_destination = "todo"
+
+                self.record_task_api_action(removed, "unclaim-task", actor, timestamp)
+                self.record_board_api_action(board, "unclaim-task", actor, timestamp, task_id)
+                self.update_board_timestamp(board, timestamp)
+                destination.insert(0, removed)
+                self.persist_board(board)
+                unclaimed_task_id = task_id
 
         spawn_terminated = False
         spawn_process_id = 0
@@ -3024,6 +4045,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "agentId": agent_id or str(matched_agent.get("agentId") or "") if matched_agent else agent_id,
             "processId": spawn_process_id or process_id,
             "unclaimedTaskId": unclaimed_task_id,
+            "destinationColumn": unclaimed_destination,
             "terminated": spawn_terminated,
         }
 
@@ -3063,6 +4085,218 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         reviewing.insert(0, task)
         self.persist_board(board)
         return {"taskIds": [task_id]}
+
+    def task_in_terminal_state(self, columns: dict, task_id: str) -> bool:
+        if not task_id:
+            return False
+        try:
+            column_name, _, _, _ = self.find_task_location(columns, task_id)
+            return column_name in TASK_TERMINAL_COLUMNS
+        except LookupError:
+            return False
+
+    def get_unresolved_depends_on(self, columns: dict, task: dict) -> list[str]:
+        depends_on = task.get("dependsOn")
+        if not isinstance(depends_on, list) or not depends_on:
+            return []
+        unresolved = []
+        for dep_id in depends_on:
+            dep_id_str = str(dep_id or "").strip()
+            if dep_id_str and not self.task_in_terminal_state(columns, dep_id_str):
+                unresolved.append(dep_id_str)
+        return unresolved
+
+    def get_derived_blocking_ids(self, columns: dict, task_id: str) -> list[str]:
+        blocking = []
+        for column_tasks in columns.values():
+            if not isinstance(column_tasks, list):
+                continue
+            for task in column_tasks:
+                if not isinstance(task, dict):
+                    continue
+                other_id = str(task.get("id") or "").strip()
+                if not other_id or other_id == task_id:
+                    continue
+                depends_on = task.get("dependsOn")
+                if isinstance(depends_on, list) and task_id in [str(d or "").strip() for d in depends_on]:
+                    blocking.append(other_id)
+        return blocking
+
+    def select_next_work_candidate(self, columns: dict, source_column: str, age_field: str) -> dict:
+        pause_status = active_pause_status()
+        if pause_status.get("isPaused"):
+            return {"paused": True, "pauseStatus": pause_status}
+
+        column = self.ensure_column(columns, source_column)
+        candidates = [t for t in column if isinstance(t, dict) and self.is_valid_task(t)]
+        if not candidates:
+            return {"candidate": None, "reason": "no-work", "blockedSummary": []}
+
+        def sort_key(task):
+            priority = PRIORITY_ORDER.get(str(task.get("priority", "normal")).strip().lower(), 1)
+            age_dt = parse_iso_datetime(task.get(age_field) or task.get("createdAt"))
+            age_value = age_dt.timestamp() if age_dt else 0
+            return (priority, age_value)
+
+        candidates.sort(key=sort_key)
+
+        blocked_summary = []
+        for task in candidates:
+            blocked_by = self.get_unresolved_depends_on(columns, task)
+            if not blocked_by:
+                age_dt = parse_iso_datetime(task.get(age_field) or task.get("createdAt"))
+                return {
+                    "candidate": task,
+                    "sourceColumn": source_column,
+                    "ageField": age_field,
+                    "orderingTimestamp": age_dt.isoformat() if age_dt else None,
+                    "blockedByTaskIds": [],
+                    "blockingTaskIds": self.get_derived_blocking_ids(columns, str(task.get("id") or "").strip()),
+                }
+            age_dt = parse_iso_datetime(task.get(age_field) or task.get("createdAt"))
+            blocked_summary.append({
+                "taskId": str(task.get("id") or "").strip(),
+                "title": str(task.get("title") or "").strip(),
+                "priority": str(task.get("priority") or "normal").strip(),
+                "createdAt": str(task.get("createdAt") or "").strip(),
+                "orderingTimestamp": age_dt.isoformat() if age_dt else None,
+                "blockedByTaskIds": blocked_by,
+            })
+
+        return {"candidate": None, "reason": "all-blocked", "blockedSummary": blocked_summary}
+
+    def build_next_work_response(self, selection: dict) -> dict:
+        if selection.get("paused"):
+            status = selection["pauseStatus"]
+            return paused_error_payload(status) | {
+                "action": "next-work",
+                "paused": True,
+            }
+
+        candidate = selection.get("candidate")
+        if not candidate:
+            return {
+                "eligible": False,
+                "reason": selection.get("reason", "no-work"),
+                "blockedSummary": selection.get("blockedSummary", []),
+            }
+
+        task_id = str(candidate.get("id") or "").strip()
+        response = {
+            "eligible": True,
+            "taskId": task_id,
+            "title": str(candidate.get("title") or "").strip(),
+            "project": str(candidate.get("project") or "").strip(),
+            "priority": str(candidate.get("priority") or "normal").strip(),
+            "type": str(candidate.get("type") or "").strip(),
+            "status": str(candidate.get("status") or "").strip(),
+            "sourceColumn": selection.get("sourceColumn", ""),
+            "createdAt": str(candidate.get("createdAt") or "").strip(),
+            "detailUrl": f"/api/task-detail?taskId={task_id}",
+            "blockedByTaskIds": selection.get("blockedByTaskIds", []),
+            "blockingTaskIds": selection.get("blockingTaskIds", []),
+        }
+        review_requested = str(candidate.get("reviewRequestedAt") or "").strip()
+        if review_requested:
+            response["reviewRequestedAt"] = review_requested
+        ordering_ts = selection.get("orderingTimestamp")
+        if ordering_ts:
+            response["orderingTimestamp"] = ordering_ts
+        return response
+
+    def next_worker_task(self, board: dict, payload: dict) -> dict:
+        columns = self.get_columns(board)
+        selection = self.select_next_work_candidate(columns, "todo", "createdAt")
+        return self.build_next_work_response(selection)
+
+    def next_review_task(self, board: dict, payload: dict) -> dict:
+        columns = self.get_columns(board)
+        selection = self.select_next_work_candidate(columns, "review", "reviewRequestedAt")
+        return self.build_next_work_response(selection)
+
+    def claim_next_worker(self, board: dict, columns: dict, payload: dict) -> dict:
+        self.require_not_paused("claim-next-worker")
+        selection = self.select_next_work_candidate(columns, "todo", "createdAt")
+        candidate = selection.get("candidate")
+        if not candidate:
+            return self.build_next_work_response(selection) | {"claimed": False}
+
+        task_id = str(candidate.get("id") or "").strip()
+        blocked_by = self.get_unresolved_depends_on(columns, candidate)
+        if blocked_by:
+            return {
+                "claimed": False,
+                "eligible": False,
+                "reason": "dependency-resolved-after-selection",
+                "taskId": task_id,
+                "blockedByTaskIds": blocked_by,
+            }
+
+        task = self.pop_task(columns, "todo", task_id)
+        claimed = self.ensure_column(columns, "claimed")
+        timestamp = now_iso()
+        agent_name = self.agent_name(payload, "Worker Agent")
+        task["status"] = "claimed"
+        task["claimedBy"] = payload.get("claimedBy") or agent_name
+        task["claimedAt"] = timestamp
+        self.record_task_api_action(task, "claim-next-worker", agent_name, timestamp)
+        self.record_board_api_action(board, "claim-next-worker", agent_name, timestamp, task_id)
+        self.update_board_timestamp(board, timestamp)
+        claimed.insert(0, task)
+        self.persist_board(board)
+        response = self.build_next_work_response(selection)
+        response["claimed"] = True
+        response["claimedAt"] = timestamp
+        response["taskIds"] = [task_id]
+        return response
+
+    def claim_next_review(self, board: dict, columns: dict, payload: dict) -> dict:
+        self.require_not_paused("claim-next-review")
+        selection = self.select_next_work_candidate(columns, "review", "reviewRequestedAt")
+        candidate = selection.get("candidate")
+        if not candidate:
+            return self.build_next_work_response(selection) | {"claimed": False}
+
+        task_id = str(candidate.get("id") or "").strip()
+        blocked_by = self.get_unresolved_depends_on(columns, candidate)
+        if blocked_by:
+            return {
+                "claimed": False,
+                "eligible": False,
+                "reason": "dependency-resolved-after-selection",
+                "taskId": task_id,
+                "blockedByTaskIds": blocked_by,
+            }
+
+        task = self.pop_task(columns, "review", task_id)
+        reviewing = self.ensure_column(columns, "reviewing")
+        timestamp = now_iso()
+        agent_name = self.agent_name(payload, "Review Agent")
+        task["status"] = "reviewing"
+        task["reviewClaimedBy"] = payload.get("reviewClaimedBy") or agent_name
+        task["reviewClaimedAt"] = timestamp
+        self.record_task_api_action(task, "claim-next-review", agent_name, timestamp)
+        self.record_board_api_action(board, "claim-next-review", agent_name, timestamp, task_id)
+        self.update_board_timestamp(board, timestamp)
+        reviewing.insert(0, task)
+        self.persist_board(board)
+        response = self.build_next_work_response(selection)
+        response["claimed"] = True
+        response["reviewClaimedAt"] = timestamp
+        response["taskIds"] = [task_id]
+        return response
+
+    def validate_depends_on(self, task_id: str, depends_on: object, columns: dict) -> None:
+        if not isinstance(depends_on, list) or not depends_on:
+            return
+        for dep_id in depends_on:
+            dep_id_str = str(dep_id or "").strip()
+            if not dep_id_str:
+                raise ValueError("dependsOn entries must be non-blank task IDs")
+            if dep_id_str == task_id:
+                raise ValueError(f"Task cannot depend on itself: {task_id}")
+            if not self.task_exists(columns, dep_id_str):
+                raise ValueError(f"dependsOn references unknown task ID: {dep_id_str}")
 
     def approve_review(self, board: dict, columns: dict, payload: dict) -> None:
         task_id = self.require_task_id(payload)
@@ -3217,35 +4451,14 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                     stderr=log_file,
                     creationflags=popen_flags,
                     close_fds=True,
+                    **_qwen_process_isolation_kwargs(),
                 )
 
-                def _pipe_qwen_through_formatter(proc, log_fh, fmt_script):
-                    try:
-                        fmt_proc = subprocess.Popen(
-                            [sys.executable, "-u", fmt_script],
-                            stdin=proc.stdout,
-                            stdout=log_fh,
-                            stderr=log_fh,
-                        )
-                        fmt_proc.wait()
-                    except Exception:
-                        pass
-                    finally:
-                        try:
-                            proc.stdout.close()
-                        except Exception:
-                            pass
-                        try:
-                            log_fh.close()
-                        except Exception:
-                            pass
-
-                t = threading.Thread(
-                    target=_pipe_qwen_through_formatter,
+                threading.Thread(
+                    target=_run_qwen_formatter_pipe,
                     args=(process, log_file, formatter_script),
                     daemon=True,
-                )
-                t.start()
+                ).start()
             else:
                 process = subprocess.Popen(
                     args,
@@ -3278,6 +4491,359 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "resumeOfProcessId": resume_run.get("processId", "") if resume_run else "",
         }
 
+    # --- Handoff intake (upstream handoff file discovery and Planner auto-processing) ---
+
+    def list_handoffs(self, board: dict, payload: dict) -> dict:
+        del payload
+        state = load_handoff_state()
+        if refresh_handoff_state(state, board):
+            save_handoff_state(state)
+        existing = {
+            str(entry.get("path") or ""): entry
+            for entry in state.get("handoffs", [])
+            if isinstance(entry, dict)
+        }
+        handoffs = []
+        for source, base_dir in HANDOFF_SOURCES.items():
+            for file_info in scan_handoff_files(source):
+                entry = existing.get(file_info["path"])
+                if entry:
+                    file_info["status"] = handoff_status_from_state(entry)
+                else:
+                    file_info["status"] = {
+                        "filename": file_info["filename"],
+                        "source": source,
+                        "path": file_info["path"],
+                        "status": "new",
+                        "model": "",
+                        "personalName": "",
+                        "processId": None,
+                        "logPath": "",
+                        "taskIds": [],
+                        "tasks": [],
+                        "error": "",
+                        "latestStatus": "New handoff",
+                        "createdAt": file_info["createdAt"],
+                        "updatedAt": "",
+                        "processedAt": "",
+                    }
+                handoffs.append(file_info)
+        return {
+            "sources": sorted(HANDOFF_SOURCES.keys()),
+            "handoffs": handoffs,
+        }
+
+    def read_handoff(self, board: dict, payload: dict) -> dict:
+        del board
+        source = str(payload.get("source") or "frontend-audits").strip()
+        filename = str(payload.get("filename") or "").strip()
+        if not filename:
+            raise ValueError("Missing filename")
+        resolved = safe_handoff_path(source, filename)
+        if not resolved or not resolved.is_file():
+            raise LookupError(f"Handoff file not found: {source}/{filename}")
+        try:
+            content = resolved.read_text(encoding="utf-8", errors="replace")
+        except OSError as error:
+            raise RuntimeError(f"Unable to read handoff file: {error}") from error
+        return {
+            "filename": filename,
+            "source": source,
+            "path": f"handoffs/{source}/{filename}",
+            "content": content,
+            "size": resolved.stat().st_size,
+        }
+
+    def build_handoff_planner_phrase(self, handoff_path: str, backend_base_url: str, personal_name: str) -> str:
+        return (
+            f"load as planner and start; your personalName is {personal_name}; your model is planner-chat; "
+            f"backendBaseUrl is {backend_base_url}; use this full base URL for every task-board API call; "
+            f"call {backend_base_url}/api/register-agent with personalName, model, role to receive your agentId. "
+            f"You are processing a Web Front-End Auditor handoff file. "
+            f"Read the handoff at {handoff_path}, deduplicate findings against the current task board, "
+            "and convert only useful, actionable findings into deduplicated todo tasks per your planner rules. "
+            "Record the handoff path in each generated task's sourceHandoffs field. "
+            "Do not implement or review. "
+            "Skip findings that are not actionable or that duplicate existing board work."
+        )
+
+    def spawn_handoff_planner(self, handoff_entry: dict, backend_base_url: str) -> dict:
+        settings = load_dispatch_settings()
+        model = str((settings.get("commands") or {}).get("qwen") or QWEN_COMMAND or "qwen").strip() or "qwen"
+        tool = "qwen"
+        personal_name = str(handoff_entry.get("personalName") or "ada").strip()
+
+        phrase = self.build_handoff_planner_phrase(
+            handoff_entry.get("path", ""),
+            backend_base_url,
+            personal_name,
+        )
+
+        args = self.spawn_command_args(tool)
+        args.extend(["-p", phrase, "-y", "-o", "stream-json"])
+
+        working_dir = str(PROJECT_ROOT)
+        SPAWN_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        run_stamp = datetime.now(timezone.utc).astimezone().strftime("%Y%m%d-%H%M%S")
+        safe_file = re.sub(r"[^a-zA-Z0-9_-]+", "-", Path(str(handoff_entry.get("filename") or "handoff")).stem).strip("-") or "handoff"
+        log_path = SPAWN_LOG_DIR / f"{run_stamp}-planner-handoff-{safe_file}-{tool}-{personal_name}-{secrets.token_hex(3)}.log"
+        popen_flags = 0
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            popen_flags |= subprocess.CREATE_NO_WINDOW
+        env = agent_subprocess_env(tool)
+        log_file = log_path.open("a", encoding="utf-8")
+        log_file.write(f"Handoff Planner ({tool}) at {now_iso()}\n")
+        log_file.write(f"Handoff: {handoff_entry.get('path', '')}\n")
+        log_file.write(f"Backend: {backend_base_url}\n")
+        log_file.write(f"Prompt: {phrase}\n\n")
+        log_file.flush()
+
+        formatter_script = str(Path(__file__).parent / "format_qwen_log.py")
+        process = subprocess.Popen(
+            args,
+            cwd=working_dir,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=log_file,
+            creationflags=popen_flags,
+            close_fds=True,
+            **_qwen_process_isolation_kwargs(),
+        )
+
+        threading.Thread(
+            target=_run_qwen_formatter_pipe,
+            args=(process, log_file, formatter_script),
+            daemon=True,
+        ).start()
+
+        return {
+            "processId": process.pid,
+            "logPath": str(log_path),
+            "model": tool,
+            "personalName": personal_name,
+        }
+
+    def process_handoff(self, board: dict, columns: dict, payload: dict) -> dict:
+        del columns
+        self.require_not_paused("process-handoff")
+        source = str(payload.get("source") or "frontend-audits").strip()
+        filename = str(payload.get("filename") or "").strip()
+        if not filename:
+            raise ValueError("Missing filename")
+        resolved = safe_handoff_path(source, filename)
+        if not resolved or not resolved.is_file():
+            raise LookupError(f"Handoff file not found: {source}/{filename}")
+
+        handoff_path = handoff_relative_path(source, filename)
+        state = load_handoff_state()
+        state_changed = refresh_handoff_state(state, board)
+        existing = None
+        for entry in state.get("handoffs", []):
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("path") == handoff_path:
+                existing = entry
+                break
+
+        backend_base_url = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
+        if existing:
+            entry = existing
+            status = str(entry.get("status") or "").strip().lower()
+            if status == "planner-working":
+                if state_changed:
+                    save_handoff_state(state)
+                raise ValueError(f"Handoff {handoff_path} is already being processed (process {entry.get('processId')}).")
+            if status in ("processed", "skipped"):
+                if state_changed:
+                    save_handoff_state(state)
+                raise ValueError(f"Handoff {handoff_path} is already {status}. Use retry-handoff to reprocess.")
+            if status == "failed":
+                if state_changed:
+                    save_handoff_state(state)
+                raise ValueError(f"Handoff {handoff_path} is failed. Use retry-handoff to reprocess.")
+        else:
+            agents_state = self.load_active_agents_state()
+            personal_name = choose_auto_personal_name("planning", agents_state.get("agents", []), [])
+            entry = {
+                "filename": filename,
+                "source": source,
+                "path": handoff_path,
+                "status": "queued",
+                "personalName": personal_name,
+                "model": "qwen",
+                "processId": None,
+                "processState": "",
+                "processCheckedAt": "",
+                "logPath": "",
+                "taskIds": [],
+                "tasks": [],
+                "error": "",
+                "latestStatus": "Waiting for Planner",
+                "createdAt": now_iso(),
+                "updatedAt": now_iso(),
+                "processedAt": "",
+                "spawnedAt": "",
+            }
+            state["handoffs"].append(entry)
+
+        if handoff_has_running_planner(state, exclude_path=handoff_path) or handoff_has_queued_before(state, handoff_path, str(entry.get("createdAt") or "")):
+            entry["status"] = "queued"
+            entry["updatedAt"] = now_iso()
+            entry["latestStatus"] = "Waiting for Planner"
+            save_handoff_state(state)
+            return {
+                "ok": True,
+                "queued": True,
+                "handoff": handoff_status_from_state(entry),
+            }
+
+        entry["status"] = "queued"
+        entry["error"] = ""
+        entry["latestStatus"] = "Launching Planner"
+        entry["spawnedAt"] = now_iso()
+        entry["updatedAt"] = now_iso()
+
+        try:
+            result = self.spawn_handoff_planner(entry, backend_base_url)
+            entry["status"] = "planner-working"
+            entry["processId"] = result.get("processId")
+            entry["logPath"] = result.get("logPath", "")
+            entry["model"] = result.get("model", "qwen")
+            entry["personalName"] = result.get("personalName", entry.get("personalName", ""))
+            entry["latestStatus"] = "Planner is running"
+        except Exception as error:
+            entry["status"] = "failed"
+            entry["error"] = str(error)
+            entry["latestStatus"] = "Planner failed to launch"
+
+        save_handoff_state(state)
+        return {
+            "ok": entry["status"] != "failed",
+            "handoff": handoff_status_from_state(entry),
+        }
+
+    def retry_handoff(self, board: dict, columns: dict, payload: dict) -> dict:
+        del columns
+        self.require_not_paused("retry-handoff")
+        source = str(payload.get("source") or "frontend-audits").strip()
+        filename = str(payload.get("filename") or "").strip()
+        if not filename:
+            raise ValueError("Missing filename")
+        resolved = safe_handoff_path(source, filename)
+        if not resolved or not resolved.is_file():
+            raise LookupError(f"Handoff file not found: {source}/{filename}")
+        handoff_path = handoff_relative_path(source, filename)
+
+        state = load_handoff_state()
+        refresh_handoff_state(state, board)
+        existing = None
+        for entry in state.get("handoffs", []):
+            if isinstance(entry, dict) and entry.get("path") == handoff_path:
+                existing = entry
+                break
+        if not existing:
+            raise LookupError(f"No processing record found for {handoff_path}. Use process-handoff instead.")
+
+        status = str(existing.get("status") or "").strip().lower()
+        if status == "planner-working":
+            raise ValueError(f"Handoff {handoff_path} is still being processed.")
+
+        backend_base_url = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
+        existing["status"] = "queued"
+        existing["error"] = ""
+        existing["taskIds"] = []
+        existing["tasks"] = []
+        existing["processId"] = None
+        existing["processState"] = ""
+        existing["processCheckedAt"] = ""
+        existing["updatedAt"] = now_iso()
+        existing["processedAt"] = ""
+        existing["spawnedAt"] = ""
+        existing["latestStatus"] = "Waiting for Planner"
+
+        if handoff_has_running_planner(state, exclude_path=handoff_path) or handoff_has_queued_before(state, handoff_path, str(existing.get("createdAt") or "")):
+            save_handoff_state(state)
+            return {
+                "ok": True,
+                "queued": True,
+                "handoff": handoff_status_from_state(existing),
+            }
+
+        existing["spawnedAt"] = now_iso()
+        existing["latestStatus"] = "Launching Planner"
+
+        try:
+            result = self.spawn_handoff_planner(existing, backend_base_url)
+            existing["status"] = "planner-working"
+            existing["processId"] = result.get("processId")
+            existing["logPath"] = result.get("logPath", "")
+            existing["model"] = result.get("model", "qwen")
+            existing["personalName"] = result.get("personalName", existing.get("personalName", ""))
+            existing["latestStatus"] = "Planner is running"
+        except Exception as error:
+            existing["status"] = "failed"
+            existing["error"] = str(error)
+            existing["latestStatus"] = "Planner failed to launch"
+
+        save_handoff_state(state)
+        return {
+            "ok": existing["status"] != "failed",
+            "handoff": handoff_status_from_state(existing),
+        }
+
+    def ignore_handoff(self, board: dict, columns: dict, payload: dict) -> dict:
+        del columns
+        source = str(payload.get("source") or "frontend-audits").strip()
+        filename = str(payload.get("filename") or "").strip()
+        if not filename:
+            raise ValueError("Missing filename")
+        resolved = safe_handoff_path(source, filename)
+        if not resolved or not resolved.is_file():
+            raise LookupError(f"Handoff file not found: {source}/{filename}")
+        handoff_path = handoff_relative_path(source, filename)
+
+        state = load_handoff_state()
+        refresh_handoff_state(state, board)
+        existing = None
+        for entry in state.get("handoffs", []):
+            if isinstance(entry, dict) and entry.get("path") == handoff_path:
+                existing = entry
+                break
+
+        if existing:
+            if str(existing.get("status") or "").strip().lower() == "planner-working":
+                raise ValueError(f"Handoff {handoff_path} is still being processed.")
+            existing["status"] = "skipped"
+            existing["updatedAt"] = now_iso()
+            existing["processedAt"] = existing.get("processedAt") or now_iso()
+            existing["latestStatus"] = "Marked ignored"
+        else:
+            existing = {
+                "filename": filename,
+                "source": source,
+                "path": handoff_path,
+                "status": "skipped",
+                "personalName": "",
+                "model": "",
+                "processId": None,
+                "logPath": "",
+                "taskIds": [],
+                "tasks": [],
+                "error": "",
+                "latestStatus": "Marked ignored",
+                "createdAt": now_iso(),
+                "updatedAt": now_iso(),
+                "processedAt": now_iso(),
+                "spawnedAt": "",
+            }
+            state["handoffs"].append(existing)
+        save_handoff_state(state)
+        return {
+            "ok": True,
+            "handoff": handoff_status_from_state(existing),
+        }
+
     # --- Planner chat (interactive human input to the Planner agent) ---
 
     PLANNER_CHAT_OUTPUT_MARKER = "===PLANNER-OUTPUT==="
@@ -3289,11 +4855,13 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         try:
             data = json.loads(PLANNER_CHAT_SESSION_PATH.read_text(encoding="utf-8-sig"))
         except (FileNotFoundError, json.JSONDecodeError):
-            return {"messages": []}
+            data = {}
         if not isinstance(data, dict):
-            return {"messages": []}
+            data = {}
         if not isinstance(data.get("messages"), list):
             data["messages"] = []
+        data.setdefault("cliSessionId", "")
+        data.setdefault("cliTool", "")
         return data
 
     def save_planner_chat(self, data: dict) -> None:
@@ -3302,7 +4870,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         temp_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         os.replace(temp_path, PLANNER_CHAT_SESSION_PATH)
 
-    def read_planner_chat_output(self, log_path: str) -> str:
+    def read_planner_chat_output(self, log_path: str, truncate: bool = True) -> str:
         if not log_path:
             return ""
         try:
@@ -3313,28 +4881,254 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         if marker in text:
             text = text.split(marker, 1)[1]
         text = text.strip()
-        if len(text) > PLANNER_CHAT_OUTPUT_LIMIT:
+        if truncate and len(text) > PLANNER_CHAT_OUTPUT_LIMIT:
             text = "...(truncated)...\n" + text[-PLANNER_CHAT_OUTPUT_LIMIT:]
         return text
+
+    def read_text_tail(self, path: str, limit: int = 2000) -> str:
+        if not path:
+            return ""
+        try:
+            text = Path(path).read_text(encoding="utf-8", errors="replace").strip()
+        except (FileNotFoundError, OSError):
+            return ""
+        if len(text) > limit:
+            text = "...(truncated)...\n" + text[-limit:]
+        return text
+
+    def _is_noise_line(self, line: str) -> bool:
+        """Check if a line is likely CLI/tool noise, not conversational text."""
+        stripped = line.strip()
+        if not stripped:
+            return False
+        noise_prefixes = (
+            ">>", "[OK]", "[ERROR]", "[error", "...(truncated)...",
+            "   Command:", "   Directory:", "   Path:", "   Pattern:",
+            "   Description:", "   Query:", "   URL:", "   Prompt:",
+            "   Content (", "   Subagent", "   Todos:", "   Cell:",
+            "   Old:", "   New:",
+            "--------", "thinking", "model:", "qwen_code_version:",
+            "permission_mode:", "session_id:",
+            "cost:", "duration:", "input_tokens:", "output_tokens:",
+            "--- Process exit status ---", "qwen:", "formatter:",
+            "warning:", "warnings:",
+        )
+        if any(stripped.startswith(p) for p in noise_prefixes):
+            return True
+        lower = stripped.lower()
+        if any(kw in lower for kw in (
+            "command:", "directory:", "exit code:", "signal:",
+            "process group", "return code", "error:",
+            "load as planner", "load as worker", "load as reviewer",
+            "your model is", "your personalname", "backendbaseurl",
+            "call http", "use this full base url",
+            "api/register-agent", "api/add-task", "api/update-task",
+            "api/claim-task", "api/heartbeat", "api/move-to-review",
+            "api/worker-board", "api/board", "api/task-detail",
+            "api/review-board", "api/claim-review", "api/approve-review",
+            "api/request-changes", "api/next-worker", "api/next-review",
+            "api/duplicate-scan", "api/agents",
+        )):
+            return True
+        if stripped.startswith("{") or stripped.endswith("}"):
+            return True
+        if stripped.startswith("[") and stripped.endswith("]"):
+            return True
+        if re.match(r'^\s{3,}\S', line) and not stripped.startswith(('-', '*', '#')):
+            return True
+        return False
+
+    def _is_doc_heavy_section(self, section: str) -> bool:
+        """Check if a section is mostly documentation/role content, not conversational."""
+        lines = section.split("\n")
+        if not lines:
+            return True
+        doc_indicators = 0
+        total_non_empty = 0
+        for line in lines:
+            stripped = line.strip()
+            if not stripped:
+                continue
+            total_non_empty += 1
+            # Markdown headers
+            if re.match(r'^#{1,6}\s', stripped):
+                doc_indicators += 1
+            # Code fence markers
+            elif stripped.startswith("```"):
+                doc_indicators += 1
+            # JSON-like structures
+            elif stripped.startswith("{") or stripped.startswith("["):
+                doc_indicators += 1
+            # API endpoint patterns
+            elif re.search(r'(GET|POST|PUT|DELETE|PATCH)\s+/\w+', stripped):
+                doc_indicators += 1
+            # curl/Invoke-RestMethod examples
+            elif stripped.startswith("curl ") or stripped.startswith("Invoke-"):
+                doc_indicators += 1
+            # Rule/list numbering patterns (1. 2. 3. etc.)
+            elif re.match(r'^\d+\.\s', stripped):
+                doc_indicators += 1
+            # Field definition patterns (key: value or "key":)
+            elif re.match(r'^"?[\w_]+"?\s*:', stripped):
+                doc_indicators += 1
+        if total_non_empty == 0:
+            return True
+        # If more than 40% of lines look like documentation, treat as doc-heavy
+        return doc_indicators / total_non_empty > 0.4
+
+    def _extract_clean_reply(self, text: str) -> str:
+        """Extract the final conversational reply from formatted CLI output.
+
+        Strips tool invocations, tool results, thinking blocks, init
+        metadata, cost/stats lines, role documentation, and other CLI noise.
+        Returns only the last substantial assistant text block.
+        """
+        if not text:
+            return ""
+        if text.startswith("...(truncated)..."):
+            text = text.split("\n", 1)[1] if "\n" in text else ""
+        # Split into sections at tool invocation boundaries.
+        # When the formatter's result event is found, stop — everything after
+        # is cost/stats metadata, not conversational text.
+        sections = []
+        current: list[str] = []
+        result_fallback = ""
+        result_fallback_lines: list[str] = []
+        found_result = False
+        for line in text.split("\n"):
+            stripped = line.strip()
+            if stripped.startswith(">> ") and len(stripped) > 3:
+                if current:
+                    sections.append("\n".join(current))
+                    current = []
+                continue
+            if not found_result and re.match(r'^result \(\w+\)\s*$', stripped):
+                if current:
+                    sections.append("\n".join(current))
+                    current = []
+                found_result = True
+                continue
+            if found_result:
+                # Capture lines after result marker as the primary reply candidate.
+                # Stop before Qwen formatter/process status, then skip trailing
+                # metadata lines like [duration: ...], cost:, return codes, etc.
+                if re.match(r'^-{3,}\s*process exit status\s*-{3,}$', stripped, re.IGNORECASE):
+                    break
+                if stripped and not self._is_noise_line(line):
+                    result_fallback_lines.append(line)
+                continue
+            current.append(line)
+        if current:
+            sections.append("\n".join(current))
+        # Build result_fallback from captured lines after result marker.
+        if result_fallback_lines:
+            result_fallback = "\n".join(result_fallback_lines).strip()
+        # Filter each section: remove noise lines, keep clean lines.
+        clean_sections: list[str] = []
+        for section in sections:
+            clean_lines: list[str] = []
+            in_code_fence = False
+            for line in section.split("\n"):
+                stripped = line.strip()
+                if stripped.startswith("```"):
+                    in_code_fence = not in_code_fence
+                    continue
+                if in_code_fence:
+                    continue
+                if self._is_noise_line(line):
+                    continue
+                clean_lines.append(line)
+            clean = "\n".join(clean_lines).strip()
+            if len(clean) > 20:
+                clean_sections.append(clean)
+        # Priority 1: Use text after result (success) marker if substantial.
+        # This is the Planner's actual conversational reply.
+        if result_fallback and len(result_fallback) > 10:
+            rf_lines = [l for l in result_fallback.split("\n") if l.strip()]
+            if rf_lines and not all(re.match(r'^[\[\s]*$', l.strip()) or l.strip().startswith("cost:") or l.strip().startswith("duration:") for l in rf_lines):
+                return result_fallback[:3000]
+        # Priority 2: Last clean section that isn't doc-heavy.
+        for section in reversed(clean_sections):
+            if self._is_doc_heavy_section(section):
+                continue
+            words = section.split()
+            if len(words) >= 5:
+                return section[:3000]
+        # Priority 3: Any clean section with enough words.
+        for section in reversed(clean_sections):
+            words = section.split()
+            if len(words) >= 5:
+                return section[:3000]
+        # Priority 4: result_fallback if it exists.
+        if result_fallback and len(result_fallback) > 10:
+            return result_fallback[:3000]
+        # Last resort: truncated raw text.
+        return text.strip()[:3000]
+
+    def extract_planner_reply(self, message: dict, data: dict) -> None:
+        """Called once a planner turn finishes. Parses the CLI output into a clean
+        reply and, for Claude JSON turns, captures the resumable session id.
+
+        Sets message['output'] to the full raw output (for diagnostics)
+        and message['result'] to the clean conversational reply (for the
+        default chat bubble).
+        """
+        log_path = str(message.get("logPath") or "")
+        if message.get("format") == "json":
+            raw = self.read_planner_chat_output(log_path, truncate=False)
+            parsed = None
+            if raw:
+                try:
+                    parsed = json.loads(raw)
+                except json.JSONDecodeError:
+                    parsed = None
+            if isinstance(parsed, dict):
+                reply = parsed.get("result")
+                if not isinstance(reply, str) or not reply.strip():
+                    reply = json.dumps(parsed, indent=2)
+                message["output"] = reply.strip()
+                message["result"] = reply.strip()
+                if parsed.get("is_error"):
+                    message["isError"] = True
+                session_id = parsed.get("session_id")
+                if isinstance(session_id, str) and session_id and message.get("tool") == "claude":
+                    data["cliSessionId"] = session_id
+                    data["cliTool"] = "claude"
+            else:
+                # CLI did not return parseable JSON (e.g. not logged in, crash).
+                err_tail = self.read_text_tail(str(message.get("errPath") or ""))
+                pieces = [p for p in [raw, ("[error output]\n" + err_tail) if err_tail else ""] if p]
+                message["output"] = ("\n\n".join(pieces)).strip() or "(no output captured)"
+                message["result"] = self._extract_clean_reply(raw) if raw else ""
+                if not message["result"]:
+                    message["result"] = "Planner run did not produce a reply. Check diagnostics for details."
+                message["isError"] = True
+        else:
+            raw_output = self.read_planner_chat_output(log_path, truncate=False)
+            message["output"] = raw_output[:PLANNER_CHAT_OUTPUT_LIMIT] if len(raw_output) > PLANNER_CHAT_OUTPUT_LIMIT else raw_output
+            message["result"] = self._extract_clean_reply(raw_output)
+            if not message["result"]:
+                message["result"] = "Planner run did not produce a reply. Check diagnostics for details."
 
     def refresh_planner_chat(self, data: dict) -> bool:
         changed = False
         for message in data.get("messages", []):
             if not isinstance(message, dict) or message.get("role") != "planner":
                 continue
-            log_path = str(message.get("logPath") or "")
-            output = self.read_planner_chat_output(log_path)
-            if output != message.get("output"):
-                message["output"] = output
-                changed = True
             if message.get("status") != "running":
                 continue
-            pid = message.get("processId")
+            # Text-mode turns can stream partial output while still running.
+            if message.get("format") != "json":
+                output = self.read_planner_chat_output(str(message.get("logPath") or ""))
+                if output != message.get("output"):
+                    message["output"] = output
+                    changed = True
             status = spawned_process_status({
-                "processId": pid,
+                "processId": message.get("processId"),
                 "spawnedAt": message.get("spawnedAt"),
             })
             if not status.get("isRunning"):
+                self.extract_planner_reply(message, data)
                 message["status"] = "done"
                 message["finishedAt"] = now_iso()
                 message["processState"] = status.get("state", "")
@@ -3356,13 +5150,16 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             return {"messages": []}
 
     def build_planner_chat_phrase(self, message: str, backend_base_url: str) -> str:
+        """First turn of a conversation: load the planner role and answer the owner."""
         return (
             "load as planner and start; your model is planner-chat; "
             f"backendBaseUrl is {backend_base_url}; use this full base URL for every task-board API call; "
             f"call {backend_base_url}/api/register-agent with personalName, model, role to receive your agentId. "
-            "You are receiving a direct request from the owner through the planner chat window. "
-            "Record and decompose it into deduplicated todo tasks per your planner rules; do not implement or review. "
-            "Owner request:\n" + message
+            "You are in an ongoing back-and-forth chat with the owner through the planner chat window. "
+            "Reply conversationally and concisely; ask clarifying questions when useful. "
+            "Record and decompose agreed work into deduplicated todo tasks per your planner rules; do not implement or review. "
+            "The owner will keep replying in this same conversation, so keep your earlier context in mind. "
+            "Owner says:\n" + message
         )
 
     def planner_chat_send(self, board: dict, columns: dict, payload: dict) -> dict:
@@ -3374,21 +5171,43 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         requested_tool = str(payload.get("tool") or payload.get("model") or "claude").strip().lower()
         tool = requested_tool if requested_tool in SPAWNABLE_TOOLS else "claude"
 
+        # Read conversation state and block overlapping turns up front.
+        with PLANNER_CHAT_LOCK:
+            data = self.load_planner_chat()
+            # Refresh first so a turn whose process already exited is not seen as running.
+            if self.refresh_planner_chat(data):
+                self.save_planner_chat(data)
+            for existing in data.get("messages", []):
+                if isinstance(existing, dict) and existing.get("role") == "planner" and existing.get("status") == "running":
+                    raise ValueError("The Planner is still responding to the previous message. Wait for it to finish.")
+            cli_session_id = str(data.get("cliSessionId") or "")
+
+        # Conversation memory currently works through Claude's resumable sessions.
+        continuing = bool(cli_session_id) and tool == "claude"
+
         backend_base_url = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
-        start_phrase = self.build_planner_chat_phrase(message, backend_base_url)
+        if continuing:
+            phrase = message  # resumed session already holds the planner context
+        else:
+            phrase = self.build_planner_chat_phrase(message, backend_base_url)
 
         command_override = payload.get("command") if "command" in payload else None
         args = self.spawn_command_args(tool, command_override=command_override)
+        chat_format = "text"
         if tool == "codex":
-            args.extend(["exec", "--skip-git-repo-check", start_phrase])
-        else:
-            args.extend(["-p", start_phrase])
-            if tool == "qwen":
-                args.extend(["-y", "-o", "stream-json"])
+            args.extend(["exec", "--skip-git-repo-check", phrase])
+        elif tool == "qwen":
+            args.extend(["-p", phrase, "-y", "-o", "stream-json"])
+        else:  # claude — conversational via --output-format json + --resume
+            chat_format = "json"
+            args.extend(["-p", phrase, "--output-format", "json"])
+            if continuing:
+                args.extend(["--resume", cli_session_id])
 
         message_id = self._new_chat_id()
         spawned_at = now_iso()
         working_dir = str(PROJECT_ROOT)
+        err_path = ""
         try:
             PLANNER_CHAT_LOG_DIR.mkdir(parents=True, exist_ok=True)
             log_path = PLANNER_CHAT_LOG_DIR / f"{message_id}-{tool}.log"
@@ -3400,10 +5219,12 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             log_file.write(f"Planner chat ({tool}) at {spawned_at}\n")
             log_file.write(f"Working directory: {working_dir}\n")
             log_file.write(f"Backend: {backend_base_url}\n")
+            log_file.write(f"Resuming session: {cli_session_id or '(new conversation)'}\n")
             log_file.write(f"{self.PLANNER_CHAT_OUTPUT_MARKER}\n")
             log_file.flush()
 
             if tool == "qwen":
+                formatter_script = str(Path(__file__).parent / "format_qwen_log.py")
                 process = subprocess.Popen(
                     args,
                     cwd=working_dir,
@@ -3413,35 +5234,31 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                     stderr=log_file,
                     creationflags=popen_flags,
                     close_fds=True,
+                    **_qwen_process_isolation_kwargs(),
                 )
-                formatter_script = str(Path(__file__).parent / "format_qwen_log.py")
-
-                def _pipe_qwen_through_formatter(proc, log_fh, fmt_script):
-                    try:
-                        fmt_proc = subprocess.Popen(
-                            [sys.executable, "-u", fmt_script],
-                            stdin=proc.stdout,
-                            stdout=log_fh,
-                            stderr=log_fh,
-                        )
-                        fmt_proc.wait()
-                    except Exception:
-                        pass
-                    finally:
-                        try:
-                            proc.stdout.close()
-                        except Exception:
-                            pass
-                        try:
-                            log_fh.close()
-                        except Exception:
-                            pass
 
                 threading.Thread(
-                    target=_pipe_qwen_through_formatter,
+                    target=_run_qwen_formatter_pipe,
                     args=(process, log_file, formatter_script),
                     daemon=True,
                 ).start()
+            elif tool == "claude":
+                # Keep stderr out of the JSON stream so the result parses cleanly.
+                err_file_path = PLANNER_CHAT_LOG_DIR / f"{message_id}-{tool}.err.log"
+                err_path = str(err_file_path)
+                err_file = err_file_path.open("a", encoding="utf-8")
+                process = subprocess.Popen(
+                    args,
+                    cwd=working_dir,
+                    env=env,
+                    stdin=subprocess.DEVNULL,
+                    stdout=log_file,
+                    stderr=err_file,
+                    creationflags=popen_flags,
+                    close_fds=True,
+                )
+                log_file.close()
+                err_file.close()
             else:
                 process = subprocess.Popen(
                     args,
@@ -3471,10 +5288,13 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 "id": message_id,
                 "role": "planner",
                 "tool": tool,
+                "format": chat_format,
                 "status": "running",
                 "processId": process.pid,
                 "spawnedAt": spawned_at,
                 "logPath": str(log_path),
+                "errPath": err_path,
+                "resumedSession": cli_session_id if continuing else "",
                 "output": "",
                 "createdAt": spawned_at,
                 "finishedAt": "",
@@ -3486,6 +5306,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "sent": True,
             "messageId": message_id,
             "tool": tool,
+            "continuing": continuing,
             "processId": process.pid,
             "logPath": str(log_path),
             "backendBaseUrl": backend_base_url,
@@ -3494,10 +5315,11 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
 
     def persist_board(self, board: dict) -> None:
         try:
-            self.normalize_board_columns(board)
-            temp_path = BOARD_PATH.with_suffix(".json.tmp")
-            temp_path.write_text(json.dumps(board, indent=2) + "\n", encoding="utf-8")
-            os.replace(temp_path, BOARD_PATH)
+            with BOARD_LOCK:
+                self.normalize_board_columns(board)
+                temp_path = BOARD_PATH.with_suffix(".json.tmp")
+                temp_path.write_text(json.dumps(board, indent=2) + "\n", encoding="utf-8")
+                os.replace(temp_path, BOARD_PATH)
         except Exception as error:
             raise RuntimeError(f"Unable to persist board: {error}") from error
 
@@ -3510,15 +5332,16 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(body)
         except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
-            self.log_error("Client disconnected before JSON response was sent")
+            return
 
 
 def load_dispatch_board() -> dict:
-    board = json.loads(BOARD_PATH.read_text(encoding="utf-8-sig"))
-    columns = board.get("columns")
-    if not isinstance(columns, dict):
-        board["columns"] = {}
-    return board
+    with BOARD_LOCK:
+        board = json.loads(BOARD_PATH.read_text(encoding="utf-8-sig"))
+        columns = board.get("columns")
+        if not isinstance(columns, dict):
+            board["columns"] = {}
+        return board
 
 
 def load_dispatch_active_agents() -> list[dict]:
@@ -3715,6 +5538,128 @@ def resume_paused_runs(
     return changed
 
 
+def auto_process_handoffs(server: ThreadingHTTPServer) -> None:
+    board = load_dispatch_board()
+    state = load_handoff_state()
+    if refresh_handoff_state(state, board):
+        save_handoff_state(state)
+        state = load_handoff_state()
+    existing_paths = {
+        str(entry.get("path") or ""): entry
+        for entry in state.get("handoffs", [])
+        if isinstance(entry, dict)
+    }
+    host, port = server.server_address
+    backend_base_url = f"http://{host}:{port}"
+
+    def request_handoff_processing(source: str, filename: str, path: str) -> None:
+        payload = {
+            "source": source,
+            "filename": filename,
+            "agentName": "Auto handoff dispatcher",
+        }
+        request = Request(
+            f"{backend_base_url}/api/process-handoff",
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urlopen(request, timeout=30) as response:
+            json.loads(response.read().decode("utf-8") or "{}")
+        append_dispatch_log({
+            "action": "auto-process-handoff",
+            "status": "success",
+            "httpStatus": 200,
+            "path": path,
+            "error": "",
+        })
+
+    queued = sorted(
+        [
+            entry for entry in state.get("handoffs", [])
+            if isinstance(entry, dict) and str(entry.get("status") or "").strip().lower() == "queued"
+        ],
+        key=lambda entry: str(entry.get("createdAt") or ""),
+    )
+    if queued and not handoff_has_running_planner(state):
+        entry = queued[0]
+        try:
+            request_handoff_processing(
+                str(entry.get("source") or "frontend-audits"),
+                str(entry.get("filename") or ""),
+                str(entry.get("path") or ""),
+            )
+        except Exception as error:
+            append_dispatch_log({
+                "action": "auto-process-handoff",
+                "status": "error",
+                "httpStatus": 500,
+                "path": str(entry.get("path") or ""),
+                "error": str(error),
+            })
+        state = load_handoff_state()
+        if refresh_handoff_state(state, board):
+            save_handoff_state(state)
+            state = load_handoff_state()
+        existing_paths = {
+            str(entry.get("path") or ""): entry
+            for entry in state.get("handoffs", [])
+            if isinstance(entry, dict)
+        }
+
+    changed = False
+    for source in HANDOFF_SOURCES:
+        for file_info in scan_handoff_files(source):
+            path = file_info["path"]
+            if path in existing_paths:
+                continue
+            personal_name = choose_auto_personal_name("planning", load_dispatch_active_agents(), [])
+            entry = {
+                "filename": file_info["filename"],
+                "source": source,
+                "path": path,
+                "status": "queued",
+                "personalName": personal_name,
+                "model": "qwen",
+                "processId": None,
+                "logPath": "",
+                "taskIds": [],
+                "tasks": [],
+                "error": "",
+                "latestStatus": "Waiting for Planner",
+                "createdAt": now_iso(),
+                "updatedAt": now_iso(),
+                "processedAt": "",
+                "spawnedAt": "",
+            }
+            try:
+                request_handoff_processing(source, file_info["filename"], path)
+            except Exception as error:
+                latest_state = load_handoff_state()
+                latest_paths = {
+                    str(latest.get("path") or "")
+                    for latest in latest_state.get("handoffs", [])
+                    if isinstance(latest, dict)
+                }
+                if path not in latest_paths:
+                    entry["status"] = "failed"
+                    entry["error"] = str(error)
+                    entry["latestStatus"] = "Auto processing failed"
+                    latest_state.setdefault("handoffs", []).append(entry)
+                    save_handoff_state(latest_state)
+                    state = latest_state
+                    existing_paths[path] = entry
+                append_dispatch_log({
+                    "action": "auto-process-handoff",
+                    "status": "error",
+                    "httpStatus": 500,
+                    "path": path,
+                    "error": str(error),
+                })
+    if changed:
+        save_handoff_state(state)
+
+
 def run_auto_dispatch_once(server: ThreadingHTTPServer) -> None:
     now = datetime.now(timezone.utc).astimezone()
     settings = load_dispatch_settings()
@@ -3734,6 +5679,8 @@ def run_auto_dispatch_once(server: ThreadingHTTPServer) -> None:
 
     if resume_paused_runs(server, settings, pending, now):
         changed_settings = True
+
+    auto_process_handoffs(server)
 
     for role in ("worker", "review"):
         role_settings = settings.get(role, {})
@@ -3793,16 +5740,24 @@ def run_auto_dispatch_once(server: ThreadingHTTPServer) -> None:
 
 
 def auto_dispatch_loop(server: ThreadingHTTPServer) -> None:
+    consecutive_errors = 0
     while True:
-        time.sleep(AUTO_DISPATCH_INTERVAL_SECONDS)
+        sleep_seconds = AUTO_DISPATCH_INTERVAL_SECONDS
+        if consecutive_errors:
+            sleep_seconds = min(60, AUTO_DISPATCH_INTERVAL_SECONDS * (2 ** min(consecutive_errors, 4)))
+        time.sleep(sleep_seconds)
         try:
             run_auto_dispatch_once(server)
+            consecutive_errors = 0
         except Exception as error:
+            consecutive_errors += 1
             append_dispatch_log({
                 "action": "auto-dispatch-loop",
                 "status": "error",
                 "httpStatus": 500,
                 "error": str(error),
+                "consecutiveErrors": consecutive_errors,
+                "nextRetrySeconds": min(60, AUTO_DISPATCH_INTERVAL_SECONDS * (2 ** min(consecutive_errors, 4))),
             })
 
 

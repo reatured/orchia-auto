@@ -10,7 +10,7 @@ Use `load as worker` at the start of a new chat to load this role.
 
 Claim one unclaimed task from `task-board/board.json`, complete it, and move it to review without conflicting with other agents.
 
-After each completed task, reload the board and check the live list again. Continue claiming safe `todo` tasks until the owner asks the Worker to stop or the current list has no safe unclaimed work.
+After each completed task, call the next-work API to find the next eligible task. Continue claiming safe `todo` tasks until the owner asks the Worker to stop or the API reports no eligible work.
 
 If the local task-board backend is running, call `POST /api/register-agent` at the start of the chat with `personalName`, `model` (`claude`, `codex`, or `qwen`), and `role: "worker"`. The server returns an `agentId`; use it for every later task board API call this chat. If the Spawn button supplied a `personalName`, use it; otherwise pick the first unused name from `task-board/agent-color-schema.json#personalNamePool`, or use the one the owner gives you.
 
@@ -21,18 +21,19 @@ Use `workflow/api-guide.md` for exact API payloads, examples, and error handling
 1. Read `workflow/workflow-overview.md`.
 2. Register as active. If the backend is running, call `POST /api/register-agent` with `personalName`, `model`, `role: "worker"`, and `startPhrase: "load as worker"`. Capture the `agentId` and keep it for the rest of the chat.
 3. If the start phrase includes `resumeMode is paused-run`, inspect the task board through the API and inspect the worktree before editing. The prior spawned-agent log is context only; `board.json` is the source of truth. If `currentTaskStillLockedByYou` is true and `currentTaskId` is still in `columns.claimed` with `claimedBy` equal to your `personalName`, heartbeat with that task ID, fetch its full details, and continue that task before claiming anything new. If the task is unknown, missing, unlocked, or owned by someone else, reconcile from the live board and prior log, then either continue the safest matching task still locked by you or unregister with a clear note.
-4. Read the compact worker board. If the backend is running, prefer `GET /api/worker-board?agentId=...`; otherwise read only `columns.todo` and `columns.claimed` from `task-board/board.json`.
-5. Choose one task from `columns.todo`, unless you are continuing a resume-mode task that is still locked by you.
-6. If the task includes `referenceImages`, inspect those image paths before planning implementation. Do not rely on chat-only screenshots when the task data gives a workflow image path.
-7. Before touching implementation files, claim the task unless you are continuing an existing resume-mode `claimed` lock. If the backend is running, prefer `POST /api/claim-task` and include your `agentId`; otherwise update `board.json` directly:
+4. Claim the next eligible task. If the backend is running, call `POST /api/claim-next-worker` with your `agentId`; the server selects the highest-priority, oldest unblocked `todo` task, claims it, and returns the task ID. If the response has `claimed: true`, proceed to step 5 with the returned `taskId`. If `claimed: false` (no work, all blocked, or paused), report the reason and stop. If the backend is not running, fall back to reading `columns.todo` and `columns.claimed` from `task-board/board.json` and choose one safe unclaimed task manually. Skip this step if continuing a resume-mode task that is still locked by you.
+5. If the task includes `referenceImages`, inspect those image paths before planning implementation. Do not rely on chat-only screenshots when the task data gives a workflow image path.
+6. Before touching implementation files, if you chose a task manually (backend not running), claim it. If the backend is running, prefer `POST /api/claim-task` and include your `agentId`; otherwise update `board.json` directly:
    - Move the whole task object from `columns.todo` to `columns.claimed`.
    - Set `status` to `claimed`, `claimedBy` to your agent name, `claimedAt` to the current timestamp.
    - Update board `updatedAt`.
-8. After claiming or confirming a resume-mode lock, call `POST /api/heartbeat-agent` with `currentTaskId` set to the claimed task ID, then call `GET /api/task-detail?taskId=...&agentId=...` for the full details of only the claimed task.
+7. After claiming or confirming a resume-mode lock, call `POST /api/heartbeat-agent` with `currentTaskId` set to the claimed task ID, then call `GET /api/task-detail?taskId=...&agentId=...` for the full details of only the claimed task.
+
+When the backend is running, do not use `/api/board`, `/api/worker-board`, or `/api/review-board` to choose your next task. Those endpoints remain available for diagnostics, fallback, or broad context only. Use `POST /api/claim-next-worker` (or `GET /api/next-worker-task` for a read-only preview) for server-side task selection with dependency-aware prioritization.
 
 ## Pause Handling
 
-- If `POST /api/claim-task` returns HTTP `423` with `paused: true`, the backend is enforcing a board-wide pause. Do not bypass it by editing `board.json` manually, retrying in a loop, or claiming through another path.
+- If `POST /api/claim-task` or `POST /api/claim-next-worker` returns HTTP `423` with `paused: true`, the backend is enforcing a board-wide pause. Do not bypass it by editing `board.json` manually, retrying in a loop, or claiming through another path.
 - Record the pause details from the response (`pausedUntil`, `remainingText`, `pauseReason`) in your report. If you are ending the chat, unregister with a note that the board is paused. If the owner explicitly asks you to wait, wait without touching implementation files.
 - Pause enforcement blocks new claims and backend spawns. It is implemented in the server; role instructions only explain what agents should do when they receive the paused response.
 - Hard stop targets only backend-spawned hidden Worker/Reviewer processes. It does not kill manual terminal/chat agents and it does not remove board locks.
@@ -40,7 +41,8 @@ Use `workflow/api-guide.md` for exact API payloads, examples, and error handling
 ## Claim Rules
 
 - Claim exactly one task at a time.
-- Before claiming, scan `columns.claimed` for overlapping task IDs, files, project areas, and clearly conflicting acceptance criteria.
+- When the backend is running, `POST /api/claim-next-worker` handles dependency checking and server-side prioritization automatically. The server skips tasks whose `dependsOn` entries are not yet in `done` or `archived`.
+- When the backend is not running and you must choose manually, scan `columns.claimed` for overlapping task IDs, files, project areas, and clearly conflicting acceptance criteria before claiming.
 - `columns.review` and `columns.done` are not broad locks for Worker conflict checks.
 - Same-file work is allowed when scopes are distinct and one of `relatedTaskIds`, `dependsOn`, or `sourceReviewTaskId` is present to indicate planned coupling.
 - Do not claim a `todo` task that conflicts under those tighter rules. Choose another safe task or stop and report the conflict.
@@ -88,7 +90,7 @@ Use this shape for inspection targets:
 ]
 ```
 
-After updating the board, call `POST /api/heartbeat-agent` with your `agentId` and the latest `currentTaskId`, then reload through `GET /api/worker-board?agentId=...` (or re-read `columns.todo` and `columns.claimed` from `board.json`) before deciding what to do next. If another safe `todo` task exists, do not stop; claim the next safe task, fetch its full details through `GET /api/task-detail?taskId=...&agentId=...`, and continue until the owner asks to stop. If no safe `todo` task exists, report that the list is clear or blocked.
+After updating the board, call `POST /api/heartbeat-agent` with your `agentId` and the latest `currentTaskId`, then call `POST /api/claim-next-worker` again (or re-read `columns.todo` and `columns.claimed` from `board.json` when the backend is not running) to find the next eligible task. If the API returns `claimed: true`, fetch full details through `GET /api/task-detail?taskId=...&agentId=...` and continue until the owner asks to stop. If the API returns `claimed: false`, report that the list is clear, all blocked, or paused.
 
 Before ending the chat for any reason, call `POST /api/unregister-agent` with your `agentId` and a short note explaining why you are stopping.
 

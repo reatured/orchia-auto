@@ -75,6 +75,8 @@ The Planner does not write implementation code. Do not edit application/source c
 11. If the task depends on a screenshot or image, save it under `reference-images/` and add a `referenceImages` entry with `path`, `description`, and `source`.
 12. If you already know where completed work should be inspected, add a starting point in `inspectionTargets`; Workers must update it when moving work to review.
 13. When a task comes from a handoff file, include that path in `sourceHandoffs`.
+14. When a new task must wait for another incomplete, claimed, reviewing, or prerequisite task, put that task ID in `dependsOn`. This is the canonical blocked-by field that the next-work APIs (`claim-next-worker`, `claim-next-review`) use to skip blocked tasks during server-side selection. The server derives reverse blocking metadata (which tasks are blocked by a given task) by scanning all tasks' `dependsOn` arrays, so do not try to maintain mirrored `blocks` or `blockingTaskIds` fields on the blocking task.
+15. Use `relatedTaskIds` for non-blocking context or coupling only — tasks that share files or scope but do not need to wait for each other. The next-work API does not inspect `relatedTaskIds` when deciding eligibility. Do not use `relatedTaskIds` as a substitute for `dependsOn` when a task must wait for another to complete.
 
 ## Planning Conflict Rules
 
@@ -86,7 +88,7 @@ The Planner does not write implementation code. Do not edit application/source c
 6. If the owner gives a requirement that overlaps claimed work, create a separate `todo` task with `dependsOn` pointing to the claimed task, or ask the owner how to merge it.
 7. If the owner asks for review, tell them to start a Reviewer; do not review the work yourself.
 8. If a request conflicts with `done` work, create a new follow-up task instead of reopening the done task unless the owner explicitly asks.
-9. Shared files/scripts are not automatic blockers; use `dependsOn`, `relatedTaskIds`, or `sourceReviewTaskId` links for coupling.
+9. Shared files/scripts are not automatic blockers. Use `dependsOn` when the new task must wait for another task to complete (the next-work API skips blocked tasks). Use `relatedTaskIds` for non-blocking context coupling (shared files, related scope). Use `sourceReviewTaskId` for review follow-ups.
 
 ## Task Fields
 

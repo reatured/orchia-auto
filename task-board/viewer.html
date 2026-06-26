@@ -7,27 +7,30 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23191816'/%3E%3Crect x='13' y='14' width='8' height='36' rx='4' fill='%233f6f8f'/%3E%3Crect x='25' y='10' width='8' height='44' rx='4' fill='%239b5b25'/%3E%3Crect x='37' y='16' width='8' height='32' rx='4' fill='%236f5aa8'/%3E%3Crect x='49' y='20' width='8' height='28' rx='4' fill='%2334785d'/%3E%3C/svg%3E">
   <style>
     :root {
-      --page: #f6f4ef;
-      --ink: #191816;
-      --muted: #69645d;
-      --line: #d8d2c7;
+      --page: #f7f8fb;
+      --ink: #17202a;
+      --muted: #626f7f;
+      --line: #d6dde8;
       --panel: #ffffff;
-      --todo: #3f6f8f;
-      --claimed: #9b5b25;
-      --review: #6f5aa8;
-      --done: #34785d;
-      --archived: #5f6872;
-      --workflow: #2f6f79;
+      --todo: #2c7da0;
+      --claimed: #b35c1e;
+      --review: #725ac1;
+      --done: #2f855a;
+      --archived: #617386;
+      --workflow: #0f766e;
+      --agent-logs: #8a6f22;
       --archive-tab-height: 132px;
       --archive-tab-width: 40px;
       --workflow-tab-height: 132px;
       --workflow-tab-width: 40px;
+      --agent-logs-tab-height: 146px;
+      --agent-logs-tab-width: 40px;
       --settings-tab-height: 118px;
       --settings-tab-width: 40px;
       --side-tab-gutter: 64px;
       --shell-edge-gap: 16px;
       --viewport-client-width: 100vw;
-      --shadow: 0 14px 34px rgba(25, 24, 22, 0.08);
+      --shadow: 0 14px 34px rgba(23, 32, 42, 0.08);
     }
 
     * {
@@ -189,6 +192,109 @@
       min-height: 28px;
       margin: 0 0 14px;
       color: var(--muted);
+    }
+
+    .system-overview {
+      display: grid;
+      grid-template-columns: minmax(260px, 1.25fr) repeat(4, minmax(150px, 1fr));
+      gap: 10px;
+      margin: 0 0 14px;
+      align-items: stretch;
+    }
+
+    .system-card {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 8px 22px rgba(23, 32, 42, 0.06);
+      padding: 11px 12px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+      border-top: 4px solid var(--card-accent, var(--todo));
+    }
+
+    .system-card.is-ok {
+      --card-accent: var(--done);
+    }
+
+    .system-card.is-watch {
+      --card-accent: #c07a2f;
+    }
+
+    .system-card.is-attention,
+    .system-card.is-error {
+      --card-accent: #b0473f;
+    }
+
+    .system-card-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+
+    .system-card-title span:first-child {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .system-value {
+      margin: 0;
+      color: var(--ink);
+      font-size: 22px;
+      line-height: 1.05;
+      font-weight: 800;
+      letter-spacing: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .system-detail {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px 8px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.25;
+      min-width: 0;
+    }
+
+    .system-detail span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .system-badge {
+      flex: 0 0 auto;
+      min-width: 24px;
+      border-radius: 999px;
+      border: 1px solid color-mix(in srgb, var(--card-accent, var(--todo)) 42%, var(--line));
+      background: color-mix(in srgb, var(--card-accent, var(--todo)) 11%, #ffffff);
+      color: color-mix(in srgb, var(--card-accent, var(--todo)) 82%, var(--ink));
+      padding: 2px 7px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .system-warnings {
+      grid-column: 1 / -1;
+      min-width: 0;
+      border: 1px solid #ddb6a9;
+      border-radius: 8px;
+      background: #fff4f1;
+      color: #7a352c;
+      padding: 9px 12px;
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
     }
 
     .board {
@@ -384,6 +490,339 @@
 
     .workflow-board.is-open .workflow-tray {
       transform: translateX(0);
+    }
+
+    .agent-logs-board {
+      position: fixed;
+      inset: 0 auto 0 0;
+      z-index: 10;
+      pointer-events: none;
+      isolation: isolate;
+    }
+
+    .agent-logs-tab {
+      pointer-events: auto;
+      position: fixed;
+      left: 0;
+      top: calc(50% + 158px);
+      width: var(--agent-logs-tab-width);
+      min-height: var(--agent-logs-tab-height);
+      border: 1px solid var(--line);
+      border-left: 0;
+      border-radius: 0 8px 8px 0;
+      background: var(--panel);
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 10px 6px;
+      font-size: 13px;
+      font-weight: 760;
+      cursor: pointer;
+      box-shadow: var(--shadow);
+      transform: translateY(-50%);
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      z-index: 13;
+    }
+
+    .agent-logs-tab:hover {
+      border-color: #aaa197;
+      background: #fbfaf7;
+    }
+
+    .agent-logs-tab .dot {
+      --lane-color: var(--agent-logs);
+    }
+
+    .agent-logs-tray {
+      pointer-events: auto;
+      position: fixed;
+      left: 0;
+      top: 0;
+      height: 100vh;
+      width: calc(100vw - var(--agent-logs-tab-width));
+      background: rgba(246, 244, 239, 0.98);
+      transform: translateX(calc(-100% - 8px));
+      transition: transform 220ms ease;
+      z-index: 12;
+      overflow: auto;
+      padding: 18px 18px 18px calc(var(--agent-logs-tab-width) + 14px);
+      box-sizing: border-box;
+      box-shadow: 18px 0 42px rgba(25, 24, 22, 0.16);
+    }
+
+    .agent-logs-board.is-open .agent-logs-tray {
+      transform: translateX(0);
+    }
+
+    .agent-logs-panel {
+      min-height: calc(100vh - 36px);
+      border: 1px solid var(--line);
+      border-top: 5px solid var(--agent-logs);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: var(--shadow);
+      padding: 16px;
+      min-width: 0;
+    }
+
+    .agent-logs-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+
+    .agent-logs-header h2 {
+      margin: 0;
+      font-size: 18px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .agent-logs-subtitle {
+      display: block;
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .agent-logs-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .agent-logs-refresh {
+      min-height: 30px;
+      border: 1px solid color-mix(in srgb, var(--agent-logs) 42%, var(--line));
+      border-radius: 8px;
+      background: color-mix(in srgb, var(--agent-logs) 10%, #ffffff);
+      color: color-mix(in srgb, var(--agent-logs) 78%, #191816);
+      padding: 5px 10px;
+      cursor: pointer;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .agent-logs-refresh:hover,
+    .agent-logs-refresh:focus-visible {
+      border-color: color-mix(in srgb, var(--agent-logs) 62%, var(--line));
+      background: color-mix(in srgb, var(--agent-logs) 18%, #ffffff);
+      outline: none;
+    }
+
+    .agent-logs-refresh:disabled {
+      cursor: progress;
+      opacity: 0.62;
+    }
+
+    .agent-logs-grid {
+      display: grid;
+      grid-template-columns: minmax(170px, 220px) minmax(220px, 280px) minmax(0, 1fr);
+      gap: 12px;
+      align-items: stretch;
+      min-width: 0;
+    }
+
+    .agent-logs-column {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfaf7;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      min-height: 520px;
+    }
+
+    .agent-logs-column-header {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .agent-logs-column-header h3 {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.2;
+      color: var(--muted);
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .agent-logs-clear {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 4px 8px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .agent-logs-clear:hover,
+    .agent-logs-clear:focus-visible {
+      border-color: #aaa197;
+      outline: none;
+    }
+
+    .agent-logs-scroll {
+      min-height: 0;
+      overflow: auto;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .agent-log-agent,
+    .agent-log-file {
+      width: 100%;
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      color: var(--ink);
+      padding: 9px 10px;
+      cursor: pointer;
+      text-align: left;
+      display: grid;
+      gap: 5px;
+      box-shadow: 0 1px 0 rgba(25, 24, 22, 0.04);
+    }
+
+    .agent-log-agent:hover,
+    .agent-log-agent:focus-visible,
+    .agent-log-file:hover,
+    .agent-log-file:focus-visible {
+      border-color: #aaa197;
+      outline: none;
+    }
+
+    .agent-log-agent.is-selected,
+    .agent-log-file.is-selected {
+      border-color: color-mix(in srgb, var(--agent-logs) 68%, var(--line));
+      background: color-mix(in srgb, var(--agent-logs) 9%, #ffffff);
+      box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--agent-logs) 18%, transparent);
+    }
+
+    .agent-log-agent-main,
+    .agent-log-file-main {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+      font-weight: 760;
+    }
+
+    .agent-log-name,
+    .agent-log-file-name {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .agent-log-count {
+      flex: 0 0 auto;
+      min-width: 24px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--agent-logs) 18%, #ffffff);
+      color: color-mix(in srgb, var(--agent-logs) 80%, #191816);
+      padding: 2px 7px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 760;
+    }
+
+    .agent-log-meta {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .agent-log-detail {
+      min-height: 0;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .agent-log-detail-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin: 10px 0;
+    }
+
+    .agent-log-detail-meta div {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #ffffff;
+      padding: 8px 9px;
+      overflow-wrap: anywhere;
+    }
+
+    .agent-log-detail-meta strong {
+      display: block;
+      margin-bottom: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    .agent-log-content {
+      flex: 1 1 auto;
+      min-height: 320px;
+      max-height: calc(100vh - 285px);
+      margin: 0;
+      overflow: auto;
+      border: 1px solid #cfc7ba;
+      border-radius: 8px;
+      background: #1f1f1f;
+      color: #f7f3ea;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .agent-log-state {
+      min-height: 116px;
+      display: grid;
+      place-items: center;
+      border: 1px dashed var(--line);
+      border-radius: 8px;
+      color: var(--muted);
+      text-align: center;
+      padding: 14px;
+      background: rgba(255, 255, 255, 0.58);
+      overflow-wrap: anywhere;
+    }
+
+    .agent-log-state.is-error {
+      border-color: #d6a38c;
+      background: #fff5ef;
+      color: #7e3d20;
     }
 
     .settings-board {
@@ -703,6 +1142,194 @@
       text-transform: uppercase;
     }
 
+    /* Handoff intake lane */
+    .handoff-intake {
+      margin-bottom: 18px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.68);
+      overflow: hidden;
+    }
+
+    .handoff-intake-header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--line);
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .handoff-intake-header h2 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 800;
+      flex: 1 1 auto;
+    }
+
+    .handoff-intake-header .handoff-count {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      background: rgba(25, 24, 22, 0.06);
+      border-radius: 6px;
+      padding: 2px 7px;
+    }
+
+    .handoff-intake-header .handoff-toggle {
+      font: inherit;
+      font-size: 12px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+    }
+
+    .handoff-intake-header .handoff-toggle:hover { border-color: #aaa197; }
+
+    .handoff-intake-body {
+      padding: 10px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 340px;
+      overflow-y: auto;
+    }
+
+    .handoff-intake-body.is-collapsed { display: none; }
+
+    .handoff-intake-empty {
+      text-align: center;
+      color: var(--muted);
+      padding: 14px 0;
+      font-size: 13px;
+    }
+
+    .handoff-card {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.82);
+      font-size: 13px;
+    }
+
+    .handoff-card-status {
+      flex: 0 0 auto;
+      width: 8px;
+      min-height: 36px;
+      border-radius: 4px;
+      align-self: stretch;
+    }
+
+    .handoff-card-status[data-status="new"] { background: #6ea8d8; }
+    .handoff-card-status[data-status="queued"] { background: #6ea8d8; }
+    .handoff-card-status[data-status="planner-working"] { background: #d3aa6c; }
+    .handoff-card-status[data-status="processed"] { background: #6ab07a; }
+    .handoff-card-status[data-status="skipped"] { background: #a8a49b; }
+    .handoff-card-status[data-status="failed"] { background: #d06a6a; }
+
+    .handoff-card-body {
+      flex: 1 1 auto;
+      min-width: 0;
+    }
+
+    .handoff-card-title {
+      font-weight: 700;
+      font-size: 13px;
+      word-break: break-all;
+      overflow-wrap: anywhere;
+    }
+
+    .handoff-card-meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 12px;
+      margin-top: 3px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .handoff-card-meta .handoff-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 1px 6px;
+      border-radius: 4px;
+      font-weight: 700;
+      text-transform: uppercase;
+      font-size: 10px;
+      letter-spacing: 0.03em;
+    }
+
+    .handoff-badge[data-status="new"] { color: #3b7cb8; background: #e4f0fa; }
+    .handoff-badge[data-status="queued"] { color: #3b7cb8; background: #e4f0fa; }
+    .handoff-badge[data-status="planner-working"] { color: #8f6d34; background: #fdf3e0; }
+    .handoff-badge[data-status="processed"] { color: #3d7a4d; background: #e6f5ea; }
+    .handoff-badge[data-status="skipped"] { color: #6b675e; background: #efede8; }
+    .handoff-badge[data-status="failed"] { color: #a03e3e; background: #fbe6e6; }
+
+    .handoff-card-actions {
+      flex: 0 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+      align-items: center;
+      justify-content: flex-end;
+      max-width: 280px;
+    }
+
+    .handoff-card-actions button {
+      font: inherit;
+      font-size: 11px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: var(--panel);
+      color: var(--ink);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .handoff-card-actions button:hover { border-color: #aaa197; }
+    .handoff-card-actions button[data-action="process"] { border-color: #6ea8d8; color: #3b7cb8; }
+    .handoff-card-actions button[data-action="retry"] { border-color: #d06a6a; color: #a03e3e; }
+
+    .handoff-card-error {
+      margin-top: 4px;
+      font-size: 11px;
+      color: #a03e3e;
+      word-break: break-word;
+    }
+
+    .handoff-card-tasks {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .handoff-card-task-ref {
+      display: inline;
+      color: var(--ink);
+    }
+
+    .handoff-card-statusline {
+      margin-top: 4px;
+      font-size: 11px;
+      color: var(--muted);
+      overflow-wrap: anywhere;
+    }
+
+    @media (max-width: 680px) {
+      .handoff-card { flex-wrap: wrap; }
+      .handoff-card-actions { width: 100%; max-width: none; justify-content: flex-end; margin-top: 4px; }
+    }
+
     /* Planner chat dock */
     .planner-chat-dock {
       position: fixed;
@@ -727,17 +1354,22 @@
     .planner-chat-header {
       display: flex;
       align-items: center;
+      flex-wrap: wrap;
       gap: 10px;
       padding: 14px 16px;
       border-bottom: 1px solid var(--line);
       border-top: 5px solid var(--workflow);
     }
 
+    .planner-chat-title {
+      flex: 1 1 150px;
+      min-width: 0;
+    }
+
     .planner-chat-header h3 {
       margin: 0;
       font-size: 15px;
       font-weight: 800;
-      flex: 1 1 auto;
     }
 
     .planner-chat-header .planner-chat-sub {
@@ -758,6 +1390,16 @@
       color: var(--ink);
     }
 
+    .planner-chat-controls {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex: 0 0 auto;
+      min-width: 0;
+      margin-left: auto;
+    }
+
     .planner-chat-iconbtn {
       appearance: none;
       border: 1px solid var(--line);
@@ -771,7 +1413,37 @@
       line-height: 1;
     }
 
-    .planner-chat-iconbtn:hover { border-color: #aaa197; }
+    .planner-chat-newbtn {
+      width: auto;
+      min-width: 74px;
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .planner-chat-iconbtn:hover,
+    .planner-chat-iconbtn:focus-visible {
+      border-color: #aaa197;
+      outline: none;
+    }
+
+    @media (max-width: 520px) {
+      .planner-chat-title {
+        flex-basis: 100%;
+      }
+
+      .planner-chat-controls {
+        width: 100%;
+      }
+    }
+
+    @media (max-width: 380px) {
+      .planner-chat-newbtn {
+        min-width: 56px;
+        padding: 0 8px;
+      }
+    }
 
     .planner-chat-body {
       flex: 1 1 auto;
@@ -812,8 +1484,49 @@
       background: var(--page);
       border: 1px solid var(--line);
       border-bottom-left-radius: 4px;
+      font-family: var(--app-font, inherit);
+      font-size: 13px;
+      white-space: normal;
+    }
+
+    .planner-msg.planner .planner-result {
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .planner-diagnostics-toggle {
+      display: inline-block;
+      margin-top: 8px;
+      padding: 2px 8px;
+      font-size: 11px;
+      color: var(--muted);
+      background: none;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--app-font, inherit);
+    }
+    .planner-diagnostics-toggle:hover {
+      background: var(--line);
+      color: var(--text);
+    }
+
+    .planner-diagnostics {
+      display: none;
+      margin-top: 8px;
+      max-height: 300px;
+      overflow: auto;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
+    .planner-diagnostics.is-open { display: block; }
+    .planner-diagnostics pre {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 12px;
+      font-size: 11px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      margin: 0;
+      opacity: 0.8;
     }
 
     .planner-msg .planner-msg-meta {
@@ -1887,6 +2600,19 @@
       background: #58736b;
     }
 
+    .ticket-lifecycle {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px 12px;
+      margin-bottom: 8px;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    .lifecycle-entry {
+      white-space: nowrap;
+    }
+
     .ticket h2 {
       margin: 0;
       font-size: 14px;
@@ -2219,8 +2945,26 @@
     }
 
     @media (max-width: 1120px) {
+      .system-overview {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
       .board {
         grid-template-columns: repeat(2, minmax(260px, 1fr));
+      }
+    }
+
+    @media (max-width: 880px) {
+      .agent-logs-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .agent-logs-column {
+        min-height: 260px;
+      }
+
+      .agent-log-content {
+        max-height: 54vh;
       }
     }
 
@@ -2261,6 +3005,10 @@
         grid-template-columns: 1fr;
       }
 
+      .system-overview {
+        grid-template-columns: 1fr;
+      }
+
       .board.is-done-focus {
         grid-template-columns: 1fr;
       }
@@ -2283,6 +3031,10 @@
         top: calc(50% - 148px);
       }
 
+      .agent-logs-tab {
+        top: calc(50% + 148px);
+      }
+
       .settings-tab {
         bottom: 16px;
       }
@@ -2290,6 +3042,31 @@
       .workflow-tray {
         padding-left: 10px;
         padding-right: 10px;
+      }
+
+      .agent-logs-tray {
+        width: calc(100vw - 10px);
+        padding-left: 10px;
+        padding-right: 10px;
+      }
+
+      .agent-logs-panel {
+        min-height: calc(100vh - 20px);
+        padding: 12px;
+      }
+
+      .agent-logs-header,
+      .agent-logs-column-header {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .agent-logs-actions {
+        justify-content: flex-start;
+      }
+
+      .agent-log-detail-meta {
+        grid-template-columns: 1fr;
       }
 
       .settings-tray {
@@ -2350,9 +3127,30 @@
 
     <p class="status" id="status"></p>
 
+    <section class="system-overview" id="systemOverview" aria-label="System status">
+      <article class="system-card">
+        <div class="system-card-title"><span>System</span><span class="system-badge">...</span></div>
+        <p class="system-value">Loading</p>
+        <div class="system-detail"><span>Checking board health and agents</span></div>
+      </article>
+    </section>
+
+    <section class="handoff-intake" id="handoffIntake" aria-label="Handoff intake">
+      <div class="handoff-intake-header" id="handoffIntakeHeader">
+        <h2>Handoff Intake</h2>
+        <span class="handoff-count" id="handoffCount">0</span>
+        <button class="handoff-toggle" type="button" id="handoffRefreshButton" title="Refresh handoff list">Refresh</button>
+        <button class="handoff-toggle" type="button" id="handoffCollapseButton">Hide</button>
+      </div>
+      <div class="handoff-intake-body" id="handoffIntakeBody">
+        <div class="handoff-intake-empty" id="handoffEmpty">No handoff files found. Upstream auditor handoffs will appear here.</div>
+      </div>
+    </section>
+
     <section class="board" id="board" aria-label="Agent task board"></section>
     <section class="workflow-board" id="workflowBoard" aria-label="Workflow graph"></section>
     <section class="archive-board" id="archiveBoard" aria-label="Archived task board"></section>
+    <section class="agent-logs-board" id="agentLogsBoard" aria-label="Agent logs"></section>
     <section class="settings-board" id="settingsBoard" aria-label="Settings"></section>
   </main>
 
@@ -2381,6 +3179,17 @@
       activeAgents: [],
       pendingSpawns: []
     };
+    const fallbackAgentLogs = {
+      logs: [],
+      agents: [],
+      pendingSpawns: [],
+      pausedRuns: [],
+      totalLogCount: 0,
+      truncated: false,
+      limit: 0
+    };
+    const AGENT_LOG_LOAD_LIMIT = 250;
+    const AGENT_LOG_RENDER_LIMIT = 250;
     const fallbackDispatchSettings = {
       commands: {
         claude: "claude",
@@ -2415,6 +3224,31 @@
       remainingText: "0s",
       message: ""
     };
+    const fallbackSystemStatus = {
+      ok: false,
+      status: "watch",
+      checkedAt: "",
+      server: {},
+      board: {
+        counts: { todo: 0, claimed: 0, review: 0, reviewing: 0, done: 0, archived: 0 },
+        activeLocks: { claimed: 0, reviewing: 0 },
+        totalTasks: 0,
+        duplicateTaskIds: [],
+        malformedTasks: 0,
+        missingDependencies: [],
+        warningCount: 0,
+        warnings: []
+      },
+      pause: fallbackPauseStatus,
+      agents: { total: 0, active: 0, stale: 0, pendingSpawns: 0, pausedRuns: 0 },
+      dispatch: {
+        worker: { enabled: false, model: "codex", maxAgents: 1, activeAgents: 0, pendingSpawns: 0 },
+        review: { enabled: false, model: "codex", maxAgents: 1, activeAgents: 0, pendingSpawns: 0 }
+      },
+      handoffs: { discoveredFiles: 0, tracked: 0, statusCounts: {}, actionable: 0, running: 0 },
+      logs: { recentCount: 0, errorCount: 0, latestError: {}, recentErrors: [] },
+      warnings: []
+    };
     const fallbackAgentSchema = {
       modelBackground: {
         claude: { label: "Claude", background: "#f4a86b", text: "#3b1f08" },
@@ -2435,8 +3269,10 @@
     const boardEl = document.getElementById("board");
     const workflowEl = document.getElementById("workflowBoard");
     const archiveEl = document.getElementById("archiveBoard");
+    const agentLogsEl = document.getElementById("agentLogsBoard");
     const settingsEl = document.getElementById("settingsBoard");
     const statusEl = document.getElementById("status");
+    const systemOverviewEl = document.getElementById("systemOverview");
     const boardNameEl = document.getElementById("boardName");
     const updatedAtEl = document.getElementById("updatedAt");
     const sourceNameEl = document.getElementById("sourceName");
@@ -2448,13 +3284,25 @@
     let workflowPanelOpen = false;
     let workflowDetailKey = "";
     let archiveTrayOpen = false;
+    let agentLogsPanelOpen = false;
     let doneFocusOpen = false;
     let settingsPanelOpen = false;
     let currentBoard = fallbackBoard;
     let currentSourceLabel = "fallback";
     let currentAgents = fallbackAgents;
+    let currentAgentLogs = fallbackAgentLogs;
     let currentDispatchSettings = fallbackDispatchSettings;
     let currentPauseStatus = fallbackPauseStatus;
+    let currentSystemStatus = fallbackSystemStatus;
+    let systemStatusError = "";
+    let agentLogsLoaded = false;
+    let agentLogsLoading = false;
+    let agentLogsError = "";
+    let selectedAgentLogKey = "";
+    let selectedAgentLogFileName = "";
+    let selectedAgentLogDetail = null;
+    let selectedAgentLogLoading = false;
+    let selectedAgentLogError = "";
     let autoRefreshTimer = null;
     let autoRefreshInFlight = false;
     let agentLogRefreshTimer = null;
@@ -2462,6 +3310,10 @@
     let pauseCountdownTimer = null;
     let pauseActionInFlight = false;
     let pinnedAgentRunKey = "";
+    let currentHandoffs = [];
+    let handoffIntakeCollapsed = false;
+    let handoffLoading = false;
+    let handoffActionInFlight = false;
 
     function syncViewportClientWidth() {
       document.documentElement.style.setProperty(
@@ -2607,6 +3459,165 @@
       return new Date(parsed).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
     }
 
+    function formatDateTime(value) {
+      const text = String(value || "").trim();
+      if (!text) return "";
+      const parsed = Date.parse(text);
+      if (Number.isNaN(parsed)) return text;
+      return new Date(parsed).toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit"
+      });
+    }
+
+    function formatBytes(value) {
+      const bytes = Number(value) || 0;
+      if (bytes < 1024) return `${bytes} B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+
+    function logFileNameFromPath(value) {
+      const text = String(value || "").trim();
+      if (!text) return "";
+      return text.split(/[\\/]/).filter(Boolean).pop() || "";
+    }
+
+    function normalizeAgentLogPart(value, fallback = "unknown") {
+      const text = String(value || "").trim().toLowerCase();
+      return text || fallback;
+    }
+
+    function agentLogIdentityKey(entry) {
+      return [
+        normalizeAgentLogPart(entry?.role),
+        normalizeAgentLogPart(entry?.model),
+        normalizeAgentLogPart(entry?.personalName || entry?.agentName || entry?.name)
+      ].join("|");
+    }
+
+    function agentLogDisplayName(entry) {
+      const name = String(entry?.personalName || entry?.agentName || entry?.name || "").trim();
+      const role = normalizeAgentLogPart(entry?.role);
+      const model = normalizeAgentLogPart(entry?.model);
+      if (name) return `${name} (${role}/${model})`;
+      return role === "unknown" && model === "unknown" ? "Unknown agent" : `${role}/${model}`;
+    }
+
+    function normalizeAgentLogsPayload(data) {
+      const source = data && typeof data === "object" ? data : fallbackAgentLogs;
+      const logs = Array.isArray(source.logs)
+        ? source.logs.filter((log) => log && typeof log === "object")
+        : [];
+      const totalLogCount = Number(source.totalLogCount);
+      const safeTotalLogCount = Number.isFinite(totalLogCount) && totalLogCount >= logs.length
+        ? totalLogCount
+        : logs.length;
+      return {
+        logs,
+        agents: Array.isArray(source.agents) ? source.agents.filter((agent) => agent && typeof agent === "object") : [],
+        pendingSpawns: Array.isArray(source.pendingSpawns) ? source.pendingSpawns.filter((spawn) => spawn && typeof spawn === "object") : [],
+        pausedRuns: Array.isArray(source.pausedRuns) ? source.pausedRuns.filter((run) => run && typeof run === "object") : [],
+        totalLogCount: safeTotalLogCount,
+        truncated: Boolean(source.truncated) || safeTotalLogCount > logs.length,
+        limit: Number(source.limit) || logs.length
+      };
+    }
+
+    function mergeAgentLogIdentity(map, entry, sourceLabel) {
+      const key = agentLogIdentityKey(entry);
+      if (!map.has(key)) {
+        map.set(key, {
+          key,
+          role: normalizeAgentLogPart(entry?.role),
+          model: normalizeAgentLogPart(entry?.model),
+          personalName: String(entry?.personalName || entry?.agentName || entry?.name || "").trim(),
+          statuses: new Set(),
+          tasks: new Set(),
+          sources: new Set(),
+          logCount: 0,
+          latestLogFileName: "",
+          latestLogAt: ""
+        });
+      }
+      const identity = map.get(key);
+      identity.sources.add(sourceLabel);
+      if (entry?.status) identity.statuses.add(String(entry.status));
+      if (entry?.currentTaskId) identity.tasks.add(String(entry.currentTaskId));
+      const latestLog = entry?.latestLog && typeof entry.latestLog === "object" ? entry.latestLog : {};
+      const latestFile = latestLog.fileName || logFileNameFromPath(entry?.logPath);
+      if (latestFile && !identity.latestLogFileName) identity.latestLogFileName = latestFile;
+      const latestTime = latestLog.updatedAt || entry?.modifiedAt || entry?.timestamp || entry?.spawnedAt || entry?.registeredAt || entry?.stoppedAt;
+      if (latestTime && (!identity.latestLogAt || Date.parse(latestTime) > Date.parse(identity.latestLogAt))) {
+        identity.latestLogAt = latestTime;
+      }
+      return identity;
+    }
+
+    function buildAgentLogIdentities(logsData = currentAgentLogs) {
+      const data = normalizeAgentLogsPayload(logsData);
+      const map = new Map();
+      data.agents.forEach((agent) => mergeAgentLogIdentity(map, agent, "registered"));
+      data.pendingSpawns.forEach((spawn) => mergeAgentLogIdentity(map, spawn, "pending"));
+      data.pausedRuns.forEach((run) => {
+        const normalizedRun = {
+          role: run.role,
+          model: run.model,
+          personalName: run.personalName,
+          status: run.resumeState || run.statusBeforeStop || "paused",
+          currentTaskId: run.currentTaskId,
+          logPath: run.logPath || run.priorLogPath,
+          stoppedAt: run.stoppedAt,
+        };
+        mergeAgentLogIdentity(map, normalizedRun, "paused");
+      });
+      data.logs.forEach((log) => {
+        const identity = mergeAgentLogIdentity(map, log, "log file");
+        identity.logCount += 1;
+        if (!identity.latestLogFileName) identity.latestLogFileName = log.fileName || "";
+        const latestTime = log.modifiedAt || log.timestamp || "";
+        if (latestTime && (!identity.latestLogAt || Date.parse(latestTime) > Date.parse(identity.latestLogAt))) {
+          identity.latestLogAt = latestTime;
+        }
+      });
+      return Array.from(map.values())
+        .map((identity) => ({
+          ...identity,
+          statuses: Array.from(identity.statuses).sort(),
+          tasks: Array.from(identity.tasks).sort(),
+          sources: Array.from(identity.sources).sort()
+        }))
+        .sort((a, b) => {
+          const activeA = a.statuses.includes("active") ? 1 : 0;
+          const activeB = b.statuses.includes("active") ? 1 : 0;
+          if (activeA !== activeB) return activeB - activeA;
+          if (a.logCount !== b.logCount) return b.logCount - a.logCount;
+          return agentLogDisplayName(a).localeCompare(agentLogDisplayName(b));
+        });
+    }
+
+    function selectedAgentLogIdentity() {
+      if (!selectedAgentLogKey) return null;
+      return buildAgentLogIdentities().find((identity) => identity.key === selectedAgentLogKey) || null;
+    }
+
+    function agentLogMatchesSelected(log) {
+      return !selectedAgentLogKey || agentLogIdentityKey(log) === selectedAgentLogKey;
+    }
+
+    function visibleAgentLogFiles() {
+      const data = normalizeAgentLogsPayload(currentAgentLogs);
+      return data.logs.filter(agentLogMatchesSelected);
+    }
+
+    function agentLogsTabLabel(data = currentAgentLogs) {
+      const normalized = normalizeAgentLogsPayload(data);
+      if (!agentLogsLoaded && !agentLogsLoading) return "Agent Logs";
+      return `Agent Logs (${normalized.totalLogCount})`;
+    }
+
     function formatDuration(seconds) {
       const totalSeconds = Math.max(0, Math.ceil(Number(seconds) || 0));
       const hours = Math.floor(totalSeconds / 3600);
@@ -2643,6 +3654,154 @@
         remainingText: isPaused ? formatDuration(remainingSeconds) : "0s",
         message: String(source.message || "").trim()
       };
+    }
+
+    function normalizeSystemStatus(status) {
+      const source = status && typeof status === "object" ? status : {};
+      const board = source.board && typeof source.board === "object" ? source.board : {};
+      const agents = source.agents && typeof source.agents === "object" ? source.agents : {};
+      const dispatch = source.dispatch && typeof source.dispatch === "object" ? source.dispatch : {};
+      const handoffs = source.handoffs && typeof source.handoffs === "object" ? source.handoffs : {};
+      const logs = source.logs && typeof source.logs === "object" ? source.logs : {};
+      const normalized = {
+        ...fallbackSystemStatus,
+        ...source,
+        board: {
+          ...fallbackSystemStatus.board,
+          ...board,
+          counts: { ...fallbackSystemStatus.board.counts, ...(board.counts || {}) },
+          activeLocks: { ...fallbackSystemStatus.board.activeLocks, ...(board.activeLocks || {}) },
+          duplicateTaskIds: Array.isArray(board.duplicateTaskIds) ? board.duplicateTaskIds : [],
+          missingDependencies: Array.isArray(board.missingDependencies) ? board.missingDependencies : [],
+          warnings: Array.isArray(board.warnings) ? board.warnings : []
+        },
+        pause: normalizePauseStatus(source.pause || currentPauseStatus || fallbackPauseStatus),
+        agents: { ...fallbackSystemStatus.agents, ...agents },
+        dispatch: {
+          worker: { ...fallbackSystemStatus.dispatch.worker, ...(dispatch.worker || {}) },
+          review: { ...fallbackSystemStatus.dispatch.review, ...(dispatch.review || {}) }
+        },
+        handoffs: {
+          ...fallbackSystemStatus.handoffs,
+          ...handoffs,
+          statusCounts: { ...(handoffs.statusCounts || {}) }
+        },
+        logs: {
+          ...fallbackSystemStatus.logs,
+          ...logs,
+          latestError: logs.latestError && typeof logs.latestError === "object" ? logs.latestError : {},
+          recentErrors: Array.isArray(logs.recentErrors) ? logs.recentErrors : []
+        },
+        warnings: Array.isArray(source.warnings) ? source.warnings : []
+      };
+      normalized.status = String(normalized.status || (normalized.ok ? "ok" : "watch")).toLowerCase();
+      return normalized;
+    }
+
+    function systemStatusLabel(status) {
+      const value = String(status || "").toLowerCase();
+      if (value === "ok") return "Healthy";
+      if (value === "attention") return "Attention";
+      if (value === "watch") return "Watch";
+      return value || "Unknown";
+    }
+
+    function systemCard(title, value, details, status = "ok", badge = "") {
+      const detailList = Array.isArray(details) ? details.filter(Boolean) : [];
+      return `
+        <article class="system-card is-${escapeText(status)}">
+          <div class="system-card-title">
+            <span>${escapeText(title)}</span>
+            ${badge ? `<span class="system-badge">${escapeText(badge)}</span>` : ""}
+          </div>
+          <p class="system-value">${escapeText(value)}</p>
+          <div class="system-detail">${detailList.map((item) => `<span>${escapeText(item)}</span>`).join("")}</div>
+        </article>
+      `;
+    }
+
+    function renderSystemOverview(status = currentSystemStatus) {
+      if (!systemOverviewEl) return;
+      const data = normalizeSystemStatus(status);
+      currentSystemStatus = data;
+      const counts = data.board.counts || {};
+      const activeWork = Number(counts.todo || 0) + Number(counts.claimed || 0) + Number(counts.review || 0) + Number(counts.reviewing || 0);
+      const boardWarnings = Number(data.board.warningCount || 0);
+      const agentIssues = Number(data.agents.stale || 0) + Number(data.agents.pausedRuns || 0);
+      const workerDispatch = data.dispatch.worker || {};
+      const reviewDispatch = data.dispatch.review || {};
+      const dispatchSummary = [
+        `Worker ${workerDispatch.enabled ? "auto on" : "auto off"} (${workerDispatch.model || "codex"} x${workerDispatch.maxAgents ?? 0})`,
+        `Review ${reviewDispatch.enabled ? "auto on" : "auto off"} (${reviewDispatch.model || "codex"} x${reviewDispatch.maxAgents ?? 0})`
+      ];
+      const pauseDetails = data.pause.isPaused
+        ? [pauseUntilText(data.pause), data.pause.remainingText || ""]
+        : ["Claims and spawns allowed"];
+      const latestError = data.logs.latestError || {};
+      const errorDetail = latestError.error
+        ? `${latestError.path || "log"}: ${latestError.error}`
+        : "No recent API errors";
+      const warnings = systemStatusError
+        ? [systemStatusError]
+        : (Array.isArray(data.warnings) ? data.warnings : []);
+
+      systemOverviewEl.innerHTML = [
+        systemCard(
+          "System",
+          systemStatusLabel(data.status),
+          [
+            data.checkedAt ? `Checked ${formatDateTime(data.checkedAt)}` : "Not checked yet",
+            data.server.uptimeSeconds ? `Uptime ${formatDuration(data.server.uptimeSeconds)}` : ""
+          ],
+          data.status,
+          data.ok ? "OK" : "!"
+        ),
+        systemCard(
+          "Board",
+          `${activeWork} active`,
+          [
+            `To do ${counts.todo || 0}`,
+            `Claimed ${counts.claimed || 0}`,
+            `Review ${counts.review || 0}`,
+            `Reviewing ${counts.reviewing || 0}`,
+            `Done ${counts.done || 0}`
+          ],
+          boardWarnings ? "attention" : "ok",
+          boardWarnings ? `${boardWarnings}` : "OK"
+        ),
+        systemCard(
+          "Agents",
+          `${data.agents.active || 0} live`,
+          [
+            `Pending ${data.agents.pendingSpawns || 0}`,
+            `Stale ${data.agents.stale || 0}`,
+            `Paused runs ${data.agents.pausedRuns || 0}`
+          ],
+          agentIssues ? "watch" : "ok",
+          `${data.agents.total || 0}`
+        ),
+        systemCard(
+          "Dispatch",
+          data.pause.isPaused ? "Paused" : "Ready",
+          [...pauseDetails, ...dispatchSummary],
+          data.pause.isPaused ? "watch" : "ok",
+          data.pause.isPaused ? "Pause" : "Run"
+        ),
+        systemCard(
+          "Logs",
+          `${data.logs.errorCount || 0} errors`,
+          [
+            errorDetail,
+            data.handoffs.actionable ? `Handoffs needing action ${data.handoffs.actionable}` : "",
+            data.handoffs.running ? `Planner handoffs running ${data.handoffs.running}` : ""
+          ],
+          data.logs.errorCount ? "attention" : "ok",
+          `${data.logs.recentCount || 0}`
+        ),
+        warnings.length
+          ? `<div class="system-warnings">${warnings.slice(0, 6).map(escapeText).join(" | ")}</div>`
+          : ""
+      ].join("");
     }
 
     function pauseUntilText(status) {
@@ -2733,6 +3892,7 @@
         `Role: ${roleSchema.label || role}`,
         `Model: ${modelSchema.label || model}`,
         agent?.currentTaskId ? `Task: ${agent.currentTaskId}` : "",
+        agent?.spawnedAt ? `Spawned: ${shortTime(agent.spawnedAt) || agent.spawnedAt}` : "",
         agent?.lastHeartbeatAt ? `Seen: ${shortTime(agent.lastHeartbeatAt) || agent.lastHeartbeatAt}` : "",
         agent?.agentId ? `Id: ${agent.agentId}` : ""
       ].filter(Boolean).join(" — ");
@@ -2944,6 +4104,7 @@
         ? agents.map((agent) => {
             const metaParts = [
               agent.currentTaskId ? `Task: ${agent.currentTaskId}` : "",
+              agent.spawnedAt ? `Spawned: ${shortTime(agent.spawnedAt) || agent.spawnedAt}` : "",
               agent.lastHeartbeatAt ? `Seen: ${shortTime(agent.lastHeartbeatAt) || agent.lastHeartbeatAt}` : ""
             ].filter(Boolean);
             return `
@@ -3126,6 +4287,18 @@
       return "";
     }
 
+    function taskLifecycleMarkup(task) {
+      const entries = [
+        task.createdAt ? `Created: ${formatDateTime(task.createdAt)}` : "",
+        task.claimedAt ? `Claimed: ${formatDateTime(task.claimedAt)}` : "",
+        task.reviewRequestedAt ? `Review requested: ${formatDateTime(task.reviewRequestedAt)}` : "",
+        task.reviewedAt ? `Reviewed: ${formatDateTime(task.reviewedAt)}` : "",
+        task.doneAt ? `Done: ${formatDateTime(task.doneAt)}` : ""
+      ].filter(Boolean);
+      if (!entries.length) return "";
+      return `<div class="ticket-lifecycle">${entries.map((e) => `<span class="lifecycle-entry">${escapeText(e)}</span>`).join("")}</div>`;
+    }
+
     function ticketCard(task, columnKey) {
       const sourceColumnKey = task.__sourceColumn || columnKey;
       const title = String(task.title || "").trim();
@@ -3179,6 +4352,7 @@
               <div class="ticket-id">${escapeText(task.id || "No ID")}</div>
               <div class="priority ${priority.toLowerCase()}">${priority}</div>
             </div>
+            ${taskLifecycleMarkup(task)}
             ${ownerFeedbackPanel(task, sourceColumnKey)}
             ${field("Inspect Change", renderInspectionTargets(task.inspectionTargets))}
             ${task.summary ? `<p class="summary">${escapeText(task.summary)}</p>` : ""}
@@ -4005,8 +5179,9 @@
     }
 
     function normalizeBoard(board) {
-      const normalized = { ...fallbackBoard, ...board };
-      normalized.columns = { ...fallbackBoard.columns, ...(board.columns || {}) };
+      const source = board && typeof board === "object" ? board : {};
+      const normalized = { ...fallbackBoard, ...source };
+      normalized.columns = { ...fallbackBoard.columns, ...(source.columns || {}) };
       const taskLookup = normalized.tasks && typeof normalized.tasks === "object" ? normalized.tasks : {};
       Object.keys(normalized.columns).forEach((columnKey) => {
         const tasks = Array.isArray(normalized.columns[columnKey]) ? normalized.columns[columnKey] : [];
@@ -4020,17 +5195,40 @@
       return normalized;
     }
 
-    async function loadJson(url) {
+    function logOptionalLoadFailure(label, error) {
+      console.warn(`Task board viewer optional ${label} load failed`, error);
+    }
+
+    async function loadJson(url, options = {}) {
+      const timeoutMs = Math.max(0, Number(options.timeoutMs) || 0);
       if (typeof window.fetch === "function") {
-        const response = await window.fetch(url, { cache: "no-store" });
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        return response.json();
+        const controller = timeoutMs > 0 && typeof AbortController === "function"
+          ? new AbortController()
+          : null;
+        const timeoutId = controller
+          ? window.setTimeout(() => controller.abort(), timeoutMs)
+          : null;
+        try {
+          const fetchOptions = { cache: "no-store" };
+          if (controller) fetchOptions.signal = controller.signal;
+          const response = await window.fetch(url, fetchOptions);
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return response.json();
+        } catch (error) {
+          if (error?.name === "AbortError") {
+            throw new Error(`${url} timed out after ${timeoutMs}ms`);
+          }
+          throw error;
+        } finally {
+          if (timeoutId) window.clearTimeout(timeoutId);
+        }
       }
 
       return new Promise((resolve, reject) => {
         const request = new XMLHttpRequest();
         request.open("GET", url, true);
         request.overrideMimeType("application/json");
+        if (timeoutMs > 0) request.timeout = timeoutMs;
         request.onload = () => {
           if (request.status >= 200 && request.status < 300) {
             try {
@@ -4042,6 +5240,7 @@
           }
           reject(new Error(`HTTP ${request.status}`));
         };
+        request.ontimeout = () => reject(new Error(`${url} timed out after ${timeoutMs}ms`));
         request.onerror = () => reject(new Error("Could not load JSON"));
         request.send();
       });
@@ -4049,15 +5248,86 @@
 
     async function loadAgents() {
       try {
-        return await loadJson("/viewer/agents?agentName=Task%20board%20viewer");
+        return await loadJson("/viewer/agents?agentName=Task%20board%20viewer", { timeoutMs: 1500 });
       } catch (error) {
+        logOptionalLoadFailure("agents", error);
         return fallbackAgents;
+      }
+    }
+
+    async function loadAgentLogs() {
+      return normalizeAgentLogsPayload(await loadJson(`/viewer/agent-logs?agentName=Task%20board%20viewer&limit=${AGENT_LOG_LOAD_LIMIT}`, { timeoutMs: 3000 }));
+    }
+
+    async function loadAgentLogContent(fileName) {
+      const url = `/viewer/agent-log-content?agentName=Task%20board%20viewer&fileName=${encodeURIComponent(fileName)}`;
+      if (typeof window.fetch === "function") {
+        const response = await window.fetch(url, { cache: "no-store" });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const error = new Error(data.error || `HTTP ${response.status}`);
+          error.status = response.status;
+          throw error;
+        }
+        return data;
+      }
+      return loadJson(url);
+    }
+
+    async function refreshAgentLogBrowser(options = {}) {
+      if (agentLogsLoading) return;
+      agentLogsLoading = true;
+      agentLogsError = "";
+      renderAgentLogsPanel();
+      try {
+        currentAgentLogs = await loadAgentLogs();
+        agentLogsLoaded = true;
+        const identities = buildAgentLogIdentities(currentAgentLogs);
+        if (selectedAgentLogKey && !identities.some((identity) => identity.key === selectedAgentLogKey)) {
+          selectedAgentLogKey = "";
+        }
+        if (selectedAgentLogFileName) {
+          const stillPresent = currentAgentLogs.logs.some((log) => log.fileName === selectedAgentLogFileName);
+          if (!stillPresent && !selectedAgentLogDetail) {
+            selectedAgentLogError = "Log file is no longer listed. Refresh or choose another log.";
+          }
+        }
+        if (!options.silent) {
+          statusEl.textContent = `Loaded ${currentAgentLogs.logs.length} agent logs.`;
+        }
+      } catch (error) {
+        agentLogsError = error.message || "Could not load agent logs.";
+        if (!options.silent) statusEl.textContent = `Agent logs failed: ${agentLogsError}`;
+      } finally {
+        agentLogsLoading = false;
+        renderAgentLogsPanel();
+      }
+    }
+
+    async function openAgentLogFile(fileName) {
+      selectedAgentLogFileName = String(fileName || "").trim();
+      if (!selectedAgentLogFileName) return;
+      selectedAgentLogDetail = null;
+      selectedAgentLogError = "";
+      selectedAgentLogLoading = true;
+      renderAgentLogsPanel();
+      try {
+        selectedAgentLogDetail = await loadAgentLogContent(selectedAgentLogFileName);
+        statusEl.textContent = `Opened ${selectedAgentLogFileName}.`;
+      } catch (error) {
+        selectedAgentLogDetail = null;
+        selectedAgentLogError = error.status === 404
+          ? "That log file is no longer available. Refresh the list or choose another log."
+          : (error.message || "Could not read log file.");
+      } finally {
+        selectedAgentLogLoading = false;
+        renderAgentLogsPanel();
       }
     }
 
     async function loadAgentSchema() {
       try {
-        const schema = await loadJson("/viewer/agent-schema");
+        const schema = await loadJson("/viewer/agent-schema", { timeoutMs: 1500 });
         if (schema && typeof schema === "object") {
           currentAgentSchema = {
             modelBackground: schema.modelBackground || fallbackAgentSchema.modelBackground,
@@ -4067,6 +5337,7 @@
         }
         return currentAgentSchema;
       } catch (error) {
+        logOptionalLoadFailure("agent schema", error);
         currentAgentSchema = fallbackAgentSchema;
         return currentAgentSchema;
       }
@@ -4074,10 +5345,11 @@
 
     async function loadDispatchSettings() {
       try {
-        const settings = await loadJson("/viewer/dispatch-settings");
+        const settings = await loadJson("/viewer/dispatch-settings", { timeoutMs: 1500 });
         currentDispatchSettings = settings && typeof settings === "object" ? settings : fallbackDispatchSettings;
         return currentDispatchSettings;
       } catch (error) {
+        logOptionalLoadFailure("dispatch settings", error);
         currentDispatchSettings = fallbackDispatchSettings;
         return currentDispatchSettings;
       }
@@ -4085,16 +5357,47 @@
 
     async function loadPauseStatus() {
       try {
-        return normalizePauseStatus(await loadJson("/viewer/pause-status?agentName=Task%20board%20viewer"));
+        return normalizePauseStatus(await loadJson("/viewer/pause-status?agentName=Task%20board%20viewer", { timeoutMs: 1500 }));
       } catch (error) {
+        logOptionalLoadFailure("pause status", error);
         return normalizePauseStatus(currentDispatchSettings?.pause || fallbackPauseStatus);
       }
+    }
+
+    async function loadSystemStatus() {
+      try {
+        const status = normalizeSystemStatus(await loadJson("/viewer/system-status?agentName=Task%20board%20viewer", { timeoutMs: 2500 }));
+        systemStatusError = "";
+        currentSystemStatus = status;
+        return status;
+      } catch (error) {
+        logOptionalLoadFailure("system status", error);
+        systemStatusError = `System status unavailable: ${error.message || error}`;
+        currentSystemStatus = normalizeSystemStatus({
+          ...fallbackSystemStatus,
+          status: "watch",
+          warnings: [systemStatusError]
+        });
+        return currentSystemStatus;
+      }
+    }
+
+    async function refreshSystemStatus(options = {}) {
+      const status = await loadSystemStatus();
+      renderSystemOverview(status);
+      if (!options.silent && statusEl) {
+        statusEl.textContent = status.ok
+          ? "System status refreshed."
+          : `System status: ${systemStatusLabel(status.status)}.`;
+      }
+      return status;
     }
 
     async function refreshPauseStatus(options = {}) {
       const previousPaused = currentPauseStatus.isPaused;
       currentPauseStatus = await loadPauseStatus();
       renderPauseControl();
+      refreshSystemStatus({ silent: true }).catch(() => {});
       if (previousPaused !== currentPauseStatus.isPaused) {
         renderBoard(currentBoard, currentSourceLabel);
       }
@@ -4161,6 +5464,7 @@
       };
       const settings = await postJson("/viewer/dispatch-settings", payload);
       currentDispatchSettings = settings && typeof settings === "object" ? settings : currentDispatchSettings;
+      await refreshSystemStatus({ silent: true }).catch(() => {});
       renderBoard(currentBoard, currentSourceLabel);
       return currentDispatchSettings;
     }
@@ -4184,6 +5488,7 @@
       try {
         const settings = await postJson("/viewer/dispatch-settings", payload);
         currentDispatchSettings = settings && typeof settings === "object" ? settings : currentDispatchSettings;
+        await refreshSystemStatus({ silent: true }).catch(() => {});
         renderSettingsPanel();
         return currentDispatchSettings;
       } finally {
@@ -4242,6 +5547,214 @@
       }
     }
 
+    // --- Handoff intake lane ---
+
+    async function loadHandoffs() {
+      try {
+        const data = await loadJson("/viewer/handoffs?agentName=Task%20board%20viewer", { timeoutMs: 2500 });
+        currentHandoffs = Array.isArray(data?.handoffs)
+          ? data.handoffs.filter((handoff) => handoff && typeof handoff === "object")
+          : [];
+      } catch (error) {
+        logOptionalLoadFailure("handoffs", error);
+        currentHandoffs = [];
+      }
+      try {
+        renderHandoffIntake();
+      } catch (error) {
+        console.error("Task board viewer handoff intake failed", error);
+        statusEl.textContent = `Handoff intake failed: ${error.message || error}`;
+      }
+      return currentHandoffs;
+    }
+
+    function handoffStatusLabel(status) {
+      const s = String(status || "").toLowerCase();
+      const labels = {
+        "new": "New",
+        "queued": "Queued",
+        "planner-working": "Planning",
+        "processed": "Processed",
+        "skipped": "No action",
+        "failed": "Failed",
+      };
+      return labels[s] || s || "Unknown";
+    }
+
+    function handoffCardHtml(handoff) {
+      const st = handoff.status || {};
+      const status = String(st.status || "new").toLowerCase();
+      const filename = escapeText(st.filename || handoff.filename || "");
+      const source = escapeText(st.source || "");
+      const path = escapeText(st.path || handoff.path || "");
+      const modifiedAt = escapeText(handoff.modifiedAt || "");
+      const createdAt = escapeText(handoff.createdAt || st.createdAt || "");
+      const processedAt = escapeText(st.processedAt || "");
+      const model = escapeText(st.model || "");
+      const personalName = escapeText(st.personalName || "");
+      const processId = escapeText(st.processId || "");
+      const processState = escapeText(st.processState || "");
+      const latestStatus = escapeText(st.latestStatus || "");
+      const error = escapeText(st.error || "");
+      const taskIds = Array.isArray(st.taskIds) ? st.taskIds : [];
+      const tasks = Array.isArray(st.tasks) ? st.tasks : [];
+      const logPath = escapeText(st.logPath || "");
+
+      const viewButton = `<button type="button" data-action="view" data-source="${source}" data-filename="${filename}">View</button>`;
+      const logButton = logPath ? `<button type="button" data-action="view-log" data-log="${logPath}">Log</button>` : "";
+      let actions = viewButton;
+      if (status === "new") {
+        actions += `<button type="button" data-action="process" data-source="${source}" data-filename="${filename}">Process</button>
+          <button type="button" data-action="ignore" data-source="${source}" data-filename="${filename}">Ignore</button>`;
+      } else if (status === "failed") {
+        actions += `<button type="button" data-action="retry" data-source="${source}" data-filename="${filename}">Retry</button>
+          <button type="button" data-action="ignore" data-source="${source}" data-filename="${filename}">Ignore</button>`;
+      }
+      actions += logButton;
+
+      let tasksHtml = "";
+      if (tasks.length > 0) {
+        tasksHtml = `<div class="handoff-card-tasks">Tasks: ${tasks.map(task => {
+          const taskId = escapeText(task.taskId || "");
+          const taskTitle = escapeText(task.title || "");
+          return `<span class="handoff-card-task-ref">${taskId}${taskTitle ? " - " + taskTitle : ""}</span>`;
+        }).join(", ")}</div>`;
+      } else if (taskIds.length > 0) {
+        tasksHtml = `<div class="handoff-card-tasks">Tasks: ${taskIds.map(id => `<span class="handoff-card-task-ref">${escapeText(id)}</span>`).join(", ")}</div>`;
+      }
+
+      let errorHtml = "";
+      if (error && status === "failed") {
+        errorHtml = `<div class="handoff-card-error">${error}</div>`;
+      }
+
+      let agentInfo = "";
+      if (model || personalName) {
+        const runParts = [
+          personalName ? personalName : "",
+          model ? model : "",
+          processId ? `PID ${processId}` : "",
+          processState ? `PID ${processState}` : "",
+        ].filter(Boolean);
+        agentInfo = `<span>${runParts.join(" | ")}</span>`;
+      }
+
+      const timeParts = [
+        createdAt ? `Created ${createdAt}` : "",
+        modifiedAt ? `Modified ${modifiedAt}` : "",
+        processedAt ? `Processed ${processedAt}` : "",
+      ].filter(Boolean);
+      const statusLine = latestStatus ? `<div class="handoff-card-statusline">${latestStatus}</div>` : "";
+
+      return `<div class="handoff-card">
+        <div class="handoff-card-status" data-status="${escapeText(status)}"></div>
+        <div class="handoff-card-body">
+          <div class="handoff-card-title">${filename}</div>
+          <div class="handoff-card-meta">
+            <span class="handoff-badge" data-status="${escapeText(status)}">${handoffStatusLabel(status)}</span>
+            ${source ? `<span>${source}</span>` : ""}
+            ${path ? `<span>${path}</span>` : ""}
+            ${timeParts.length ? `<span>${timeParts.join(" | ")}</span>` : ""}
+            ${agentInfo}
+          </div>
+          ${statusLine}
+          ${tasksHtml}
+          ${errorHtml}
+        </div>
+        <div class="handoff-card-actions">${actions}</div>
+      </div>`;
+    }
+
+    function renderHandoffIntake() {
+      const body = document.getElementById("handoffIntakeBody");
+      const countEl = document.getElementById("handoffCount");
+      const collapseBtn = document.getElementById("handoffCollapseButton");
+      const emptyEl = document.getElementById("handoffEmpty");
+      if (!body) return;
+
+      const total = currentHandoffs.length;
+      const newCount = currentHandoffs.filter(h => {
+        const s = String(h?.status?.status || "new").toLowerCase();
+        return s === "new" || s === "queued" || s === "failed";
+      }).length;
+      if (countEl) {
+        countEl.textContent = total > 0 ? (newCount > 0 ? `${newCount}/${total}` : `${total}`) : "0";
+      }
+
+      if (handoffIntakeCollapsed) {
+        body.classList.add("is-collapsed");
+        if (collapseBtn) collapseBtn.textContent = "Show";
+        return;
+      }
+      body.classList.remove("is-collapsed");
+      if (collapseBtn) collapseBtn.textContent = "Hide";
+
+      if (total === 0) {
+        body.innerHTML = `<div class="handoff-intake-empty">No handoff files found. Upstream auditor handoffs will appear here.</div>`;
+        return;
+      }
+
+      body.innerHTML = currentHandoffs.map(handoffCardHtml).join("");
+    }
+
+    function toggleHandoffIntake(forceState) {
+      if (typeof forceState === "boolean") {
+        handoffIntakeCollapsed = forceState;
+      } else {
+        handoffIntakeCollapsed = !handoffIntakeCollapsed;
+      }
+      renderHandoffIntake();
+    }
+
+    async function runHandoffAction(action, source, filename) {
+      if (handoffActionInFlight) return;
+      handoffActionInFlight = true;
+      const endpoints = {
+        "process": "/viewer/process-handoff",
+        "retry": "/viewer/retry-handoff",
+        "ignore": "/viewer/ignore-handoff",
+      };
+      const endpoint = endpoints[action];
+      if (!endpoint) { handoffActionInFlight = false; return; }
+
+      statusEl.textContent = action === "process" ? "Processing handoff..."
+        : action === "retry" ? "Retrying handoff..."
+        : "Marking handoff as ignored...";
+      try {
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source, filename, agentName: "Task board viewer" }),
+        });
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          statusEl.textContent = `Handoff action failed: ${result.error || response.statusText}`;
+        } else {
+          statusEl.textContent = `Handoff ${action} complete.`;
+        }
+        await loadHandoffs();
+        await refreshSystemStatus({ silent: true }).catch(() => {});
+      } catch (error) {
+        statusEl.textContent = `Handoff action failed: ${error.message}`;
+      } finally {
+        handoffActionInFlight = false;
+      }
+    }
+
+    async function viewHandoffContent(source, filename) {
+      try {
+        const data = await loadJson(`/viewer/handoff-content?source=${encodeURIComponent(source)}&filename=${encodeURIComponent(filename)}&agentName=Task%20board%20viewer`);
+        const content = data.content || "(empty)";
+        const w = window.open("", "_blank", "width=800,height=600");
+        if (w) {
+          w.document.write(`<html><head><title>${escapeText(filename)}</title><style>body{font-family:monospace;white-space:pre-wrap;padding:20px;font-size:13px;}</style></head><body>${escapeText(content)}</body></html>`);
+          w.document.close();
+        }
+      } catch (error) {
+        statusEl.textContent = `Could not load handoff: ${error.message}`;
+      }
+    }
+
     function renderSettingsPanel() {
       const commands = commandSettings();
       settingsEl.classList.toggle("is-open", settingsPanelOpen);
@@ -4277,6 +5790,169 @@
               <button class="settings-save-button" type="submit">Save</button>
             </div>
           </form>
+        </div>
+      `;
+    }
+
+    function agentLogAgentButton(identity) {
+      const selected = selectedAgentLogKey === identity.key;
+      const metaParts = [
+        identity.statuses.length ? `Status: ${identity.statuses.join(", ")}` : "",
+        identity.tasks.length ? `Tasks: ${identity.tasks.join(", ")}` : "",
+        identity.sources.length ? `Sources: ${identity.sources.join(", ")}` : "",
+        identity.latestLogAt ? `Latest: ${formatDateTime(identity.latestLogAt)}` : "",
+        identity.latestLogFileName ? identity.latestLogFileName : ""
+      ].filter(Boolean);
+      return `
+        <button class="agent-log-agent${selected ? " is-selected" : ""}" type="button" data-agent-log-agent="${escapeText(identity.key)}" aria-pressed="${selected ? "true" : "false"}">
+          <span class="agent-log-agent-main">
+            <span class="agent-log-name">${escapeText(agentLogDisplayName(identity))}</span>
+            <span class="agent-log-count">${escapeText(identity.logCount)}</span>
+          </span>
+          <span class="agent-log-meta">${escapeText(metaParts.join(" | ") || "No matching log files yet")}</span>
+        </button>
+      `;
+    }
+
+    function agentLogFileButton(log) {
+      const selected = selectedAgentLogFileName === log.fileName;
+      const metaParts = [
+        agentLogDisplayName(log),
+        log.timestamp ? `Spawned ${formatDateTime(log.timestamp)}` : "",
+        log.modifiedAt ? `Modified ${formatDateTime(log.modifiedAt)}` : "",
+        formatBytes(log.size)
+      ].filter(Boolean);
+      return `
+        <button class="agent-log-file${selected ? " is-selected" : ""}" type="button" data-agent-log-file="${escapeText(log.fileName)}" aria-pressed="${selected ? "true" : "false"}">
+          <span class="agent-log-file-main">
+            <span class="agent-log-file-name">${escapeText(log.fileName || "Unnamed log")}</span>
+          </span>
+          <span class="agent-log-meta">${escapeText(metaParts.join(" | "))}</span>
+        </button>
+      `;
+    }
+
+    function agentLogDetailMarkup() {
+      if (selectedAgentLogLoading) {
+        return `<div class="agent-log-state">Loading log content...</div>`;
+      }
+      if (selectedAgentLogError) {
+        return `<div class="agent-log-state is-error">${escapeText(selectedAgentLogError)}</div>`;
+      }
+      if (!selectedAgentLogFileName) {
+        return `<div class="agent-log-state">Select a log to read its content.</div>`;
+      }
+      const detail = selectedAgentLogDetail && typeof selectedAgentLogDetail === "object" ? selectedAgentLogDetail : null;
+      if (!detail) {
+        return `<div class="agent-log-state">No log content loaded.</div>`;
+      }
+      const content = String(detail.content || "");
+      const metaItems = [
+        ["File", detail.fileName || selectedAgentLogFileName],
+        ["Agent", agentLogDisplayName(detail)],
+        ["Role / model", `${normalizeAgentLogPart(detail.role)} / ${normalizeAgentLogPart(detail.model)}`],
+        ["Spawned", detail.timestamp ? formatDateTime(detail.timestamp) : "Unknown"],
+        ["Modified", detail.modifiedAt ? formatDateTime(detail.modifiedAt) : "Unknown"],
+        ["Size", formatBytes(detail.size)]
+      ];
+      return `
+        <div class="agent-log-detail">
+          <div class="agent-log-detail-meta">
+            ${metaItems.map(([label, value]) => `
+              <div><strong>${escapeText(label)}</strong>${escapeText(value)}</div>
+            `).join("")}
+          </div>
+          <pre class="agent-log-content">${escapeText(content || "(empty log file)")}</pre>
+        </div>
+      `;
+    }
+
+    function renderAgentLogsPanel() {
+      if (!agentLogsEl) return;
+      const data = normalizeAgentLogsPayload(currentAgentLogs);
+      const logs = data.logs;
+      const identities = buildAgentLogIdentities(data);
+      const selectedIdentity = selectedAgentLogIdentity();
+      const visibleLogs = visibleAgentLogFiles();
+      const displayLogs = visibleLogs.slice(0, AGENT_LOG_RENDER_LIMIT);
+      const hiddenVisibleCount = Math.max(0, visibleLogs.length - displayLogs.length);
+      const loadedSummary = data.truncated
+        ? `Showing newest ${logs.length} of ${data.totalLogCount} readable spawned-agent log files.`
+        : `${logs.length} readable spawned-agent log files.`;
+      const logScope = selectedIdentity ? agentLogDisplayName(selectedIdentity) : "All agents";
+      const tabLabel = agentLogsTabLabel(data);
+
+      agentLogsEl.classList.toggle("is-open", agentLogsPanelOpen);
+      if (!agentLogsPanelOpen) {
+        agentLogsEl.innerHTML = `
+          <button class="agent-logs-tab" type="button" data-agent-logs-toggle aria-expanded="false" aria-controls="agent-logs-panel">
+            <span class="dot" aria-hidden="true"></span>
+            <span>${escapeText(tabLabel)}</span>
+          </button>
+        `;
+        return;
+      }
+
+      const agentList = identities.length
+        ? identities.map(agentLogAgentButton).join("")
+        : `<div class="agent-log-state">No discovered agents or log metadata yet.</div>`;
+      let logList = "";
+      if (agentLogsLoading && !agentLogsLoaded) {
+        logList = `<div class="agent-log-state">Loading agent logs...</div>`;
+      } else if (agentLogsError) {
+        logList = `<div class="agent-log-state is-error">${escapeText(agentLogsError)}</div>`;
+      } else if (!logs.length) {
+        logList = `<div class="agent-log-state">No spawned-agent log files found.</div>`;
+      } else if (!visibleLogs.length) {
+        logList = `<div class="agent-log-state">No log files match the selected agent.</div>`;
+      } else {
+        logList = displayLogs.map(agentLogFileButton).join("");
+        if (hiddenVisibleCount > 0) {
+          logList += `<div class="agent-log-state">Showing newest ${displayLogs.length} matching logs. ${hiddenVisibleCount} older matching logs are hidden to keep the viewer responsive.</div>`;
+        }
+      }
+
+      agentLogsEl.innerHTML = `
+        <button class="agent-logs-tab" type="button" data-agent-logs-toggle aria-expanded="${agentLogsPanelOpen ? "true" : "false"}" aria-controls="agent-logs-panel">
+          <span class="dot" aria-hidden="true"></span>
+          <span>${escapeText(tabLabel)}</span>
+        </button>
+        <div class="agent-logs-tray" id="agent-logs-panel" aria-hidden="${agentLogsPanelOpen ? "false" : "true"}">
+          <section class="agent-logs-panel">
+            <div class="agent-logs-header">
+              <div>
+                <h2>Agent Logs</h2>
+                <span class="agent-logs-subtitle">${escapeText(logs.length ? `${loadedSummary} Showing ${logScope}.` : "Browse historical spawned-agent logs when files are available.")}</span>
+              </div>
+              <div class="agent-logs-actions">
+                <button class="agent-logs-refresh" type="button" data-agent-logs-refresh ${agentLogsLoading ? "disabled" : ""}>${agentLogsLoading ? "Refreshing..." : "Refresh"}</button>
+                <button class="icon-button" type="button" data-agent-logs-close aria-label="Close agent logs" title="Close agent logs">&times;</button>
+              </div>
+            </div>
+            <div class="agent-logs-grid">
+              <section class="agent-logs-column" aria-label="Discovered agents">
+                <div class="agent-logs-column-header">
+                  <h3>Agents</h3>
+                  ${selectedAgentLogKey ? `<button class="agent-logs-clear" type="button" data-agent-log-clear>All logs</button>` : ""}
+                </div>
+                <div class="agent-logs-scroll">${agentList}</div>
+              </section>
+              <section class="agent-logs-column" aria-label="Log files">
+                <div class="agent-logs-column-header">
+                  <h3>${escapeText(logScope)} logs</h3>
+                  <span class="agent-log-meta">${escapeText(`${displayLogs.length}${hiddenVisibleCount ? ` of ${visibleLogs.length}` : ""} shown`)}</span>
+                </div>
+                <div class="agent-logs-scroll">${logList}</div>
+              </section>
+              <section class="agent-logs-column" aria-label="Log detail">
+                <div class="agent-logs-column-header">
+                  <h3>Detail</h3>
+                  <span class="agent-log-meta">${escapeText(selectedAgentLogFileName || "No log selected")}</span>
+                </div>
+                <div class="agent-logs-scroll">${agentLogDetailMarkup()}</div>
+              </section>
+            </div>
+          </section>
         </div>
       `;
     }
@@ -4349,6 +6025,10 @@
         const processText = result?.processId ? ` PID: ${result.processId}.` : "";
         const logText = result?.logPath ? ` Log: ${result.logPath}.` : "";
         statusEl.textContent = `Spawned ${roleLabel} in ${toolLabel} non-interactively.${processText}${logText} Start phrase: "${phrase}"`;
+        await Promise.allSettled([
+          refreshAgentLogs(),
+          refreshSystemStatus({ silent: true })
+        ]);
       } catch (error) {
         if (error.status === 423 || error.payload?.paused) {
           await refreshPauseStatus({ silent: true }).catch(() => {});
@@ -4369,10 +6049,12 @@
           taskId,
           archivedBy: "Task board viewer"
         });
-        const [board, agents] = await Promise.all([
+        const [board, agents, systemStatus] = await Promise.all([
           loadJson("board.json"),
-          loadAgents()
+          loadAgents(),
+          loadSystemStatus()
         ]);
+        currentSystemStatus = systemStatus;
         collapsedTasks.delete(taskId);
         renderBoard(board, "board.json", agents);
         statusEl.textContent = `Archived ${taskId} and updated board.json.`;
@@ -4391,10 +6073,12 @@
             ? "Reviewer agent was killed before finishing."
             : "Worker agent was killed before finishing."
         });
-        const [board, agents] = await Promise.all([
+        const [board, agents, systemStatus] = await Promise.all([
           loadJson("board.json"),
-          loadAgents()
+          loadAgents(),
+          loadSystemStatus()
         ]);
+        currentSystemStatus = systemStatus;
         collapsedTasks.delete(taskId);
         renderBoard(board, "board.json", agents);
         statusEl.textContent = source === "reviewing"
@@ -4419,10 +6103,12 @@
         if (processId) payload.processId = Number(processId);
         if (taskId) payload.taskId = taskId;
         const result = await postJson("/viewer/terminate-agent", payload);
-        const [board, agents] = await Promise.all([
+        const [board, agents, systemStatus] = await Promise.all([
           loadJson("board.json"),
-          loadAgents()
+          loadAgents(),
+          loadSystemStatus()
         ]);
+        currentSystemStatus = systemStatus;
         if (taskId) collapsedTasks.delete(taskId);
         renderBoard(board, "board.json", agents);
         const msg = result?.message || `Terminated agent ${label}.`;
@@ -4445,10 +6131,12 @@
           feedback,
           returnedBy: "owner via task board viewer"
         });
-        const [board, agents] = await Promise.all([
+        const [board, agents, systemStatus] = await Promise.all([
           loadJson("board.json"),
-          loadAgents()
+          loadAgents(),
+          loadSystemStatus()
         ]);
+        currentSystemStatus = systemStatus;
         collapsedTasks.delete(taskId);
         renderBoard(board, "board.json", agents);
         statusEl.textContent = `Moved ${taskId} back to Review with feedback.`;
@@ -4489,6 +6177,32 @@
       `;
     }
 
+    function reportOptionalPanelError(label, error) {
+      console.error(`Task board viewer ${label} panel failed`, error);
+      if (statusEl) {
+        statusEl.textContent = `${label} panel failed: ${error?.message || error}`;
+      }
+    }
+
+    function renderAgentLogsErrorPanel(error) {
+      if (!agentLogsEl) return;
+      const message = error?.message || "Agent Logs could not render.";
+      agentLogsEl.classList.toggle("is-open", agentLogsPanelOpen);
+      agentLogsEl.innerHTML = `
+        <button class="agent-logs-tab" type="button" data-agent-logs-toggle aria-expanded="${agentLogsPanelOpen ? "true" : "false"}" aria-controls="agent-logs-panel">
+          <span class="dot" aria-hidden="true"></span>
+          <span>Agent Logs</span>
+        </button>
+        ${agentLogsPanelOpen ? `
+          <div class="agent-logs-tray" id="agent-logs-panel" aria-hidden="false">
+            <section class="agent-logs-panel">
+              <div class="agent-log-state is-error">${escapeText(message)}</div>
+            </section>
+          </div>
+        ` : ""}
+      `;
+    }
+
     function renderBoard(board, sourceLabel, agentsState = currentAgents) {
       syncViewportClientWidth();
       const normalized = normalizeBoard(board);
@@ -4499,6 +6213,7 @@
       boardNameEl.textContent = normalized.boardName || "Project Task Board";
       updatedAtEl.textContent = `Updated: ${normalized.updatedAt || "unknown"}`;
       sourceNameEl.textContent = `Source: ${sourceLabel}`;
+      renderSystemOverview(currentSystemStatus);
 
       boardEl.classList.toggle("is-done-focus", doneFocusOpen);
       if (doneFocusOpen) {
@@ -4542,7 +6257,17 @@
           })}
         </div>
       `;
-      renderSettingsPanel();
+      try {
+        renderSettingsPanel();
+      } catch (error) {
+        reportOptionalPanelError("Settings", error);
+      }
+      try {
+        renderAgentLogsPanel();
+      } catch (error) {
+        reportOptionalPanelError("Agent Logs", error);
+        renderAgentLogsErrorPanel(error);
+      }
       applyPinnedAgentRunState();
       syncViewportClientWidth();
     }
@@ -4554,6 +6279,18 @@
         archiveTrayOpen = !archiveTrayOpen;
       }
       renderBoard(currentBoard, currentSourceLabel);
+    }
+
+    function toggleAgentLogsPanel(forceOpen) {
+      if (typeof forceOpen === "boolean") {
+        agentLogsPanelOpen = forceOpen;
+      } else {
+        agentLogsPanelOpen = !agentLogsPanelOpen;
+      }
+      renderAgentLogsPanel();
+      if (agentLogsPanelOpen && !agentLogsLoading) {
+        refreshAgentLogBrowser({ silent: true }).catch(() => {});
+      }
     }
 
     function toggleWorkflowPanel(forceOpen) {
@@ -4763,6 +6500,51 @@
       returnTaskToReview(taskId, feedback);
     });
 
+    agentLogsEl.addEventListener("click", (event) => {
+      const toggleButton = event.target.closest("[data-agent-logs-toggle]");
+      if (toggleButton) {
+        toggleAgentLogsPanel();
+        return;
+      }
+
+      const closeButton = event.target.closest("[data-agent-logs-close]");
+      if (closeButton) {
+        toggleAgentLogsPanel(false);
+        return;
+      }
+
+      const refreshButton = event.target.closest("[data-agent-logs-refresh]");
+      if (refreshButton) {
+        refreshAgentLogBrowser().catch(() => {});
+        return;
+      }
+
+      const clearButton = event.target.closest("[data-agent-log-clear]");
+      if (clearButton) {
+        selectedAgentLogKey = "";
+        renderAgentLogsPanel();
+        return;
+      }
+
+      const agentButton = event.target.closest("[data-agent-log-agent]");
+      if (agentButton) {
+        selectedAgentLogKey = agentButton.dataset.agentLogAgent || "";
+        const visibleFiles = visibleAgentLogFiles().map((log) => log.fileName);
+        if (selectedAgentLogFileName && !visibleFiles.includes(selectedAgentLogFileName)) {
+          selectedAgentLogFileName = "";
+          selectedAgentLogDetail = null;
+          selectedAgentLogError = "";
+        }
+        renderAgentLogsPanel();
+        return;
+      }
+
+      const logButton = event.target.closest("[data-agent-log-file]");
+      if (logButton) {
+        openAgentLogFile(logButton.dataset.agentLogFile).catch(() => {});
+      }
+    });
+
     settingsEl.addEventListener("click", (event) => {
       const toggleButton = event.target.closest("[data-settings-toggle]");
       if (toggleButton) {
@@ -4853,17 +6635,20 @@
       dock.setAttribute("aria-label", "Planner chat");
       dock.innerHTML = `
         <div class="planner-chat-header">
-          <div style="flex:1 1 auto; min-width:0;">
+          <div class="planner-chat-title">
             <h3 data-planner-chat-title>Planner chat</h3>
             <span class="planner-chat-sub" data-planner-chat-sub>Send a request directly to the Planner agent</span>
           </div>
-          <select class="planner-chat-tool" data-planner-chat-tool aria-label="Planner model">
-            <option value="claude">Claude</option>
-            <option value="codex">Codex</option>
-            <option value="qwen">Qwen</option>
-          </select>
-          <button class="planner-chat-iconbtn" type="button" data-planner-chat-details title="Open planner details">&#9432;</button>
-          <button class="planner-chat-iconbtn" type="button" data-planner-chat-close title="Close chat" aria-label="Close planner chat">&times;</button>
+          <div class="planner-chat-controls">
+            <select class="planner-chat-tool" data-planner-chat-tool aria-label="Planner model" title="Model for this conversation">
+              <option value="claude">Claude</option>
+              <option value="codex">Codex</option>
+              <option value="qwen">Qwen</option>
+            </select>
+            <button class="planner-chat-iconbtn planner-chat-newbtn" type="button" data-planner-chat-new title="Start a new chat and clear this Planner conversation" aria-label="Start a new Planner chat and clear this conversation">New chat</button>
+            <button class="planner-chat-iconbtn" type="button" data-planner-chat-details title="Open planner details" aria-label="Open planner details">&#9432;</button>
+            <button class="planner-chat-iconbtn" type="button" data-planner-chat-close title="Close chat" aria-label="Close planner chat">&times;</button>
+          </div>
         </div>
         <div class="planner-chat-body" data-planner-chat-body></div>
         <div class="planner-chat-footer">
@@ -4884,11 +6669,22 @@
       plannerChat.subEl = dock.querySelector("[data-planner-chat-sub]");
 
       dock.querySelector("[data-planner-chat-close]").addEventListener("click", closePlannerChat);
+      dock.querySelector("[data-planner-chat-new]").addEventListener("click", newPlannerConversation);
       dock.querySelector("[data-planner-chat-details]").addEventListener("click", () => {
         if (plannerChat.detailKey) {
           workflowDetailKey = plannerChat.detailKey;
           workflowPanelOpen = true;
           renderBoard(currentBoard, currentSourceLabel);
+        }
+      });
+      plannerChat.bodyEl.addEventListener("click", (event) => {
+        const toggle = event.target.closest("[data-planner-diagnostics-toggle]");
+        if (toggle) {
+          const diagEl = toggle.parentElement.querySelector(".planner-diagnostics");
+          if (diagEl) {
+            const isOpen = diagEl.classList.toggle("is-open");
+            toggle.textContent = isOpen ? "Hide diagnostics" : "Show diagnostics";
+          }
         }
       });
       plannerChat.sendEl.addEventListener("click", sendPlannerMessage);
@@ -4906,6 +6702,7 @@
       const label = (opts && opts.label) || "Planner";
       plannerChat.titleEl.textContent = `${label} chat`;
       plannerChat.open = true;
+      plannerChat.lastSignature = "";
       plannerChat.dock.classList.add("is-open");
       pollPlannerChat();
       if (plannerChat.pollTimer) window.clearInterval(plannerChat.pollTimer);
@@ -4922,18 +6719,35 @@
       }
     }
 
+    function applyPlannerChatControls(list) {
+      const started = list.some((m) => m.role === "planner");
+      const running = list.some((m) => m.role === "planner" && m.status === "running");
+      if (plannerChat.toolEl) {
+        plannerChat.toolEl.disabled = started;
+        plannerChat.toolEl.title = started
+          ? "Model is locked for this conversation — start a new chat to switch"
+          : "Model for this conversation";
+      }
+      if (plannerChat.sendEl && !plannerChat.sending) {
+        plannerChat.sendEl.disabled = running;
+        plannerChat.sendEl.textContent = running ? "Working..." : "Send";
+      }
+    }
+
     function renderPlannerMessages(messages) {
       const list = Array.isArray(messages) ? messages : [];
-      const signature = JSON.stringify(list.map((m) => [m.id, m.status, (m.output || "").length, (m.text || "").length]));
+      applyPlannerChatControls(list);
+      const signature = JSON.stringify(list.map((m) => [m.id, m.status, (m.result || m.output || "").length, (m.text || "").length]));
       if (signature === plannerChat.lastSignature) return;
       plannerChat.lastSignature = signature;
 
       const body = plannerChat.bodyEl;
       if (!body) return;
       const nearBottom = body.scrollHeight - body.scrollTop - body.clientHeight < 80;
+      plannerChat.hasMessages = list.length > 0;
 
       if (!list.length) {
-        body.innerHTML = `<div class="planner-chat-empty">No messages yet. Send a request and the Planner will turn it into todo tasks on the board.</div>`;
+        body.innerHTML = `<div class="planner-chat-empty">No messages yet. Send a request and the Planner will reply here and turn agreed work into todo tasks on the board.</div>`;
         return;
       }
 
@@ -4942,15 +6756,39 @@
           return `<div class="planner-msg owner">${escapeText(msg.text || "")}</div>`;
         }
         const running = msg.status === "running";
-        const statusText = running ? "Planner working..." : "Planner";
-        const output = msg.output ? escapeText(msg.output) : (running ? "Starting up..." : "(no output captured)");
-        return `
-          <div class="planner-msg planner">
-            <span class="planner-msg-meta"><span class="planner-msg-status ${running ? "running" : ""}">${escapeText(statusText)}${msg.tool ? " &middot; " + escapeText(msg.tool) : ""}</span></span>${output}
-          </div>`;
+        const statusText = running ? "Planner is thinking" : (msg.isError ? "Planner — error" : "Planner");
+        const metaHtml = `<span class="planner-msg-meta"><span class="planner-msg-status ${running ? "running" : ""}">${escapeText(statusText)}${msg.tool ? " &middot; " + escapeText(msg.tool) : ""}</span></span>`;
+        if (running) {
+          return `<div class="planner-msg planner">${metaHtml}<span class="planner-result">Thinking&hellip;</span></div>`;
+        }
+        const resultText = msg.result || "";
+        const rawOutput = msg.output || "";
+        const displayText = resultText || rawOutput || "(no reply captured)";
+        let diagHtml = "";
+        if (rawOutput && rawOutput !== resultText) {
+          diagHtml = `<button class="planner-diagnostics-toggle" type="button" data-planner-diagnostics-toggle>Show diagnostics</button><div class="planner-diagnostics"><pre>${escapeText(rawOutput)}</pre></div>`;
+        }
+        return `<div class="planner-msg planner">${metaHtml}<span class="planner-result">${escapeText(displayText)}</span>${diagHtml}</div>`;
       }).join("");
 
       if (nearBottom) body.scrollTop = body.scrollHeight;
+    }
+
+    async function newPlannerConversation() {
+      if (plannerChat.hasMessages) {
+        const confirmed = window.confirm("Start a new Planner chat? This clears the current conversation in this panel.");
+        if (!confirmed) return;
+      }
+      try {
+        await postJson("/viewer/planner-chat-clear", {});
+      } catch (error) {
+        /* ignore — render below reflects whatever the server has */
+      }
+      plannerChat.lastSignature = "";
+      plannerChat.hasMessages = false;
+      renderPlannerMessages([]);
+      if (plannerChat.inputEl) plannerChat.inputEl.focus();
+      statusEl.textContent = "Started a new planner conversation.";
     }
 
     async function pollPlannerChat() {
@@ -4974,13 +6812,32 @@
       plannerChat.sending = true;
       plannerChat.sendEl.disabled = true;
       plannerChat.sendEl.textContent = "Sending...";
+
+      // Optimistic bubbles for instant chat feel.
+      const empty = plannerChat.bodyEl.querySelector(".planner-chat-empty");
+      if (empty) empty.remove();
+      const ownerBubble = document.createElement("div");
+      ownerBubble.className = "planner-msg owner";
+      ownerBubble.textContent = message;
+      plannerChat.bodyEl.appendChild(ownerBubble);
+      const pendingBubble = document.createElement("div");
+      pendingBubble.className = "planner-msg planner";
+      pendingBubble.innerHTML = `<span class="planner-msg-meta"><span class="planner-msg-status running">Planner is thinking &middot; ${escapeText(tool)}</span></span><span class="planner-result">Thinking&hellip;</span>`;
+      plannerChat.bodyEl.appendChild(pendingBubble);
+      plannerChat.bodyEl.scrollTop = plannerChat.bodyEl.scrollHeight;
+      plannerChat.inputEl.value = "";
+      plannerChat.hasMessages = true;
+
       try {
         const data = await postJson("/viewer/planner-chat-send", { message, tool });
-        plannerChat.inputEl.value = "";
         plannerChat.lastSignature = "";
         renderPlannerMessages(data.messages);
-        statusEl.textContent = `Planner chat: launched ${tool} planner.`;
+        pollPlannerChat();
       } catch (error) {
+        // Roll back optimistic bubbles and restore the message for retry.
+        ownerBubble.remove();
+        pendingBubble.remove();
+        plannerChat.inputEl.value = message;
         statusEl.textContent = `Planner chat failed: ${error.message}`;
       } finally {
         plannerChat.sending = false;
@@ -5120,14 +6977,26 @@
         statusEl.textContent = "Loading board.json...";
       }
       try {
-        const [board, agents, , , pauseStatus] = await Promise.all([
-          loadJson("board.json"),
+        const board = await loadJson("board.json", { timeoutMs: 5000 });
+        renderBoard(board, "board.json", currentAgents);
+        if (!silent) {
+          statusEl.textContent = "Loaded board.json. Loading viewer metadata...";
+        }
+
+        const [agentsResult, , , pauseResult, systemResult] = await Promise.allSettled([
           loadAgents(),
           loadAgentSchema(),
           loadDispatchSettings(),
-          loadPauseStatus()
+          loadPauseStatus(),
+          loadSystemStatus()
         ]);
-        currentPauseStatus = pauseStatus;
+        const agents = agentsResult.status === "fulfilled" ? agentsResult.value : fallbackAgents;
+        currentPauseStatus = pauseResult.status === "fulfilled"
+          ? pauseResult.value
+          : normalizePauseStatus(currentDispatchSettings?.pause || fallbackPauseStatus);
+        currentSystemStatus = systemResult.status === "fulfilled"
+          ? systemResult.value
+          : currentSystemStatus;
         renderBoard(board, "board.json", agents);
         statusEl.textContent = silent
           ? `Auto refreshed ${new Date().toLocaleTimeString()}.`
@@ -5175,6 +7044,7 @@
           autoRefreshInFlight = true;
           try {
             await loadDefaultBoard({ silent: true });
+            loadHandoffs();
           } finally {
             autoRefreshInFlight = false;
           }
@@ -5217,8 +7087,50 @@
     if (window.visualViewport) {
       window.visualViewport.addEventListener("resize", syncViewportClientWidth);
     }
+
+    const handoffIntakeEl = document.getElementById("handoffIntake");
+    const handoffRefreshBtn = document.getElementById("handoffRefreshButton");
+    const handoffCollapseBtn = document.getElementById("handoffCollapseButton");
+    const handoffIntakeBody = document.getElementById("handoffIntakeBody");
+
+    if (handoffRefreshBtn) {
+      handoffRefreshBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        loadHandoffs();
+      });
+    }
+    if (handoffCollapseBtn) {
+      handoffCollapseBtn.addEventListener("click", (event) => {
+        event.stopPropagation();
+        toggleHandoffIntake();
+      });
+    }
+    if (handoffIntakeBody) {
+      handoffIntakeBody.addEventListener("click", (event) => {
+        const btn = event.target.closest("button[data-action]");
+        if (!btn) return;
+        const action = btn.dataset.action;
+        const source = btn.dataset.source || "";
+        const filename = btn.dataset.filename || "";
+        if (action === "view") {
+          viewHandoffContent(source, filename);
+        } else if (action === "view-log") {
+          const logPath = btn.dataset.log || "";
+          if (logPath) {
+            toggleAgentLogsPanel(true);
+            openAgentLogFile(logPath.split("/").pop()).catch((error) => {
+              statusEl.textContent = `Could not load handoff log: ${error.message}`;
+            });
+          }
+        } else if (["process", "retry", "ignore"].includes(action)) {
+          runHandoffAction(action, source, filename);
+        }
+      });
+    }
+
     syncViewportClientWidth();
     loadDefaultBoard().finally(startAgentLogRefresh);
+    loadHandoffs();
   </script>
 </body>
 </html>

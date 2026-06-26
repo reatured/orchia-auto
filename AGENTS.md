@@ -16,7 +16,7 @@ This project uses a simple JSON-backed task board with three separate board role
 - Task board API guide: `workflow/api-guide.md`
 - Task board source of truth: `task-board/board.json`
 - Project config: `task-board/config.json`
-- Dispatch settings: `task-board/agent-dispatch-settings.json`
+- Runtime dispatch settings: `task-board/agent-dispatch-settings.json` (created by the server/viewer when needed)
 
 ## Agent Start Phrases
 

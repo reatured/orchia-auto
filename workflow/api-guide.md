@@ -14,6 +14,8 @@ Spawned agents are given the current `backendBaseUrl` in their start prompt. Use
 
 Agents use `/api/...` endpoints. The HTML viewer uses `/viewer/...` endpoints and writes to `task-board-viewer.log`, so viewer reads and the owner's viewer actions do not mix with agent API calls.
 
+The backend terminal intentionally filters routine successful viewer polling and static reads, including `/viewer/pause-status`, `/viewer/agents`, and `/board.json`. Successful write actions and request failures still print concise terminal lines; structured audit history remains in `task-board-api.log` and `task-board-viewer.log`.
+
 The API is the preferred way to create, claim, move, review, approve, return, archive, update, or delete tasks. Direct JSON edits are the fallback only when the backend is not running.
 
 Examples below are shown for both **curl** (macOS/Linux/Git Bash) and **PowerShell** (Windows). Replace `$BASE`/`$base`, `$agentId`, and task IDs with your values.
@@ -32,9 +34,9 @@ $base = "http://127.0.0.1:4177"
 1. At the start of the chat, call `POST /api/register-agent` with `personalName`, `model`, and `role`. The server returns an `agentId` (for example `agt_a1b2c3`). Keep it for the lifetime of the chat.
 2. Include that `agentId` in every later API payload. `personalName`/`agentName` are display fields only; `agentId` is the contract key.
 3. `personalName` is a single short lowercase token (e.g. `ada`, `finn`, `iris`). The Spawn button picks one from `agent-color-schema.json#personalNamePool`. If the owner gives a name, use it.
-4. `model` is `claude` or `codex`. `role` is `planning`, `worker`, or `review`.
+4. `model` is `claude`, `codex`, or `qwen`. `role` is `planning`, `worker`, or `review`.
 5. Send JSON objects only, with `Content-Type: application/json`.
-6. Reload the role-appropriate compact board after every successful status change before choosing more work. Workers use `GET /api/worker-board`; Reviewers use `GET /api/review-board`; Planners may use `GET /api/board`.
+6. After every successful status change, call the next-work API to find the next eligible task. Workers use `POST /api/claim-next-worker`; Reviewers use `POST /api/claim-next-review`. For diagnostics or broad context only, Workers may also use `GET /api/worker-board` and Reviewers `GET /api/review-board`; Planners may use `GET /api/board`.
 7. After choosing or claiming a task, use `GET /api/task-detail?taskId=...` to load full details for that one task.
 8. Use `GET /api/duplicate-scan` for duplicate checks instead of loading the whole board.
 9. Do not use the HTML viewer as an agent input.
@@ -63,10 +65,14 @@ $base = "http://127.0.0.1:4177"
 | `POST /api/hard-stop-spawned-agents` or `POST /api/hard-stop` | Stop running backend-spawned Worker/Reviewer processes during an active pause. |
 | `POST /api/add-task` | Create one new task in `todo`. |
 | `POST /api/update-task` | Update allowed task fields without changing ID or status. |
-| `POST /api/claim-task` | Move one task `todo` → `claimed`. |
+| `GET /api/next-worker-task` | Read-only preview of the next eligible unblocked `todo` task. |
+| `POST /api/claim-next-worker` | Select and claim the next eligible `todo` task atomically. |
+| `GET /api/next-review-task` | Read-only preview of the next eligible unblocked `review` task. |
+| `POST /api/claim-next-review` | Select and claim the next eligible `review` task atomically. |
+| `POST /api/claim-task` | Move one specific task `todo` → `claimed`. |
 | `POST /api/unclaim-task` | Recovery: `claimed` → `todo`. |
 | `POST /api/move-to-review` | Move one task `claimed` → `review`. |
-| `POST /api/claim-review` | Move one task `review` → `reviewing`. |
+| `POST /api/claim-review` | Move one specific task `review` → `reviewing`. |
 | `POST /api/approve-review` | Move one task `reviewing` → `done`. |
 | `POST /api/request-changes` | Close failed task into `done` as replaced; create/update follow-up `todo`. |
 | `POST /api/return-to-review` | Move one `done` task back to `review` with owner feedback. |
@@ -120,7 +126,128 @@ Invoke-RestMethod -Uri "$base/api/pause-status?agentId=$agentId"
 
 `GET /api/worker-board` and `GET /api/review-board` return only the role's active columns as compact summaries; they omit `done`, `archived`, the top-level `tasks` index, `apiAuditLog`, and policy text. After choosing a task, load full details with `GET /api/task-detail`.
 
-`GET /api/agents` is mainly for the owner-facing viewer and diagnostics. Registered agents appear in `activeAgents`. Hidden spawned processes that have not registered yet appear in `pendingSpawns` with `processId`, `processStatus.state` (`running`, `exited`, `pid-reused`, or `unknown`), and `latestLog.preview`. Hard-stopped spawned processes that are eligible for resume appear in `pausedRuns`. Workers and Reviewers should not use this endpoint to choose tasks; use `/api/worker-board` or `/api/review-board`.
+## Next-Work APIs
+
+Workers and Reviewers use these endpoints for server-side task selection instead of reading the full board to choose work. The server handles priority ordering (high → normal → low), age tie-breaking (oldest first), and dependency checking (skips tasks whose `dependsOn` entries are not all in `done` or `archived`).
+
+### Read-only preview
+
+```bash
+# Worker: preview next eligible todo task (does not claim)
+curl -s "$BASE/api/next-worker-task?agentId=$agentId"
+# Reviewer: preview next eligible review task (does not claim)
+curl -s "$BASE/api/next-review-task?agentId=$agentId"
+```
+```powershell
+Invoke-RestMethod -Uri "$base/api/next-worker-task?agentId=$agentId"
+Invoke-RestMethod -Uri "$base/api/next-review-task?agentId=$agentId"
+```
+
+**Eligible response** (a task is available):
+
+```json
+{
+  "eligible": true,
+  "taskId": "TASK-YYYYMMDD-001",
+  "title": "Task title",
+  "project": "Project area",
+  "priority": "high",
+  "type": "implementation",
+  "status": "todo",
+  "sourceColumn": "todo",
+  "createdAt": "2026-06-24T10:00:00-07:00",
+  "detailUrl": "/api/task-detail?taskId=TASK-YYYYMMDD-001",
+  "blockedByTaskIds": [],
+  "blockingTaskIds": ["TASK-YYYYMMDD-003"],
+  "orderingTimestamp": "2026-06-24T10:00:00-07:00"
+}
+```
+
+**No-work response** (no tasks or all blocked):
+
+```json
+{
+  "eligible": false,
+  "reason": "all-blocked",
+  "blockedSummary": [
+    {
+      "taskId": "TASK-YYYYMMDD-002",
+      "title": "Blocked task title",
+      "priority": "high",
+      "createdAt": "2026-06-24T10:00:00-07:00",
+      "blockedByTaskIds": ["TASK-YYYYMMDD-001"]
+    }
+  ]
+}
+```
+
+The `reason` field is `"no-work"` when the source column is empty, or `"all-blocked"` when every candidate has unresolved `dependsOn` entries. The `blockedSummary` lists each blocked task and the dependency IDs that block it.
+
+**Paused response** (HTTP 200 with paused flag):
+
+```json
+{
+  "action": "next-work",
+  "paused": true,
+  "isPaused": true,
+  "pausedUntil": "2026-06-25T02:00:00-07:00",
+  "remainingSeconds": 3600,
+  "remainingText": "1h 0m",
+  "pauseReason": "Rate-limit cooldown"
+}
+```
+
+### Atomic claim
+
+```bash
+# Worker: select and claim the next eligible todo task
+curl -s -X POST "$BASE/api/claim-next-worker" -H "Content-Type: application/json" \
+  -d "{\"agentId\":\"$agentId\",\"claimedBy\":\"workercd81\"}"
+# Reviewer: select and claim the next eligible review task
+curl -s -X POST "$BASE/api/claim-next-review" -H "Content-Type: application/json" \
+  -d "{\"agentId\":\"$agentId\",\"reviewClaimedBy\":\"ada\"}"
+```
+```powershell
+Invoke-RestMethod -Uri "$base/api/claim-next-worker" -Method Post -ContentType "application/json" `
+  -Body (@{ agentId = $agentId; claimedBy = "workercd81" } | ConvertTo-Json)
+Invoke-RestMethod -Uri "$base/api/claim-next-review" -Method Post -ContentType "application/json" `
+  -Body (@{ agentId = $agentId; reviewClaimedBy = "ada" } | ConvertTo-Json)
+```
+
+**Successful claim response** (includes all preview fields plus):
+
+```json
+{
+  "eligible": true,
+  "taskId": "TASK-YYYYMMDD-001",
+  "claimed": true,
+  "claimedAt": "2026-06-25T01:00:00-07:00",
+  "taskIds": ["TASK-YYYYMMDD-001"]
+}
+```
+
+For `claim-next-review`, the response includes `reviewClaimedAt` instead of `claimedAt`.
+
+**No-work claim response** (`claimed: false`):
+
+```json
+{
+  "eligible": false,
+  "reason": "all-blocked",
+  "claimed": false,
+  "blockedSummary": [...]
+}
+```
+
+**Paused claim** returns HTTP `423` with `paused: true` and pause details — same as `POST /api/claim-task`.
+
+### Backward compatibility
+
+The older explicit endpoints (`POST /api/claim-task`, `POST /api/claim-review`) and the compact board reads (`GET /api/worker-board`, `GET /api/review-board`) still work. Agents that need to claim a specific known task ID can continue using `POST /api/claim-task`. The next-work APIs are the preferred path for normal task selection because they handle prioritization and dependency checking server-side.
+
+**Dependency metadata:** `dependsOn` is the canonical blocked-by field stored on each task. The Planner sets it when creating a `todo` task that must wait for another incomplete, claimed, reviewing, or prerequisite task. The server derives reverse blocking information (which other tasks are blocked by a given task) by scanning all tasks' `dependsOn` arrays; agents should not maintain mirrored `blocks` or `blockingTaskIds` fields. `relatedTaskIds` is for non-blocking context only — it links tasks that share files or scope but must not prevent the server from selecting the task. The next-work APIs respond with `blockedByTaskIds` (the task's own unresolved `dependsOn` entries) and `blockingTaskIds` (server-derived list of other tasks blocked by this task).
+
+`GET /api/agents` is mainly for the owner-facing viewer and diagnostics. Registered agents appear in `activeAgents`. Hidden spawned processes that have not registered yet appear in `pendingSpawns` with `processId`, `processStatus.state` (`running`, `exited`, `pid-reused`, or `unknown`), and `latestLog.preview`. Hard-stopped spawned processes that are eligible for resume appear in `pausedRuns`. Workers and Reviewers should not use this endpoint to choose tasks; use the next-work APIs (`/api/claim-next-worker`, `/api/claim-next-review`) instead.
 
 ## Spawn And Health Check APIs
 
@@ -131,9 +258,11 @@ curl -s -X POST "$BASE/api/agent-health-check" -H "Content-Type: application/jso
   -d '{"agentId":"'$agentId'","tool":"codex","command":"codex"}'
 curl -s -X POST "$BASE/api/agent-health-check" -H "Content-Type: application/json" \
   -d '{"agentId":"'$agentId'","tool":"claude","command":"claude"}'
+curl -s -X POST "$BASE/api/agent-health-check" -H "Content-Type: application/json" \
+  -d '{"agentId":"'$agentId'","tool":"qwen","command":"qwen"}'
 ```
 
-Health checks return JSON with `ok`, `status`, `tool`, `command`, `durationMs`, and, when useful, `error`, `outputPreview`, and `suggestion`. Codex checks run `codex exec --skip-git-repo-check "Reply exactly: OK"`; Claude Code checks run `claude -p "Reply exactly: OK"`. Plain `codex` and `claude` command names are resolved from `PATH` plus common install locations including Homebrew, `/usr/local/bin`, user-local bins, npm, and Windows Node/npm paths. When `CODEX_SQLITE_HOME` is not already set, Codex health checks and spawned Codex agents use `task-board/codex-sqlite-state/` as a writable state folder.
+Health checks return JSON with `ok`, `status`, `tool`, `command`, `durationMs`, and, when useful, `error`, `outputPreview`, and `suggestion`. Codex checks run `codex exec --skip-git-repo-check "Reply exactly: OK"`; Claude Code checks run `claude -p "Reply exactly: OK"`; Qwen checks run `qwen -p "Reply exactly: OK" -y`. Plain `codex`, `claude`, and `qwen` command names are resolved from `PATH` plus common install locations including Homebrew, `/usr/local/bin`, user-local bins, npm, and Windows Node/npm paths. When `CODEX_SQLITE_HOME` is not already set, Codex health checks and spawned Codex agents use `task-board/codex-sqlite-state/` as a writable state folder.
 
 ## Pause, Hard Stop, Resume APIs
 
@@ -338,7 +467,7 @@ Invoke-RestMethod -Uri "$base/viewer/agent-health-check" -Method Post -ContentTy
 - `400` means the payload is invalid or the requested transition is not allowed.
 - `404` means the task ID was not found in the expected column.
 - `409` from hard stop means the board is not currently paused; pause first, then hard stop spawned agents if needed.
-- `423` from `POST /api/claim-task`, `POST /api/claim-review`, or `POST /api/spawn-agent` means the board is paused. The viewer Spawn button uses the same spawn path. The response includes `paused: true`, `pausedUntil`, `remainingSeconds`, `remainingText`, and `pauseReason`; do not bypass it by editing `board.json` manually.
+- `423` from `POST /api/claim-task`, `POST /api/claim-next-worker`, `POST /api/claim-next-review`, `POST /api/claim-review`, or `POST /api/spawn-agent` means the board is paused. The viewer Spawn button uses the same spawn path. The response includes `paused: true`, `pausedUntil`, `remainingSeconds`, `remainingText`, and `pauseReason`; do not bypass it by editing `board.json` manually.
 - If a claim call fails, reload the role-specific board view (`GET /api/worker-board` or `GET /api/review-board`); another agent may have claimed the task first.
 - Do not edit around failed claims by manually moving tasks unless the owner explicitly asks.
 - If the backend is unavailable, fall back to direct `board.json` edits using the same role rules.

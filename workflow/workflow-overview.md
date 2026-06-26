@@ -1,6 +1,6 @@
 # Workflow Overview
 
-This is a simple, JSON-backed task board for coordinating multiple AI agents on one project. It has a three-role board core, **Planner**, **Worker**, and **Reviewer**, plus optional upstream handoff roles such as **Web Front-End Auditor**. It works with both the Claude and Codex CLIs.
+This is a simple, JSON-backed task board for coordinating multiple AI agents on one project. It has a three-role board core, **Planner**, **Worker**, and **Reviewer**, plus optional upstream handoff roles such as **Web Front-End Auditor**. It works with the Claude, Codex, and Qwen CLIs.
 
 > This is the generic three-role core. Projects can extend it (see "Extending the workflow" at the end), but start here.
 
@@ -20,9 +20,9 @@ When the local task-board backend is running, agents should use its API for card
 
 - `workflow/api-guide.md`
 
-Every agent that talks to the task board API registers at the start of the chat by calling `POST /api/register-agent` with `personalName`, `model` (`claude` or `codex`), and `role`. The server returns an `agentId` (for example `agt_a1b2c3`). Send that `agentId` in every later API payload — it is the contract key. `personalName` is a short lowercase token (pick the first unused name from `task-board/agent-color-schema.json#personalNamePool`, or use the one the owner or the Spawn button gave you). The backend records the resolved display name in `lastApiActor`, each task's `apiHistory`, and the board-level `apiAuditLog`. The HTML viewer renders each agent as a colored chip: the model determines the background color (orange for Claude, blue for Codex) and the role determines the border color.
+Every agent that talks to the task board API registers at the start of the chat by calling `POST /api/register-agent` with `personalName`, `model` (`claude`, `codex`, or `qwen`), and `role`. The server returns an `agentId` (for example `agt_a1b2c3`). Send that `agentId` in every later API payload — it is the contract key. `personalName` is a short lowercase token (pick the first unused name from `task-board/agent-color-schema.json#personalNamePool`, or use the one the owner or the Spawn button gave you). The backend records the resolved display name in `lastApiActor`, each task's `apiHistory`, and the board-level `apiAuditLog`. The HTML viewer renders each agent as a colored chip: the model determines the background color (orange for Claude, blue for Codex, purple for Qwen) and the role determines the border color.
 
-The backend writes an append-only API audit log at `task-board/task-board-api.log` (JSON Lines: request time, method, endpoint, task ID, agent name, status, error). The viewer uses separate `/viewer/...` endpoints and writes to `task-board/task-board-viewer.log`, so viewer activity does not mix with agent activity. These logs are for troubleshooting only; the source of truth remains `board.json`.
+The backend writes an append-only API audit log at `task-board/task-board-api.log` (JSON Lines: request time, method, endpoint, task ID, agent name, status, error). The viewer uses separate `/viewer/...` endpoints and writes to `task-board/task-board-viewer.log`, so viewer activity does not mix with agent activity. The backend terminal filters routine successful viewer polling and static reads; it stays focused on concise write-action and error lines while the JSONL files keep the detailed audit trail. These logs are for troubleshooting only; the source of truth remains `board.json`.
 
 The viewer's Spawn buttons launch Worker and Reviewer agents as hidden non-interactive CLI processes (they do not open terminal tabs). Each spawned process receives the current `backendBaseUrl` and writes output to `task-board/spawned-agent-logs/`. The backend exposes spawned processes through `GET /api/agents` with PID-backed status (`running`, `exited`, `pid-reused`, or `unknown`) and latest log previews. The viewer also has optional auto-dispatch controls per role (selected model, max active agents, Auto toggle) and CLI command settings stored in `task-board/agent-dispatch-settings.json`; when Auto is on, the backend spawns hidden agents only when matching work exists and active + still-running pending agents are below that role's maximum. Use the viewer Settings health checks on a new laptop before spawning: they call `/viewer/agent-health-check` with the same command shape as real hidden agents and report actionable setup steps. If that route returns 404, restart `task-board/server.py` so the running backend has the current health-check routes.
 
@@ -32,7 +32,7 @@ The backend supports a board-wide pause for rate-limit windows and other owner-d
 
 `POST /api/pause-plus-one-hour` and its alias `POST /api/pause` add exactly one hour per call. The backend calculates the next `pausedUntil` from `max(now, current pausedUntil) + 1 hour`, so repeated Pause +1h clicks accumulate time instead of resetting the window. `POST /api/resume-now` clears the active pause immediately.
 
-While paused, the backend rejects new Worker claims, Reviewer claims, and backend spawns: `POST /api/claim-task`, `POST /api/claim-review`, and `POST /api/spawn-agent` return HTTP `423` with `paused: true`, `pausedUntil`, `remainingSeconds`, `remainingText`, and `pauseReason`. The viewer Spawn button uses the same spawn path, so manual viewer spawns and auto-dispatch spawns are both blocked. This is server enforcement; role instructions are secondary guidance. The pause does not kill already-running agents or prevent a current claimed task from moving forward, but new claims and new backend spawns stay blocked until the pause expires or is resumed.
+While paused, the backend rejects new Worker claims, Reviewer claims, and backend spawns: `POST /api/claim-task`, `POST /api/claim-next-worker`, `POST /api/claim-next-review`, `POST /api/claim-review`, and `POST /api/spawn-agent` return HTTP `423` with `paused: true`, `pausedUntil`, `remainingSeconds`, `remainingText`, and `pauseReason`. The viewer Spawn button uses the same spawn path, so manual viewer spawns and auto-dispatch spawns are both blocked. This is server enforcement; role instructions are secondary guidance. The pause does not kill already-running agents or prevent a current claimed task from moving forward, but new claims and new backend spawns stay blocked until the pause expires or is resumed.
 
 Auto-dispatch checks pause state before doing work. When the board is paused it may clean stale pending-spawn records, but it does not spawn new agents and it does not resume paused runs. After the pause expires or `Resume now` clears it, auto-dispatch resumes eligible `pausedRuns` before normal new Worker/Reviewer spawning.
 
@@ -69,9 +69,11 @@ The Web Front-End Auditor is read-only with respect to the task board. It writes
 
 Nodes in the viewer's Agent Workflow Map carry an `acceptsHumanInput` flag. Only the **Planner** is flagged today; Worker and Reviewer are not, because the owner directs work through planning rather than into in-flight implementation or review. A human-input node shows a "Human input" badge and, when clicked, opens a docked **chat window** beside the workflow graph instead of the read-only detail modal.
 
-The chat lets the owner give the Planner a request directly, like a CLI prompt. Each message spawns a one-shot Planner process (`claude` / `codex` / `qwen`, selectable in the chat header) started with `load as planner and start` plus the owner's text and the backend base URL. The Planner records and decomposes the request into deduplicated `todo` tasks per the normal planner rules — it does not implement or review. Output streams back into the chat panel as the process runs.
+The chat is a real back-and-forth conversation, not a one-shot prompt. With Claude (the default model, selectable in the chat header along with Codex and Qwen), the first message starts the Planner with `load as planner and start` and runs it via `claude -p --output-format json`; the backend captures the returned `session_id` and passes `--resume <session_id>` on every later turn, so the Planner remembers the whole conversation. Continuing turns send only the new message — the resumed session already holds the planner context. The Planner replies conversationally and decomposes agreed work into deduplicated `todo` tasks per the normal planner rules; it does not implement or review. The clean reply (`result`) is shown in the panel rather than raw logs.
 
-Backend endpoints (viewer and API): `POST /viewer/planner-chat-send` (launch a Planner with the owner message), `GET /viewer/planner-chat` (poll the session, refresh process status, stream log output), and `POST /viewer/planner-chat-clear` (reset the conversation). Session state and per-message logs live under `task-board/planner-chat/` (runtime-only, gitignored).
+The model is locked once a conversation starts (use "New chat" to switch). Only one turn runs at a time — sending while the Planner is still responding is rejected. Codex and Qwen run as one-shot turns today (no cross-turn memory); conversational continuity is Claude-specific via session resume.
+
+Backend endpoints (viewer and API): `POST /viewer/planner-chat-send` (launch/continue a turn with the owner message), `GET /viewer/planner-chat` (poll the session, refresh process status, parse the reply), and `POST /viewer/planner-chat-clear` (start a new conversation). Session state — including the resumable `cliSessionId` — and per-message logs live under `task-board/planner-chat/` (runtime-only, gitignored).
 
 ## Roles
 
@@ -126,21 +128,44 @@ The HTML viewer keeps the six JSON columns for locking but displays the main int
 2. The Web Front-End Auditor may inspect the app and write Markdown handoffs, but does not mutate the task board. Handoffs live under `handoffs/frontend-audits/` and should include concrete visual findings, viewports, reproduction steps, evidence, and suggested acceptance criteria.
 3. The Planner records the owner's requirements and decomposes them into tasks. When given a handoff, it reads the handoff, records its path in `sourceHandoffs`, and converts only useful, actionable, deduplicated findings into tasks. Before creating or materially changing a task, it reloads the board and checks all six columns for duplicate or overlapping work by title, scope, files, acceptance criteria, `relatedTaskIds`, `dependsOn`, `sourceHandoffs`, and `sourceReviewTaskId`. Prefer `POST /api/add-task` and `POST /api/update-task` when the backend is running.
 4. The Planner only edits `board.json` and workflow docs (and only edits workflow docs when asked). It does not write product code, scripts, tests, or implementation files, and never switches into Worker or Reviewer behavior.
-5. Workers read the worker board (`todo` + `claimed`) before doing any work, then claim exactly one `todo` task by moving it to `claimed` (`claimedBy`, `claimedAt`). Prefer `POST /api/claim-task`.
+5. Workers call `POST /api/claim-next-worker` to claim the highest-priority, oldest unblocked `todo` task. The server handles dependency checking and prioritization automatically. If the backend is not running, fall back to reading `columns.todo` and `columns.claimed` from `board.json` and claim one safe task manually with `POST /api/claim-task`.
 6. A Worker claims based on `columns.claimed` conflicts only, not as a broad lock from `review`/`done`.
 7. When a Worker finishes, it records the result and moves the task to `review`, adding `inspectionTargets` (URL/path, viewport, state, notes). Prefer `POST /api/move-to-review`.
 8. If a Worker is killed or abandons a task, the owner can use the viewer's expanded claimed-card "Unclaim task" button (`/viewer/unclaim-task`) to move it back to `todo` and clear the claim fields.
-9. A Worker reloads the board after finishing each task and checks `todo` again; if another safe task exists it claims the next one and continues unless the owner asked to stop.
-10. A Reviewer claims one task from `columns.review` by moving it to `reviewing` (prefer `POST /api/claim-review`), inspects it, then approves or requests changes.
+9. After finishing each task, a Worker calls `POST /api/claim-next-worker` again to claim the next eligible task. If the API returns `claimed: false` (no work, all blocked, or paused), the Worker stops unless the owner asked to continue.
+10. A Reviewer calls `POST /api/claim-next-review` to claim the highest-priority, oldest unblocked `review` task into `reviewing`, inspects it, then approves or requests changes. If the backend is not running, fall back to `POST /api/claim-review`.
 11. A Reviewer uses `inspectionTargets` as the primary places to inspect when present.
 12. If approved, the Reviewer moves the task from `reviewing` to `done` (prefer `POST /api/approve-review`).
 13. If not approved, the Reviewer closes the task into the top of `done` as replaced, records a failure brief (`failureExpected`, `failureActual`, `failureDecision`), and creates or updates a follow-up `todo`. Before creating a follow-up, it uses `GET /api/duplicate-scan?...&includeArchived=true` to check every column. The failed original records `replacedByTaskId`/`latestFollowUpTaskId`. Prefer `POST /api/request-changes`.
 14. The owner may return a `done` task to `review` from the viewer with feedback. The Reviewer treats `ownerFeedback`, `returnedToReviewAt`, and `Owner feedback for re-review` notes as the owner's active review question.
 15. A Reviewer must not claim, review, move, or duplicate work for a task already in `columns.reviewing`.
-16. A Reviewer reloads the board after every decision and continues with the next unclaimed `review` task, or reports the review list clear.
+16. After every decision, a Reviewer calls `POST /api/claim-next-review` again to claim the next eligible review task. If the API returns `claimed: false`, the Reviewer reports the review list clear.
 17. The Reviewer writes only to `board.json`, except for reference images under `reference-images/` recorded on a follow-up task.
 18. The owner may also review `review` tasks and move accepted tasks to `done`.
 19. Agents ignore `task-board/viewer.html` unless the owner explicitly asks to change the viewer itself.
+
+## Server-Side Task Selection
+
+When the backend is running, Workers and Reviewers rely on the server for safe task selection instead of reading the full board to choose work.
+
+- `GET /api/next-worker-task` returns the next eligible unblocked `todo` task (read-only preview, does not claim).
+- `POST /api/claim-next-worker` selects and claims the next eligible `todo` task atomically.
+- `GET /api/next-review-task` returns the next eligible unblocked `review` task (read-only preview).
+- `POST /api/claim-next-review` selects and claims the next eligible `review` task atomically.
+
+**Prioritization:** the server sorts candidates by priority (high → normal → low), then by age (oldest first within the same priority). For Workers, age is `createdAt`; for Reviewers, age is `reviewRequestedAt` (falling back to `createdAt`).
+
+**Dependency checking:** the server skips any task whose `dependsOn` entries are not all in `done` or `archived`. If every candidate is blocked, the API returns `eligible: false` with `reason: "all-blocked"` and a `blockedSummary` listing each blocked task and its unresolved dependency IDs.
+
+**Pause handling:** if the board is paused, the next-work APIs return `paused: true` with the pause status. The claim-next APIs reject with HTTP 423.
+
+Workers and Reviewers should not use `/api/board`, `/api/worker-board`, or `/api/review-board` to choose their next task when the next-work APIs are available. Those broader endpoints remain for diagnostics, fallback, or context only.
+
+### Dependency Model
+
+- **`dependsOn`** is the canonical blocked-by field. When a task lists task IDs in `dependsOn`, the server treats those as hard prerequisites: the task is ineligible for next-work selection until every listed dependency is in `done` or `archived`. The Planner must set `dependsOn` when creating a `todo` task that must wait for another incomplete, claimed, reviewing, or prerequisite task.
+- **`relatedTaskIds`** is for non-blocking context and coupling only. It links tasks that share context or scope but must not prevent the server from selecting the task. The next-work API does not inspect `relatedTaskIds` when deciding eligibility.
+- **Reverse blocking is server-derived.** The server computes which other tasks are blocked by a given task by scanning all tasks' `dependsOn` arrays. Agents and the viewer should not maintain separate `blocks` or `blockingTaskIds` fields; those values are derived on demand to avoid stale mirrored data.
 
 ## Conflict Rule
 

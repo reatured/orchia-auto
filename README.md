@@ -1,6 +1,6 @@
-# orchia-auto
+# agent-workflow-starter
 
-A reusable, project-agnostic **multi-agent workflow** for coordinating AI coding agents (Claude or Codex CLIs) on a single project. It ships a clean three-role board core — **Planner**, **Worker**, **Reviewer** — backed by a small local task-board server, a JSON board, and a read-only HTML viewer. It also includes an upstream **Web Front-End Auditor** role that writes visual audit handoffs for Planner.
+A reusable, project-agnostic **multi-agent workflow** for coordinating AI coding agents (Claude, Codex, or Qwen CLIs) on a single project. It ships a clean three-role board core — **Planner**, **Worker**, **Reviewer** — backed by a small local task-board server, a JSON board, and a read-only HTML viewer. It also includes an upstream **Web Front-End Auditor** role that writes visual audit handoffs for Planner.
 
 Copy this repo into a new project, adjust a few config values and role files, and start coordinating multiple agents on real work without them stepping on each other.
 
@@ -10,7 +10,7 @@ Current starter version: **0.3.0**. See [`CHANGELOG.md`](CHANGELOG.md) for upgra
 
 ## What is this for?
 
-When you run more than one AI coding agent on the same project at the same time, two things go wrong: agents duplicate each other's work, and they edit the same files with no idea the other is mid-change. `orchia-auto` solves that with a shared, auditable **task board** that acts as the single source of truth and the coordination lock.
+When you run more than one AI coding agent on the same project at the same time, two things go wrong: agents duplicate each other's work, and they edit the same files with no idea the other is mid-change. This starter solves that with a shared, auditable **task board** that acts as the single source of truth and the coordination lock.
 
 It gives you a clear separation between **planning**, **doing**, and **reviewing**, so each agent has one job and one job only:
 
@@ -26,7 +26,7 @@ Each agent runs in its own chat and never switches roles. Because every claim an
 - You want to **parallelize** work across several agent sessions (e.g. three Workers building three features at once).
 - You want a clear, enforced boundary between *planning*, *doing*, and *reviewing*.
 - You want a **single, auditable source of truth** for everything in flight.
-- You're mixing tools — some agents on **Claude**, some on **Codex** — and want them on one board.
+- You're mixing tools — some agents on **Claude**, some on **Codex**, some on **Qwen** — and want them on one board.
 
 ### When it's overkill
 
@@ -64,7 +64,7 @@ See [`workflow/workflow-overview.md`](workflow/workflow-overview.md) for the ful
 ## Requirements
 
 - **Python 3.9+** (standard library only — no third-party packages, no `pip install`).
-- A coding-agent CLI: **Claude** (`claude`) and/or **Codex** (`codex`). Both are supported; configure default command names in `task-board/config.json`, or update them from the viewer Settings tab after the backend starts.
+- A coding-agent CLI: **Claude** (`claude`), **Codex** (`codex`), and/or **Qwen** (`qwen`). Configure default command names in `task-board/config.json`, or update them from the viewer Settings tab after the backend starts.
 
 ---
 
@@ -75,8 +75,8 @@ See [`workflow/workflow-overview.md`](workflow/workflow-overview.md) for the ful
 Clone it into (or alongside) your project:
 
 ```bash
-git clone https://github.com/reatured/orchia-auto.git
-cd orchia-auto
+git clone https://github.com/your-org/agent-workflow-starter.git
+cd agent-workflow-starter
 ```
 
 ### 2. Configure for your project
@@ -93,7 +93,11 @@ Edit [`task-board/config.json`](task-board/config.json). Every project-specific 
   "host": "127.0.0.1",
   "port": 4177,
   "projectRoot": "..",
-  "spawn": { "claudeCommand": "claude", "codexCommand": "codex" }
+  "spawn": {
+    "claudeCommand": "claude",
+    "codexCommand": "codex",
+    "qwenCommand": "qwen"
+  }
 }
 ```
 
@@ -104,7 +108,7 @@ Edit [`task-board/config.json`](task-board/config.json). Every project-specific 
 | `devServerUrl` | Base URL used in inspection-target examples (e.g. your local app). |
 | `host` / `port` | Where the server listens. Default `127.0.0.1:4177`. |
 | `projectRoot` | Path (relative to `task-board/`) to your actual project root. |
-| `spawn.claudeCommand` / `spawn.codexCommand` | Default CLI command names on your machine. The viewer Settings tab can override them in `task-board/agent-dispatch-settings.json`. |
+| `spawn.claudeCommand` / `spawn.codexCommand` / `spawn.qwenCommand` | Default CLI command names on your machine. The viewer Settings tab can override them in `task-board/agent-dispatch-settings.json`. |
 
 If you want to test the workflow inside this starter without committing runtime board state, copy the role, workflow, and task-board files into a project-local `teamwork/` folder and run `teamwork/task-board/server.py`. The default `.gitignore` excludes `teamwork/`, so local self-management boards, logs, active-agent files, and smoke-test data stay out of git.
 
@@ -161,7 +165,7 @@ Get-NetTCPConnection -LocalPort $port -State Listen |
 
 Replace `4177` if `task-board/config.json` uses a different port.
 
-Before using Spawn or auto-dispatch on a new laptop, open the viewer's **Settings** tab and click **Test Codex** and/or **Test Claude**. The tests run the same command shape used for hidden agents (`codex exec --skip-git-repo-check` or `claude -p`) and report the remaining human step, such as signing in or trusting the project directory. If a test reports that the health-check route is missing, restart `task-board/server.py`, refresh the viewer, and test again so the running backend matches the current files.
+Before using Spawn or auto-dispatch on a new laptop, open the viewer's **Settings** tab and click **Test Codex**, **Test Claude**, and/or **Test Qwen**. The tests run the same command shape used for hidden agents (`codex exec --skip-git-repo-check`, `claude -p`, or `qwen -p -y`) and report the remaining human step, such as signing in or trusting the project directory. If a test reports that the health-check route is missing, restart `task-board/server.py`, refresh the viewer, and test again so the running backend matches the current files.
 
 ### 6. Start agents
 
@@ -176,14 +180,14 @@ Open a **separate chat per agent** and load a role with its start phrase:
 
 A typical visual-polish run: start a **Web Front-End Auditor** chat against your app URL → give its handoff file to a **Planner** chat → start one or more **Worker** chats to claim and build → start a **Reviewer** chat to approve. Watch board-moving work on the viewer.
 
-> The viewer also has **Spawn** buttons and optional **auto-dispatch** to launch Workers/Reviewers as hidden CLI processes. Use **Pause +1h** to add one hour from `max(now, pausedUntil)`; repeated clicks accumulate time. While paused, the server rejects new Worker claims, Reviewer claims, viewer Spawn clicks, and auto-dispatch spawns. **Resume now** clears the pause, after which auto-dispatch resumes eligible paused hidden runs before starting normal new work. Hard stop applies only to backend-spawned hidden Worker/Reviewer processes and records `pausedRuns`; it does not kill manual terminal/chat agents. Use the bottom-left **Settings** tab to test and customize the local Codex and Claude Code command names used for spawning. Plain `codex` and `claude` commands are resolved from `PATH` plus common install locations such as Homebrew, `/usr/local/bin`, user-local bins, npm, and Windows Node/npm paths. Spawned output is written to `task-board/spawned-agent-logs/`, and the viewer uses PID checks plus log previews to show whether a spawned process is still running.
+> The viewer also has **Spawn** buttons and optional **auto-dispatch** to launch Workers/Reviewers as hidden CLI processes. Use **Pause +1h** to add one hour from `max(now, pausedUntil)`; repeated clicks accumulate time. While paused, the server rejects new Worker claims, Reviewer claims, viewer Spawn clicks, and auto-dispatch spawns. **Resume now** clears the pause, after which auto-dispatch resumes eligible paused hidden runs before starting normal new work. Hard stop applies only to backend-spawned hidden Worker/Reviewer processes and records `pausedRuns`; it does not kill manual terminal/chat agents. Use the bottom-left **Settings** tab to test and customize the local Codex, Claude Code, and Qwen command names used for spawning. Plain `codex`, `claude`, and `qwen` commands are resolved from `PATH` plus common install locations such as Homebrew, `/usr/local/bin`, user-local bins, npm, and Windows Node/npm paths. Spawned output is written to `task-board/spawned-agent-logs/`, and the viewer uses PID checks plus log previews to show whether a spawned process is still running.
 
 ---
 
 ## Repository layout
 
 ```
-orchia-auto/
+agent-workflow-starter/
   README.md                     # this file
   VERSION                       # current starter version
   CHANGELOG.md                  # release and upgrade notes
@@ -210,12 +214,12 @@ orchia-auto/
 
 Every agent that talks to the API:
 
-1. **Registers** at chat start: `POST /api/register-agent` with `personalName`, `model` (`claude` or `codex`), and `role` → receives an `agentId`.
+1. **Registers** at chat start: `POST /api/register-agent` with `personalName`, `model` (`claude`, `codex`, or `qwen`), and `role` → receives an `agentId`.
 2. **Includes that `agentId`** in every later request — it's the contract key.
-3. **Reloads** its compact board view after each status change (`/api/worker-board` or `/api/review-board`) and uses `/api/duplicate-scan` instead of loading the whole board.
+3. **Calls the next-work API** after each status change to find the next eligible task. Workers use `POST /api/claim-next-worker`; Reviewers use `POST /api/claim-next-review`. The server handles priority ordering and dependency checking. For diagnostics only, agents may also read compact board views (`/api/worker-board`, `/api/review-board`). All agents use `/api/duplicate-scan` instead of loading the whole board.
 4. Workers and Reviewers **heartbeat** after claiming/moving a task and **unregister** before ending.
 
-During a board-wide pause, `POST /api/claim-task`, `POST /api/claim-review`, and `POST /api/spawn-agent` return HTTP `423` with pause details. Agents should not bypass that response with manual JSON edits. Resume context comes from live board locks and `/api/heartbeat-agent` state first; prior spawned-agent logs are only recovery context.
+During a board-wide pause, `POST /api/claim-task`, `POST /api/claim-next-worker`, `POST /api/claim-next-review`, `POST /api/claim-review`, and `POST /api/spawn-agent` return HTTP `423` with pause details. Agents should not bypass that response with manual JSON edits. Resume context comes from live board locks and `/api/heartbeat-agent` state first; prior spawned-agent logs are only recovery context.
 
 The server writes an append-only audit log (`task-board/task-board-api.log`, JSON Lines) and persists the board with an **atomic write** (temp file + `os.replace`), so a crash mid-write never corrupts `board.json`. See [`workflow/api-guide.md`](workflow/api-guide.md) for every endpoint with `curl` and PowerShell examples.
 
@@ -223,6 +227,6 @@ The server writes an append-only audit log (`task-board/task-board-api.log`, JSO
 
 ## Notes
 
-- Runtime artifacts (`*.log`, `active-agents.json`, `agent-dispatch-settings.json`, `spawned-agent-logs/`, `codex-sqlite-state/`, `*.json.tmp`, `__pycache__/`), generated handoffs (`handoffs/`, `reference-images/frontend-audits/`), and project-local self-test boards (`teamwork/`) are git-ignored; the server regenerates or owns them.
+- Runtime artifacts (`*.log`, `active-agents.json`, `agent-dispatch-settings.json`, `handoff-state.json`, `planner-chat/`, `spawned-agent-logs/`, `codex-sqlite-state/`, `*.json.tmp`, `__pycache__/`), generated handoffs/evidence (`handoffs/`, `reference-images/`), tool-local state (`.qwen/`), local reference material (`reference/`), and project-local self-test boards (`teamwork/`) are git-ignored; the server regenerates or owns them.
 - Works on Windows, macOS, and Linux. On macOS/Linux use `python3 task-board/server.py`; on Windows use `py -3 task-board\server.py` or `python task-board\server.py`.
 - `notion-page.md` is a paste-ready human-readable master spec — drop it into Notion or any wiki to share the workflow with your team.

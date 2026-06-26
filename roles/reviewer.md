@@ -10,7 +10,7 @@ Use `load as reviewer` at the start of a new chat to load this role.
 
 Review a specific task in `columns.review`, claim it into `columns.reviewing` before judging, then decide whether the result answers the owner's specific review question. Approve it into `done`, or open a follow-up `todo` task when it fails.
 
-After each review decision, reload the board and check the live `review` list again. Continue claiming unclaimed review tasks until the owner asks the Reviewer to stop or the current review list is clear.
+After each review decision, call the next-review API to find the next eligible review task. Continue claiming unclaimed review tasks until the owner asks the Reviewer to stop or the API reports no eligible work.
 
 If the local task-board backend is running, call `POST /api/register-agent` at the start of the chat with `personalName`, `model` (`claude`, `codex`, or `qwen`), and `role: "review"`. The server returns an `agentId`; use it for every later task board API call this chat. If the Spawn button supplied a `personalName`, use it; otherwise pick the first unused name from `task-board/agent-color-schema.json#personalNamePool`, or use the one the owner gives you.
 
@@ -42,9 +42,9 @@ If a fix is needed, the Reviewer records the issue in `board.json`, creates or u
 2. Read `roles/reviewer.md`.
 3. Register as active. If the backend is running, call `POST /api/register-agent` with `personalName`, `model`, `role: "review"`, and `startPhrase: "load as reviewer"`. Capture the `agentId` and keep it for the rest of the chat.
 4. If the start phrase includes `resumeMode is paused-run`, inspect the task board through the API and inspect the worktree before judging or editing board state. The prior spawned-agent log is context only; `board.json` is the source of truth. If `currentTaskStillLockedByYou` is true and `currentTaskId` is still in `columns.reviewing` with `reviewClaimedBy` equal to your `personalName`, heartbeat with that task ID, fetch its full details, and continue that review before claiming anything new. If the task is unknown, missing, unlocked, or owned by someone else, reconcile from the live board and prior log, then either continue the safest matching review still locked by you or unregister with a clear note.
-5. Read the compact review board. If the backend is running, prefer `GET /api/review-board?agentId=...`; otherwise read only `columns.review` and `columns.reviewing` from `task-board/board.json`.
-6. Identify the specific task in `columns.review` and the owner's review question, unless you are continuing a resume-mode task that is still locked by you.
-7. If you are not continuing an existing resume-mode `reviewing` lock, move the target task to `columns.reviewing`, set `status: "reviewing"`, `reviewClaimedBy`, and `reviewClaimedAt`. If the backend is running, prefer `POST /api/claim-review` and include your `agentId`; otherwise update `board.json` directly.
+5. Claim the next eligible review task. If the backend is running, call `POST /api/claim-next-review` with your `agentId`; the server selects the highest-priority, oldest unblocked `review` task, moves it to `reviewing`, and returns the task ID. If the response has `claimed: true`, proceed to step 6 with the returned `taskId`. If `claimed: false` (no work, all blocked, or paused), report the reason and stop. If the backend is not running, fall back to reading `columns.review` and `columns.reviewing` from `task-board/board.json` and choose one unclaimed review task manually. Skip this step if continuing a resume-mode task that is still locked by you.
+6. Identify the owner's review question for the claimed task, unless you are continuing a resume-mode task that is still locked by you.
+7. If you chose a task manually (backend not running), move it to `columns.reviewing`, set `status: "reviewing"`, `reviewClaimedBy`, and `reviewClaimedAt`. If the backend is running, prefer `POST /api/claim-review` and include your `agentId`; otherwise update `board.json` directly.
 8. After claiming or confirming a resume-mode lock, call `POST /api/heartbeat-agent` with `currentTaskId` set to the review task ID, then call `GET /api/task-detail?taskId=...&agentId=...` for the full details of only the claimed review task.
 9. Inspect the relevant result (page, output, behavior, state, or interaction) using whatever tool fits the project.
 
@@ -54,9 +54,11 @@ Claim only tasks currently in `columns.review`. A task already in `columns.revie
 
 If the task includes `ownerFeedback`, `returnedToReviewAt`, or notes beginning with `Owner feedback for re-review`, treat that feedback as the owner's active review question. Use it as a primary input when deciding whether to create or update follow-up `todo` tasks.
 
+When the backend is running, do not use `/api/board`, `/api/worker-board`, or `/api/review-board` to choose your next review task. Those endpoints remain available for diagnostics, fallback, or broad context only. Use `POST /api/claim-next-review` (or `GET /api/next-review-task` for a read-only preview) for server-side task selection with dependency-aware prioritization.
+
 ## Pause Handling
 
-- If `POST /api/claim-review` returns HTTP `423` with `paused: true`, the backend is enforcing a board-wide pause. Do not bypass it by editing `board.json` manually, retrying in a loop, or claiming through another path.
+- If `POST /api/claim-review` or `POST /api/claim-next-review` returns HTTP `423` with `paused: true`, the backend is enforcing a board-wide pause. Do not bypass it by editing `board.json` manually, retrying in a loop, or claiming through another path.
 - Record the pause details from the response (`pausedUntil`, `remainingText`, `pauseReason`) in your report. If you are ending the chat, unregister with a note that the board is paused. If the owner explicitly asks you to wait, wait without modifying review state.
 - Pause enforcement blocks new review claims and backend spawns. It is implemented in the server; role instructions only explain what agents should do when they receive the paused response.
 - Hard stop targets only backend-spawned hidden Worker/Reviewer processes. It does not kill manual terminal/chat agents and it does not remove board locks.
@@ -88,7 +90,7 @@ Approve only when:
 5. Update board `updatedAt`.
 6. Report the approval and evidence to the owner.
 7. Call `POST /api/heartbeat-agent` with the latest `currentTaskId`.
-8. Reload the compact board (`GET /api/review-board?agentId=...` or re-read `columns.review`/`columns.reviewing`); if another unclaimed `review` task exists and the owner did not stop you, claim the next task into `columns.reviewing`, fetch its full details, and continue. Otherwise report that the review list is clear.
+8. Call `POST /api/claim-next-review` again (or re-read `columns.review`/`columns.reviewing` from `board.json` when the backend is not running) to find the next eligible review task. If the response has `claimed: true`, fetch full details through `GET /api/task-detail?taskId=...&agentId=...` and continue. If `claimed: false`, report that the review list is clear, all blocked, or paused.
 
 ## If Not Approved
 
@@ -109,7 +111,7 @@ Approve only when:
 11. Update board `updatedAt`.
 12. Report the decision and the todo task ID to the owner.
 13. Call `POST /api/heartbeat-agent` with the latest `currentTaskId`.
-14. Reload the compact board and continue with the next unclaimed `review` task, or report that the review list is clear.
+14. Call `POST /api/claim-next-review` again (or re-read `columns.review`/`columns.reviewing` from `board.json` when the backend is not running) to find the next eligible review task. If the response has `claimed: true`, fetch full details and continue. If `claimed: false`, report that the review list is clear, all blocked, or paused.
 
 Before ending the chat for any reason, call `POST /api/unregister-agent` with your `agentId` and a short note explaining why you are stopping.
 
