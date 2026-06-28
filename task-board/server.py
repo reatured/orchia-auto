@@ -84,14 +84,9 @@ PLANNER_CHAT_DIR = ROOT / "planner-chat"
 PLANNER_CHAT_SESSION_PATH = PLANNER_CHAT_DIR / "session.json"
 PLANNER_CHAT_LOG_DIR = PLANNER_CHAT_DIR / "logs"
 PLANNER_CHAT_OUTPUT_LIMIT = 20000
-HANDOFF_STATE_PATH = ROOT / "handoff-state.json"
-HANDOFF_SOURCES = {
-    "frontend-audits": PROJECT_ROOT / "handoffs" / "frontend-audits",
-}
 SERVER_STARTED_AT = datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
 SERVER_STARTED_MONOTONIC = time.monotonic()
 BOARD_LOCK = threading.RLock()
-HANDOFF_STATE_LOCK = threading.Lock()
 API_LOG_LOCK = threading.Lock()
 VIEWER_LOG_LOCK = threading.Lock()
 ACTIVE_AGENTS_LOCK = threading.Lock()
@@ -128,8 +123,6 @@ GET_ACTIONS = {
     "/api/pause": "get_pause_status",
     "/api/pause-status": "get_pause_status",
     "/api/planner-chat": "planner_chat_poll",
-    "/api/handoffs": "list_handoffs",
-    "/api/handoff-content": "read_handoff",
     "/api/next-worker-task": "next_worker_task",
     "/api/next-review-task": "next_review_task",
     "/api/system-status": "get_system_status",
@@ -149,8 +142,6 @@ VIEWER_GET_ACTIONS = {
     "/viewer/pause": "get_pause_status",
     "/viewer/pause-status": "get_pause_status",
     "/viewer/planner-chat": "planner_chat_poll",
-    "/viewer/handoffs": "list_handoffs",
-    "/viewer/handoff-content": "read_handoff",
     "/viewer/system-status": "get_system_status",
 }
 POST_ACTIONS = {
@@ -178,9 +169,6 @@ POST_ACTIONS = {
     "/api/resume-now": "resume_now",
     "/api/planner-chat-send": "planner_chat_send",
     "/api/planner-chat-clear": "planner_chat_clear",
-    "/api/process-handoff": "process_handoff",
-    "/api/retry-handoff": "retry_handoff",
-    "/api/ignore-handoff": "ignore_handoff",
     "/api/claim-next-worker": "claim_next_worker",
     "/api/claim-next-review": "claim_next_review",
 }
@@ -215,9 +203,6 @@ VIEWER_POST_ACTIONS = {
     "/viewer/resume-now": "resume_now",
     "/viewer/planner-chat-send": "planner_chat_send",
     "/viewer/planner-chat-clear": "planner_chat_clear",
-    "/viewer/process-handoff": "process_handoff",
-    "/viewer/retry-handoff": "retry_handoff",
-    "/viewer/ignore-handoff": "ignore_handoff",
 }
 SPAWNABLE_AGENT_ROLES = {"worker", "review"}
 SPAWNABLE_TOOLS = {"claude", "codex", "qwen"}
@@ -614,300 +599,6 @@ def persist_dispatch_settings(settings: dict) -> None:
         temp_path.write_text(json.dumps(normalized, indent=2) + "\n", encoding="utf-8")
         os.replace(temp_path, DISPATCH_SETTINGS_PATH)
     clear_agent_log_state_cache()
-
-
-# --- Handoff state management ---
-
-def load_handoff_state() -> dict:
-    with HANDOFF_STATE_LOCK:
-        if not HANDOFF_STATE_PATH.exists():
-            return {"version": 1, "handoffs": []}
-        try:
-            data = json.loads(HANDOFF_STATE_PATH.read_text(encoding="utf-8-sig"))
-        except json.JSONDecodeError:
-            return {"version": 1, "handoffs": []}
-    if not isinstance(data, dict):
-        return {"version": 1, "handoffs": []}
-    if not isinstance(data.get("handoffs"), list):
-        data["handoffs"] = []
-    return data
-
-
-def save_handoff_state(state: dict) -> None:
-    if not isinstance(state, dict):
-        state = {"version": 1, "handoffs": []}
-    if not isinstance(state.get("handoffs"), list):
-        state["handoffs"] = []
-    state["version"] = 1
-    state["updatedAt"] = now_iso()
-    with HANDOFF_STATE_LOCK:
-        temp_path = HANDOFF_STATE_PATH.with_suffix(".json.tmp")
-        temp_path.write_text(json.dumps(state, indent=2) + "\n", encoding="utf-8")
-        os.replace(temp_path, HANDOFF_STATE_PATH)
-
-
-def safe_handoff_path(source: str, filename: str) -> Path | None:
-    base_dir = HANDOFF_SOURCES.get(source)
-    if not base_dir:
-        return None
-    if not filename or "\\" in filename:
-        return None
-    relative_path = Path(filename)
-    if relative_path.is_absolute() or any(part in {"", ".", ".."} for part in relative_path.parts):
-        return None
-    resolved = (base_dir / relative_path).resolve()
-    base_resolved = base_dir.resolve()
-    if resolved != base_resolved and base_resolved not in resolved.parents:
-        return None
-    if resolved.suffix.lower() != ".md":
-        return None
-    return resolved
-
-
-def handoff_relative_path(source: str, filename: str) -> str:
-    return f"handoffs/{source}/{filename}"
-
-
-def scan_handoff_files(source: str) -> list[dict]:
-    base_dir = HANDOFF_SOURCES.get(source)
-    if not base_dir or not base_dir.is_dir():
-        return []
-    files = []
-    try:
-        for entry in sorted(base_dir.iterdir()):
-            if entry.is_file() and entry.suffix == ".md":
-                stat = entry.stat()
-                files.append({
-                    "filename": entry.name,
-                    "source": source,
-                    "path": f"handoffs/{source}/{entry.name}",
-                    "size": stat.st_size,
-                    "modifiedAt": datetime.fromtimestamp(stat.st_mtime, timezone.utc).astimezone().isoformat(timespec="seconds"),
-                    "createdAt": datetime.fromtimestamp(stat.st_ctime, timezone.utc).astimezone().isoformat(timespec="seconds"),
-                })
-    except OSError:
-        pass
-    return files
-
-
-def handoff_tasks_from_board(board: dict, handoff_path: str) -> list[dict]:
-    columns = board.get("columns") if isinstance(board, dict) else {}
-    if not isinstance(columns, dict):
-        return []
-    task_refs = []
-    for column_name in BOARD_COLUMN_ORDER:
-        column = columns.get(column_name)
-        if not isinstance(column, list):
-            continue
-        for task in column:
-            if not isinstance(task, dict):
-                continue
-            sources = task.get("sourceHandoffs")
-            if isinstance(sources, str):
-                sources = [sources]
-            if not isinstance(sources, list):
-                continue
-            normalized_sources = [str(item or "").strip() for item in sources]
-            if handoff_path not in normalized_sources:
-                continue
-            task_id = str(task.get("id") or "").strip()
-            if not task_id:
-                continue
-            task_refs.append({
-                "taskId": task_id,
-                "title": str(task.get("title") or "").strip(),
-                "status": str(task.get("status") or column_name).strip(),
-                "column": column_name,
-            })
-    return task_refs
-
-
-def safe_handoff_log_tail(log_path: object, limit: int = 4000) -> str:
-    log_text = str(log_path or "").strip()
-    if not log_text:
-        return ""
-    max_bytes = max(1024, int(limit * 4))
-    try:
-        resolved = Path(log_text).resolve()
-        root = SPAWN_LOG_DIR.resolve()
-        if root not in resolved.parents or not resolved.is_file():
-            return ""
-        size = resolved.stat().st_size
-        with resolved.open("rb") as log_file:
-            if size > max_bytes:
-                log_file.seek(size - max_bytes)
-            raw = log_file.read(max_bytes)
-    except OSError:
-        return ""
-    content = raw.decode("utf-8", errors="replace")
-    return content[-limit:]
-
-
-def handoff_log_succeeded(log_tail: str) -> bool:
-    lowered = log_tail.lower()
-    return (
-        "result (success)" in lowered
-        or '"subtype":"success"' in lowered.replace(" ", "")
-        or "subtype': 'success" in lowered
-    )
-
-
-def handoff_log_error_summary(log_tail: str) -> str:
-    for line in reversed(log_tail.splitlines()):
-        text = line.strip()
-        if not text:
-            continue
-        lowered = text.lower()
-        if "error" in lowered or "failed" in lowered or "traceback" in lowered:
-            return text[:220]
-    return ""
-
-
-def latest_handoff_status(log_tail: str, status: str) -> str:
-    for line in reversed(log_tail.splitlines()):
-        text = line.strip()
-        if not text:
-            continue
-        lowered = text.lower()
-        if lowered.startswith(("thinking", "result", "[ok]", "error", "warning")):
-            return text[:180]
-    labels = {
-        "new": "New handoff",
-        "queued": "Waiting for Planner",
-        "planner-working": "Planner is running",
-        "processed": "Planner finished with tasks",
-        "skipped": "No actionable findings",
-        "failed": "Planner failed",
-    }
-    return labels.get(status, status)
-
-
-def refresh_handoff_entry(entry: dict, board: dict) -> bool:
-    if not isinstance(entry, dict):
-        return False
-    changed = False
-    timestamp = now_iso()
-    handoff_path = str(entry.get("path") or "").strip()
-    task_refs = handoff_tasks_from_board(board, handoff_path)
-    task_ids = [ref["taskId"] for ref in task_refs]
-    if entry.get("taskIds") != task_ids:
-        entry["taskIds"] = task_ids
-        changed = True
-    if entry.get("tasks") != task_refs:
-        entry["tasks"] = task_refs
-        changed = True
-
-    status = str(entry.get("status") or "new").strip().lower()
-    log_tail = safe_handoff_log_tail(entry.get("logPath"))
-    latest_status = latest_handoff_status(log_tail, status)
-    if latest_status and entry.get("latestStatus") != latest_status:
-        entry["latestStatus"] = latest_status
-        changed = True
-
-    if status not in {"queued", "planner-working"}:
-        return changed
-
-    process_id = parse_process_id(entry.get("processId"))
-    if not process_id:
-        if status == "planner-working":
-            entry["status"] = "failed"
-            entry["error"] = entry.get("error") or "Planner marked running without a process ID."
-            entry["updatedAt"] = timestamp
-            changed = True
-        return changed
-
-    proc_status = spawned_process_status({
-        "processId": process_id,
-        "spawnedAt": entry.get("spawnedAt"),
-    })
-    process_state = str(proc_status.get("state") or "").strip().lower()
-    if entry.get("processState") != process_state:
-        entry["processState"] = process_state
-        changed = True
-    if entry.get("processCheckedAt") != proc_status.get("checkedAt"):
-        entry["processCheckedAt"] = proc_status.get("checkedAt", "")
-        changed = True
-    if proc_status.get("isRunning"):
-        if status != "planner-working":
-            entry["status"] = "planner-working"
-            entry["updatedAt"] = timestamp
-            changed = True
-        return changed
-
-    if process_state == "exited":
-        if handoff_log_succeeded(log_tail):
-            entry["status"] = "processed" if task_refs else "skipped"
-            entry["error"] = "" if task_refs else "Planner completed without creating source-linked tasks."
-        else:
-            entry["status"] = "failed"
-            entry["error"] = handoff_log_error_summary(log_tail) or "Planner process exited without a success result."
-        entry["processedAt"] = entry.get("processedAt") or timestamp
-        entry["updatedAt"] = timestamp
-        return True
-
-    entry["status"] = "failed"
-    entry["error"] = entry.get("error") or f"Planner process {process_id} {process_state or 'unknown'}."
-    entry["updatedAt"] = timestamp
-    return True
-
-
-def refresh_handoff_state(state: dict, board: dict) -> bool:
-    changed = False
-    if not isinstance(state, dict):
-        return False
-    for entry in state.get("handoffs", []):
-        if isinstance(entry, dict) and refresh_handoff_entry(entry, board):
-            changed = True
-    return changed
-
-
-def handoff_has_running_planner(state: dict, exclude_path: str = "") -> bool:
-    for entry in state.get("handoffs", []):
-        if not isinstance(entry, dict):
-            continue
-        if exclude_path and entry.get("path") == exclude_path:
-            continue
-        status = str(entry.get("status") or "").strip().lower()
-        if status == "planner-working":
-            return True
-    return False
-
-
-def handoff_has_queued_before(state: dict, handoff_path: str, created_at: str) -> bool:
-    queued_created_at = str(created_at or "")
-    for entry in state.get("handoffs", []):
-        if not isinstance(entry, dict) or entry.get("path") == handoff_path:
-            continue
-        if str(entry.get("status") or "").strip().lower() != "queued":
-            continue
-        other_created_at = str(entry.get("createdAt") or "")
-        if not queued_created_at or not other_created_at or other_created_at <= queued_created_at:
-            return True
-    return False
-
-
-def handoff_status_from_state(entry: dict) -> dict:
-    status = str(entry.get("status") or "new").strip().lower()
-    process_id = entry.get("processId")
-    return {
-        "filename": entry.get("filename", ""),
-        "source": entry.get("source", ""),
-        "path": entry.get("path", ""),
-        "status": status,
-        "model": entry.get("model", ""),
-        "personalName": entry.get("personalName", ""),
-        "processId": process_id,
-        "processState": entry.get("processState", ""),
-        "processCheckedAt": entry.get("processCheckedAt", ""),
-        "logPath": entry.get("logPath", ""),
-        "taskIds": entry.get("taskIds") or [],
-        "tasks": entry.get("tasks") or [],
-        "error": entry.get("error", ""),
-        "latestStatus": entry.get("latestStatus", ""),
-        "createdAt": entry.get("createdAt", ""),
-        "updatedAt": entry.get("updatedAt", ""),
-        "processedAt": entry.get("processedAt", ""),
-    }
 
 
 def parse_iso_datetime(value: object) -> datetime | None:
@@ -1535,7 +1226,6 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "relatedTaskIds",
             "dependsOn",
             "sourceReviewTaskId",
-            "sourceHandoffs",
             "redoCount",
             "claimedBy",
             "claimedAt",
@@ -2486,31 +2176,6 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "warnings": warnings,
         }
 
-    def handoff_summary(self, board: dict) -> dict:
-        state = load_handoff_state()
-        if refresh_handoff_state(state, board):
-            save_handoff_state(state)
-        status_counts: dict[str, int] = {}
-        for entry in state.get("handoffs", []):
-            if not isinstance(entry, dict):
-                continue
-            status = str(entry.get("status") or "new").strip().lower() or "new"
-            status_counts[status] = status_counts.get(status, 0) + 1
-        discovered = 0
-        for source in HANDOFF_SOURCES:
-            discovered += len(scan_handoff_files(source))
-        return {
-            "discoveredFiles": discovered,
-            "tracked": sum(status_counts.values()),
-            "statusCounts": status_counts,
-            "actionable": (
-                status_counts.get("new", 0)
-                + status_counts.get("queued", 0)
-                + status_counts.get("failed", 0)
-            ),
-            "running": status_counts.get("planner-working", 0),
-        }
-
     def get_system_status(self, board: dict, payload: dict) -> dict:
         del payload
         checked_at = now_iso()
@@ -2539,7 +2204,6 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             if isinstance(run, dict)
         ]
         board_health = self.board_health_summary(board)
-        handoffs = self.handoff_summary(board)
         logs = self.recent_log_summary()
 
         warning_items = []
@@ -2549,9 +2213,6 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             warning_items.append(f"{len(stale_agents)} stale agent record(s)")
         if logs["errorCount"]:
             warning_items.append(f"{logs['errorCount']} recent API/viewer error(s)")
-        failed_handoffs = int(handoffs.get("statusCounts", {}).get("failed", 0))
-        if failed_handoffs:
-            warning_items.append(f"{failed_handoffs} failed handoff(s)")
 
         status = "ok"
         if logs["errorCount"] or board_health["duplicateTaskIds"] or board_health["malformedTasks"]:
@@ -2597,7 +2258,6 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 "pausedRuns": len(paused_runs),
             },
             "dispatch": dispatch,
-            "handoffs": handoffs,
             "logs": logs,
             "warnings": warning_items[:12],
         }
@@ -3453,7 +3113,6 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "acceptanceCriteria": self.normalize_list(payload.get("acceptanceCriteria"), "acceptanceCriteria"),
             "dependsOn": self.normalize_list(payload.get("dependsOn"), "dependsOn"),
             "relatedTaskIds": self.normalize_list(payload.get("relatedTaskIds"), "relatedTaskIds"),
-            "sourceHandoffs": self.normalize_list(payload.get("sourceHandoffs"), "sourceHandoffs"),
             "files": self.normalize_list(payload.get("files"), "files"),
             "referenceImages": self.normalize_list(payload.get("referenceImages"), "referenceImages"),
             "inspectionTargets": self.normalize_list(payload.get("inspectionTargets"), "inspectionTargets"),
@@ -3722,7 +3381,6 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "acceptanceCriteria",
             "dependsOn",
             "relatedTaskIds",
-            "sourceHandoffs",
             "files",
             "referenceImages",
             "inspectionTargets",
@@ -3740,7 +3398,6 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "acceptanceCriteria",
             "dependsOn",
             "relatedTaskIds",
-            "sourceHandoffs",
             "files",
             "referenceImages",
             "inspectionTargets",
@@ -4491,359 +4148,6 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "resumeOfProcessId": resume_run.get("processId", "") if resume_run else "",
         }
 
-    # --- Handoff intake (upstream handoff file discovery and Planner auto-processing) ---
-
-    def list_handoffs(self, board: dict, payload: dict) -> dict:
-        del payload
-        state = load_handoff_state()
-        if refresh_handoff_state(state, board):
-            save_handoff_state(state)
-        existing = {
-            str(entry.get("path") or ""): entry
-            for entry in state.get("handoffs", [])
-            if isinstance(entry, dict)
-        }
-        handoffs = []
-        for source, base_dir in HANDOFF_SOURCES.items():
-            for file_info in scan_handoff_files(source):
-                entry = existing.get(file_info["path"])
-                if entry:
-                    file_info["status"] = handoff_status_from_state(entry)
-                else:
-                    file_info["status"] = {
-                        "filename": file_info["filename"],
-                        "source": source,
-                        "path": file_info["path"],
-                        "status": "new",
-                        "model": "",
-                        "personalName": "",
-                        "processId": None,
-                        "logPath": "",
-                        "taskIds": [],
-                        "tasks": [],
-                        "error": "",
-                        "latestStatus": "New handoff",
-                        "createdAt": file_info["createdAt"],
-                        "updatedAt": "",
-                        "processedAt": "",
-                    }
-                handoffs.append(file_info)
-        return {
-            "sources": sorted(HANDOFF_SOURCES.keys()),
-            "handoffs": handoffs,
-        }
-
-    def read_handoff(self, board: dict, payload: dict) -> dict:
-        del board
-        source = str(payload.get("source") or "frontend-audits").strip()
-        filename = str(payload.get("filename") or "").strip()
-        if not filename:
-            raise ValueError("Missing filename")
-        resolved = safe_handoff_path(source, filename)
-        if not resolved or not resolved.is_file():
-            raise LookupError(f"Handoff file not found: {source}/{filename}")
-        try:
-            content = resolved.read_text(encoding="utf-8", errors="replace")
-        except OSError as error:
-            raise RuntimeError(f"Unable to read handoff file: {error}") from error
-        return {
-            "filename": filename,
-            "source": source,
-            "path": f"handoffs/{source}/{filename}",
-            "content": content,
-            "size": resolved.stat().st_size,
-        }
-
-    def build_handoff_planner_phrase(self, handoff_path: str, backend_base_url: str, personal_name: str) -> str:
-        return (
-            f"load as planner and start; your personalName is {personal_name}; your model is planner-chat; "
-            f"backendBaseUrl is {backend_base_url}; use this full base URL for every task-board API call; "
-            f"call {backend_base_url}/api/register-agent with personalName, model, role to receive your agentId. "
-            f"You are processing a Web Front-End Auditor handoff file. "
-            f"Read the handoff at {handoff_path}, deduplicate findings against the current task board, "
-            "and convert only useful, actionable findings into deduplicated todo tasks per your planner rules. "
-            "Record the handoff path in each generated task's sourceHandoffs field. "
-            "Do not implement or review. "
-            "Skip findings that are not actionable or that duplicate existing board work."
-        )
-
-    def spawn_handoff_planner(self, handoff_entry: dict, backend_base_url: str) -> dict:
-        settings = load_dispatch_settings()
-        model = str((settings.get("commands") or {}).get("qwen") or QWEN_COMMAND or "qwen").strip() or "qwen"
-        tool = "qwen"
-        personal_name = str(handoff_entry.get("personalName") or "ada").strip()
-
-        phrase = self.build_handoff_planner_phrase(
-            handoff_entry.get("path", ""),
-            backend_base_url,
-            personal_name,
-        )
-
-        args = self.spawn_command_args(tool)
-        args.extend(["-p", phrase, "-y", "-o", "stream-json"])
-
-        working_dir = str(PROJECT_ROOT)
-        SPAWN_LOG_DIR.mkdir(parents=True, exist_ok=True)
-        run_stamp = datetime.now(timezone.utc).astimezone().strftime("%Y%m%d-%H%M%S")
-        safe_file = re.sub(r"[^a-zA-Z0-9_-]+", "-", Path(str(handoff_entry.get("filename") or "handoff")).stem).strip("-") or "handoff"
-        log_path = SPAWN_LOG_DIR / f"{run_stamp}-planner-handoff-{safe_file}-{tool}-{personal_name}-{secrets.token_hex(3)}.log"
-        popen_flags = 0
-        if hasattr(subprocess, "CREATE_NO_WINDOW"):
-            popen_flags |= subprocess.CREATE_NO_WINDOW
-        env = agent_subprocess_env(tool)
-        log_file = log_path.open("a", encoding="utf-8")
-        log_file.write(f"Handoff Planner ({tool}) at {now_iso()}\n")
-        log_file.write(f"Handoff: {handoff_entry.get('path', '')}\n")
-        log_file.write(f"Backend: {backend_base_url}\n")
-        log_file.write(f"Prompt: {phrase}\n\n")
-        log_file.flush()
-
-        formatter_script = str(Path(__file__).parent / "format_qwen_log.py")
-        process = subprocess.Popen(
-            args,
-            cwd=working_dir,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.PIPE,
-            stderr=log_file,
-            creationflags=popen_flags,
-            close_fds=True,
-            **_qwen_process_isolation_kwargs(),
-        )
-
-        threading.Thread(
-            target=_run_qwen_formatter_pipe,
-            args=(process, log_file, formatter_script),
-            daemon=True,
-        ).start()
-
-        return {
-            "processId": process.pid,
-            "logPath": str(log_path),
-            "model": tool,
-            "personalName": personal_name,
-        }
-
-    def process_handoff(self, board: dict, columns: dict, payload: dict) -> dict:
-        del columns
-        self.require_not_paused("process-handoff")
-        source = str(payload.get("source") or "frontend-audits").strip()
-        filename = str(payload.get("filename") or "").strip()
-        if not filename:
-            raise ValueError("Missing filename")
-        resolved = safe_handoff_path(source, filename)
-        if not resolved or not resolved.is_file():
-            raise LookupError(f"Handoff file not found: {source}/{filename}")
-
-        handoff_path = handoff_relative_path(source, filename)
-        state = load_handoff_state()
-        state_changed = refresh_handoff_state(state, board)
-        existing = None
-        for entry in state.get("handoffs", []):
-            if not isinstance(entry, dict):
-                continue
-            if entry.get("path") == handoff_path:
-                existing = entry
-                break
-
-        backend_base_url = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
-        if existing:
-            entry = existing
-            status = str(entry.get("status") or "").strip().lower()
-            if status == "planner-working":
-                if state_changed:
-                    save_handoff_state(state)
-                raise ValueError(f"Handoff {handoff_path} is already being processed (process {entry.get('processId')}).")
-            if status in ("processed", "skipped"):
-                if state_changed:
-                    save_handoff_state(state)
-                raise ValueError(f"Handoff {handoff_path} is already {status}. Use retry-handoff to reprocess.")
-            if status == "failed":
-                if state_changed:
-                    save_handoff_state(state)
-                raise ValueError(f"Handoff {handoff_path} is failed. Use retry-handoff to reprocess.")
-        else:
-            agents_state = self.load_active_agents_state()
-            personal_name = choose_auto_personal_name("planning", agents_state.get("agents", []), [])
-            entry = {
-                "filename": filename,
-                "source": source,
-                "path": handoff_path,
-                "status": "queued",
-                "personalName": personal_name,
-                "model": "qwen",
-                "processId": None,
-                "processState": "",
-                "processCheckedAt": "",
-                "logPath": "",
-                "taskIds": [],
-                "tasks": [],
-                "error": "",
-                "latestStatus": "Waiting for Planner",
-                "createdAt": now_iso(),
-                "updatedAt": now_iso(),
-                "processedAt": "",
-                "spawnedAt": "",
-            }
-            state["handoffs"].append(entry)
-
-        if handoff_has_running_planner(state, exclude_path=handoff_path) or handoff_has_queued_before(state, handoff_path, str(entry.get("createdAt") or "")):
-            entry["status"] = "queued"
-            entry["updatedAt"] = now_iso()
-            entry["latestStatus"] = "Waiting for Planner"
-            save_handoff_state(state)
-            return {
-                "ok": True,
-                "queued": True,
-                "handoff": handoff_status_from_state(entry),
-            }
-
-        entry["status"] = "queued"
-        entry["error"] = ""
-        entry["latestStatus"] = "Launching Planner"
-        entry["spawnedAt"] = now_iso()
-        entry["updatedAt"] = now_iso()
-
-        try:
-            result = self.spawn_handoff_planner(entry, backend_base_url)
-            entry["status"] = "planner-working"
-            entry["processId"] = result.get("processId")
-            entry["logPath"] = result.get("logPath", "")
-            entry["model"] = result.get("model", "qwen")
-            entry["personalName"] = result.get("personalName", entry.get("personalName", ""))
-            entry["latestStatus"] = "Planner is running"
-        except Exception as error:
-            entry["status"] = "failed"
-            entry["error"] = str(error)
-            entry["latestStatus"] = "Planner failed to launch"
-
-        save_handoff_state(state)
-        return {
-            "ok": entry["status"] != "failed",
-            "handoff": handoff_status_from_state(entry),
-        }
-
-    def retry_handoff(self, board: dict, columns: dict, payload: dict) -> dict:
-        del columns
-        self.require_not_paused("retry-handoff")
-        source = str(payload.get("source") or "frontend-audits").strip()
-        filename = str(payload.get("filename") or "").strip()
-        if not filename:
-            raise ValueError("Missing filename")
-        resolved = safe_handoff_path(source, filename)
-        if not resolved or not resolved.is_file():
-            raise LookupError(f"Handoff file not found: {source}/{filename}")
-        handoff_path = handoff_relative_path(source, filename)
-
-        state = load_handoff_state()
-        refresh_handoff_state(state, board)
-        existing = None
-        for entry in state.get("handoffs", []):
-            if isinstance(entry, dict) and entry.get("path") == handoff_path:
-                existing = entry
-                break
-        if not existing:
-            raise LookupError(f"No processing record found for {handoff_path}. Use process-handoff instead.")
-
-        status = str(existing.get("status") or "").strip().lower()
-        if status == "planner-working":
-            raise ValueError(f"Handoff {handoff_path} is still being processed.")
-
-        backend_base_url = f"http://{self.server.server_address[0]}:{self.server.server_address[1]}"
-        existing["status"] = "queued"
-        existing["error"] = ""
-        existing["taskIds"] = []
-        existing["tasks"] = []
-        existing["processId"] = None
-        existing["processState"] = ""
-        existing["processCheckedAt"] = ""
-        existing["updatedAt"] = now_iso()
-        existing["processedAt"] = ""
-        existing["spawnedAt"] = ""
-        existing["latestStatus"] = "Waiting for Planner"
-
-        if handoff_has_running_planner(state, exclude_path=handoff_path) or handoff_has_queued_before(state, handoff_path, str(existing.get("createdAt") or "")):
-            save_handoff_state(state)
-            return {
-                "ok": True,
-                "queued": True,
-                "handoff": handoff_status_from_state(existing),
-            }
-
-        existing["spawnedAt"] = now_iso()
-        existing["latestStatus"] = "Launching Planner"
-
-        try:
-            result = self.spawn_handoff_planner(existing, backend_base_url)
-            existing["status"] = "planner-working"
-            existing["processId"] = result.get("processId")
-            existing["logPath"] = result.get("logPath", "")
-            existing["model"] = result.get("model", "qwen")
-            existing["personalName"] = result.get("personalName", existing.get("personalName", ""))
-            existing["latestStatus"] = "Planner is running"
-        except Exception as error:
-            existing["status"] = "failed"
-            existing["error"] = str(error)
-            existing["latestStatus"] = "Planner failed to launch"
-
-        save_handoff_state(state)
-        return {
-            "ok": existing["status"] != "failed",
-            "handoff": handoff_status_from_state(existing),
-        }
-
-    def ignore_handoff(self, board: dict, columns: dict, payload: dict) -> dict:
-        del columns
-        source = str(payload.get("source") or "frontend-audits").strip()
-        filename = str(payload.get("filename") or "").strip()
-        if not filename:
-            raise ValueError("Missing filename")
-        resolved = safe_handoff_path(source, filename)
-        if not resolved or not resolved.is_file():
-            raise LookupError(f"Handoff file not found: {source}/{filename}")
-        handoff_path = handoff_relative_path(source, filename)
-
-        state = load_handoff_state()
-        refresh_handoff_state(state, board)
-        existing = None
-        for entry in state.get("handoffs", []):
-            if isinstance(entry, dict) and entry.get("path") == handoff_path:
-                existing = entry
-                break
-
-        if existing:
-            if str(existing.get("status") or "").strip().lower() == "planner-working":
-                raise ValueError(f"Handoff {handoff_path} is still being processed.")
-            existing["status"] = "skipped"
-            existing["updatedAt"] = now_iso()
-            existing["processedAt"] = existing.get("processedAt") or now_iso()
-            existing["latestStatus"] = "Marked ignored"
-        else:
-            existing = {
-                "filename": filename,
-                "source": source,
-                "path": handoff_path,
-                "status": "skipped",
-                "personalName": "",
-                "model": "",
-                "processId": None,
-                "logPath": "",
-                "taskIds": [],
-                "tasks": [],
-                "error": "",
-                "latestStatus": "Marked ignored",
-                "createdAt": now_iso(),
-                "updatedAt": now_iso(),
-                "processedAt": now_iso(),
-                "spawnedAt": "",
-            }
-            state["handoffs"].append(existing)
-        save_handoff_state(state)
-        return {
-            "ok": True,
-            "handoff": handoff_status_from_state(existing),
-        }
-
     # --- Planner chat (interactive human input to the Planner agent) ---
 
     PLANNER_CHAT_OUTPUT_MARKER = "===PLANNER-OUTPUT==="
@@ -5538,128 +4842,6 @@ def resume_paused_runs(
     return changed
 
 
-def auto_process_handoffs(server: ThreadingHTTPServer) -> None:
-    board = load_dispatch_board()
-    state = load_handoff_state()
-    if refresh_handoff_state(state, board):
-        save_handoff_state(state)
-        state = load_handoff_state()
-    existing_paths = {
-        str(entry.get("path") or ""): entry
-        for entry in state.get("handoffs", [])
-        if isinstance(entry, dict)
-    }
-    host, port = server.server_address
-    backend_base_url = f"http://{host}:{port}"
-
-    def request_handoff_processing(source: str, filename: str, path: str) -> None:
-        payload = {
-            "source": source,
-            "filename": filename,
-            "agentName": "Auto handoff dispatcher",
-        }
-        request = Request(
-            f"{backend_base_url}/api/process-handoff",
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-            method="POST",
-        )
-        with urlopen(request, timeout=30) as response:
-            json.loads(response.read().decode("utf-8") or "{}")
-        append_dispatch_log({
-            "action": "auto-process-handoff",
-            "status": "success",
-            "httpStatus": 200,
-            "path": path,
-            "error": "",
-        })
-
-    queued = sorted(
-        [
-            entry for entry in state.get("handoffs", [])
-            if isinstance(entry, dict) and str(entry.get("status") or "").strip().lower() == "queued"
-        ],
-        key=lambda entry: str(entry.get("createdAt") or ""),
-    )
-    if queued and not handoff_has_running_planner(state):
-        entry = queued[0]
-        try:
-            request_handoff_processing(
-                str(entry.get("source") or "frontend-audits"),
-                str(entry.get("filename") or ""),
-                str(entry.get("path") or ""),
-            )
-        except Exception as error:
-            append_dispatch_log({
-                "action": "auto-process-handoff",
-                "status": "error",
-                "httpStatus": 500,
-                "path": str(entry.get("path") or ""),
-                "error": str(error),
-            })
-        state = load_handoff_state()
-        if refresh_handoff_state(state, board):
-            save_handoff_state(state)
-            state = load_handoff_state()
-        existing_paths = {
-            str(entry.get("path") or ""): entry
-            for entry in state.get("handoffs", [])
-            if isinstance(entry, dict)
-        }
-
-    changed = False
-    for source in HANDOFF_SOURCES:
-        for file_info in scan_handoff_files(source):
-            path = file_info["path"]
-            if path in existing_paths:
-                continue
-            personal_name = choose_auto_personal_name("planning", load_dispatch_active_agents(), [])
-            entry = {
-                "filename": file_info["filename"],
-                "source": source,
-                "path": path,
-                "status": "queued",
-                "personalName": personal_name,
-                "model": "qwen",
-                "processId": None,
-                "logPath": "",
-                "taskIds": [],
-                "tasks": [],
-                "error": "",
-                "latestStatus": "Waiting for Planner",
-                "createdAt": now_iso(),
-                "updatedAt": now_iso(),
-                "processedAt": "",
-                "spawnedAt": "",
-            }
-            try:
-                request_handoff_processing(source, file_info["filename"], path)
-            except Exception as error:
-                latest_state = load_handoff_state()
-                latest_paths = {
-                    str(latest.get("path") or "")
-                    for latest in latest_state.get("handoffs", [])
-                    if isinstance(latest, dict)
-                }
-                if path not in latest_paths:
-                    entry["status"] = "failed"
-                    entry["error"] = str(error)
-                    entry["latestStatus"] = "Auto processing failed"
-                    latest_state.setdefault("handoffs", []).append(entry)
-                    save_handoff_state(latest_state)
-                    state = latest_state
-                    existing_paths[path] = entry
-                append_dispatch_log({
-                    "action": "auto-process-handoff",
-                    "status": "error",
-                    "httpStatus": 500,
-                    "path": path,
-                    "error": str(error),
-                })
-    if changed:
-        save_handoff_state(state)
-
-
 def run_auto_dispatch_once(server: ThreadingHTTPServer) -> None:
     now = datetime.now(timezone.utc).astimezone()
     settings = load_dispatch_settings()
@@ -5679,8 +4861,6 @@ def run_auto_dispatch_once(server: ThreadingHTTPServer) -> None:
 
     if resume_paused_runs(server, settings, pending, now):
         changed_settings = True
-
-    auto_process_handoffs(server)
 
     for role in ("worker", "review"):
         role_settings = settings.get(role, {})

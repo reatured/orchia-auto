@@ -1,10 +1,10 @@
 # agent-workflow-starter
 
-A reusable, project-agnostic **multi-agent workflow** for coordinating AI coding agents (Claude, Codex, or Qwen CLIs) on a single project. It ships a clean three-role board core — **Planner**, **Worker**, **Reviewer** — backed by a small local task-board server, a JSON board, and a read-only HTML viewer. It also includes an upstream **Web Front-End Auditor** role that writes visual audit handoffs for Planner.
+A reusable, project-agnostic **multi-agent workflow** for coordinating AI coding agents (Claude, Codex, or Qwen CLIs) on a single project. It ships a clean three-role board core — **Planner**, **Worker**, **Reviewer** — backed by a small local task-board server, a JSON board, and a read-only HTML viewer.
 
 Copy this repo into a new project, adjust a few config values and role files, and start coordinating multiple agents on real work without them stepping on each other.
 
-Current starter version: **0.3.0**. See [`CHANGELOG.md`](CHANGELOG.md) for upgrade notes.
+Current starter version: **0.3.1**. See [`CHANGELOG.md`](CHANGELOG.md) for upgrade notes.
 
 ---
 
@@ -14,7 +14,6 @@ When you run more than one AI coding agent on the same project at the same time,
 
 It gives you a clear separation between **planning**, **doing**, and **reviewing**, so each agent has one job and one job only:
 
-- **Web Front-End Auditor** — visually inspects the running web UI and writes Markdown handoffs. Never creates or moves tasks.
 - **Planner** — turns your requirements into small, deduplicated `todo` tasks on the board. Never writes product code.
 - **Worker** — claims exactly one task at a time, implements it, and moves it to `review`. Never reviews or marks its own work done.
 - **Reviewer** — reviews completed work and either approves it to `done` or opens a follow-up `todo`. Never implements fixes.
@@ -70,6 +69,8 @@ See [`workflow/workflow-overview.md`](workflow/workflow-overview.md) for the ful
 
 ## Setup
 
+> **Fastest path — drop into an existing project.** Put this whole folder inside your project, then from inside it run `python3 init.py` (Windows: `py -3 init.py`). It configures `task-board/config.json` to target the parent project, writes `CLAUDE.md` + `AGENTS.md` pointers there so Claude Code and Codex auto-load the workflow, picks a free port, and starts the backend. Pass `--no-start` to configure only, or a path to target a different project root. The manual steps below explain what it sets up.
+
 ### 1. Get the repo
 
 Clone it into (or alongside) your project:
@@ -122,8 +123,7 @@ Edit the files in [`roles/`](roles/) to fit your project:
 ### 4. (Optional) Tweak appearance and extend
 
 - Edit [`task-board/agent-color-schema.json`](task-board/agent-color-schema.json) to change the `personalNamePool` (the short names agents pick from) or the chip colors.
-- Use `roles/web-frontend-auditor.md` when you want a visual UI pass before planning. It writes handoffs under `handoffs/frontend-audits/`; only the Planner turns those handoffs into tasks.
-- If you need other research/audit agents that feed the Planner, follow the **"Extending the workflow"** section in [`workflow/workflow-overview.md`](workflow/workflow-overview.md). Upstream agents write Markdown handoff files; only the Planner ever creates tasks.
+- If you need research/audit agents that feed the Planner, follow the **"Extending the workflow"** section in [`workflow/workflow-overview.md`](workflow/workflow-overview.md). Upstream agents write Markdown input files; only the Planner ever creates tasks.
 
 ### 5. Start the backend
 
@@ -173,12 +173,11 @@ Open a **separate chat per agent** and load a role with its start phrase:
 
 | Start phrase | Role | What it does |
 | --- | --- | --- |
-| `load as web front-end auditor` | Web Front-End Auditor | Visually inspects the app and writes a handoff for Planner. |
 | `load as planner` | Planner | Reads your requirements, creates `todo` tasks. |
 | `load as worker` | Worker | Claims a task, implements it, moves it to `review`. |
 | `load as reviewer` | Reviewer | Reviews completed work; approves or sends back. |
 
-A typical visual-polish run: start a **Web Front-End Auditor** chat against your app URL → give its handoff file to a **Planner** chat → start one or more **Worker** chats to claim and build → start a **Reviewer** chat to approve. Watch board-moving work on the viewer.
+A typical run: start a **Planner** chat with your requirements → start one or more **Worker** chats to claim and build → start a **Reviewer** chat to approve. Watch board-moving work on the viewer.
 
 > The viewer also has **Spawn** buttons and optional **auto-dispatch** to launch Workers/Reviewers as hidden CLI processes. Use **Pause +1h** to add one hour from `max(now, pausedUntil)`; repeated clicks accumulate time. While paused, the server rejects new Worker claims, Reviewer claims, viewer Spawn clicks, and auto-dispatch spawns. **Resume now** clears the pause, after which auto-dispatch resumes eligible paused hidden runs before starting normal new work. Hard stop applies only to backend-spawned hidden Worker/Reviewer processes and records `pausedRuns`; it does not kill manual terminal/chat agents. Use the bottom-left **Settings** tab to test and customize the local Codex, Claude Code, and Qwen command names used for spawning. Plain `codex`, `claude`, and `qwen` commands are resolved from `PATH` plus common install locations such as Homebrew, `/usr/local/bin`, user-local bins, npm, and Windows Node/npm paths. Spawned output is written to `task-board/spawned-agent-logs/`, and the viewer uses PID checks plus log previews to show whether a spawned process is still running.
 
@@ -194,7 +193,6 @@ agent-workflow-starter/
   AGENTS.md                     # entry point both Claude and Codex read first
   CLAUDE.md                     # one-line pointer to AGENTS.md
   roles/
-    web-frontend-auditor.md
     planner.md  worker.md  reviewer.md
   workflow/
     workflow-overview.md        # the three-role model, columns, rules
@@ -227,6 +225,6 @@ The server writes an append-only audit log (`task-board/task-board-api.log`, JSO
 
 ## Notes
 
-- Runtime artifacts (`*.log`, `active-agents.json`, `agent-dispatch-settings.json`, `handoff-state.json`, `planner-chat/`, `spawned-agent-logs/`, `codex-sqlite-state/`, `*.json.tmp`, `__pycache__/`), generated handoffs/evidence (`handoffs/`, `reference-images/`), tool-local state (`.qwen/`), local reference material (`reference/`), and project-local self-test boards (`teamwork/`) are git-ignored; the server regenerates or owns them.
+- Runtime artifacts (`*.log`, `active-agents.json`, `agent-dispatch-settings.json`, `planner-chat/`, `spawned-agent-logs/`, `codex-sqlite-state/`, `*.json.tmp`, `__pycache__/`), generated evidence (`reference-images/`), tool-local state (`.qwen/`), local reference material (`reference/`), and project-local self-test boards (`teamwork/`) are git-ignored; the server regenerates or owns them.
 - Works on Windows, macOS, and Linux. On macOS/Linux use `python3 task-board/server.py`; on Windows use `py -3 task-board\server.py` or `python task-board\server.py`.
 - `notion-page.md` is a paste-ready human-readable master spec — drop it into Notion or any wiki to share the workflow with your team.

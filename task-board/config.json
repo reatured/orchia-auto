@@ -1,6 +1,6 @@
 {
   "_comment": "Edit these values for your project. The server reads this file at startup. See README.md.",
-  "projectName": "Your Project Name",
+  "projectName": "Orchia Auto Starter Kit",
   "boardTitle": "Project Task Board",
   "owner": "owner",
   "ownerLabel": "the project owner",

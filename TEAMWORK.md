@@ -1,6 +1,6 @@
 # Agent Instructions
 
-This project uses a simple JSON-backed task board with three separate board roles: **Planner**, **Worker**, and **Reviewer**. It also supports an upstream **Web Front-End Auditor** that visually inspects the running UI and writes handoff files for Planner. The Planner turns requirements and handoffs into tasks, Workers implement tasks, and Reviewers review completed work. The workflow is compatible with the Claude, Codex, and Qwen CLIs.
+This project uses a simple JSON-backed task board with three separate board roles: **Planner**, **Worker**, and **Reviewer**. The Planner turns requirements into tasks, Workers implement tasks, and Reviewers review completed work. The workflow is compatible with the Claude, Codex, and Qwen CLIs.
 
 > **New to this repo?** This is a reusable starter. Edit `task-board/config.json` and the role files for your project — see `README.md` ("Adapt to your project").
 
@@ -9,7 +9,6 @@ This project uses a simple JSON-backed task board with three separate board role
 - Workflow overview: `workflow/workflow-overview.md`
 - Current starter version: `VERSION`
 - Release notes and upgrade notes: `CHANGELOG.md`
-- Web Front-End Auditor role: `roles/web-frontend-auditor.md`
 - Planner role: `roles/planner.md`
 - Worker role: `roles/worker.md`
 - Reviewer role: `roles/reviewer.md`
@@ -24,14 +23,15 @@ Use these phrases at the start of a new chat to load the intended role:
 
 | Start phrase | Role file |
 | --- | --- |
-| `load as web front-end auditor` | `roles/web-frontend-auditor.md` |
 | `load as planner` | `roles/planner.md` |
 | `load as worker` | `roles/worker.md` |
 | `load as reviewer` | `roles/reviewer.md` |
 
 ## Backend (Task Board Server)
 
-Start the local task-board backend (Python 3.9+, no third-party dependencies):
+**Fastest setup (drop-in):** from this starter folder, run `python3 init.py` (Windows: `py -3 init.py`). It points the board at the project folder that holds this starter, writes `CLAUDE.md` and `AGENTS.md` pointers into that project so Claude and Codex auto-load the workflow, picks a free port, and starts the backend. Use `--no-start` to configure without launching, or pass a path to target a different project root.
+
+Or start the local task-board backend manually (Python 3.9+, no third-party dependencies):
 
 ```bash
 # macOS / Linux / Git Bash
@@ -85,4 +85,4 @@ If the backend is not running, agents coordinate by editing `task-board/board.js
 
 ## Hard Role Separation
 
-Web Front-End Auditor, Planner, Worker, and Reviewer are separate agents. Agents do not switch roles inside the same chat. The Web Front-End Auditor writes handoffs under `handoffs/frontend-audits/` and does not mutate the task board. See `workflow/workflow-overview.md` for the full rules, the six board columns (`todo`, `claimed`, `review`, `reviewing`, `done`, `archived`), and the conflict rule.
+Planner, Worker, and Reviewer are separate agents. Agents do not switch roles inside the same chat. See `workflow/workflow-overview.md` for the full rules, the six board columns (`todo`, `claimed`, `review`, `reviewing`, `done`, `archived`), and the conflict rule.

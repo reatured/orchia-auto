@@ -4,7 +4,6 @@
   "updatedAt": "",
   "workflowDocs": {
     "overview": "../workflow/workflow-overview.md",
-    "webFrontendAuditor": "../roles/web-frontend-auditor.md",
     "planner": "../roles/planner.md",
     "worker": "../roles/worker.md",
     "reviewer": "../roles/reviewer.md",
@@ -24,7 +23,6 @@
     "titleValidation": "Every task must have a real, nonblank title. Untitled, Untitled task, and blank titles are invalid; the API rejects them and the viewer hides malformed records."
   },
   "roleSeparation": {
-    "webFrontendAuditor": "Web Front-End Auditor is an upstream handoff role. It inspects the running UI and writes Markdown handoffs, but never creates tasks, claims work, moves cards, edits code, or reviews completed work.",
     "planner": "Planner is planning-only. It records requirements in board.json, but never switches into Worker or Reviewer behavior in the same chat.",
     "worker": "Worker execution starts only in a separate Worker chat or when the owner explicitly starts an agent with the Worker role.",
     "reviewer": "Reviewer review starts only in a separate Reviewer chat or when the owner explicitly starts an agent with the Reviewer role.",

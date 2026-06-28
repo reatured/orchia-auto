@@ -1,0 +1,179 @@
+#!/usr/bin/env python3
+"""Initialize this agent task-board starter for the project that holds it.
+
+Drop this whole folder into a project, then run:
+
+    python3 init.py            # macOS / Linux / Git Bash
+    py -3 init.py              # Windows
+
+What it does:
+  1. Points the task board at the PARENT project folder (the one holding this
+     starter) by setting `projectRoot` in task-board/config.json.
+  2. Names the board after that parent folder and picks a free port.
+  3. Writes thin CLAUDE.md and AGENTS.md pointers into the parent folder so
+     Claude Code and Codex auto-load the workflow (TEAMWORK.md). Existing files
+     are preserved -- the pointer is appended, never overwritten.
+  4. Starts the backend and prints the viewer URL (use --no-start to skip).
+
+Flags:
+  --no-start        Configure only; do not launch the server.
+  --port N          Force a specific port instead of auto-selecting.
+  PROJECT_ROOT      Optional path to use as the project root instead of the
+                    parent folder (stored as an absolute path).
+"""
+
+from __future__ import annotations
+
+import json
+import socket
+import subprocess
+import sys
+from pathlib import Path
+
+STARTER_DIR = Path(__file__).resolve().parent
+TASKBOARD_DIR = STARTER_DIR / "task-board"
+CONFIG_PATH = TASKBOARD_DIR / "config.json"
+SERVER_PATH = TASKBOARD_DIR / "server.py"
+TEAMWORK_FILE = "TEAMWORK.md"
+
+POINTER_START = "<!-- agent-workflow-pointer:start -->"
+POINTER_END = "<!-- agent-workflow-pointer:end -->"
+
+
+def parse_args(argv: list[str]) -> dict:
+    opts = {"start": True, "port": None, "project_root": None}
+    rest = []
+    i = 0
+    while i < len(argv):
+        arg = argv[i]
+        if arg == "--no-start":
+            opts["start"] = False
+        elif arg == "--port":
+            i += 1
+            if i >= len(argv):
+                sys.exit("--port requires a number")
+            opts["port"] = int(argv[i])
+        elif arg.startswith("--port="):
+            opts["port"] = int(arg.split("=", 1)[1])
+        elif arg in ("-h", "--help"):
+            print(__doc__)
+            sys.exit(0)
+        else:
+            rest.append(arg)
+        i += 1
+    if rest:
+        opts["project_root"] = rest[0]
+    return opts
+
+
+def load_config() -> dict:
+    if CONFIG_PATH.exists():
+        try:
+            data = json.loads(CONFIG_PATH.read_text(encoding="utf-8-sig"))
+            if isinstance(data, dict):
+                return data
+        except json.JSONDecodeError:
+            print(f"! config.json is invalid JSON; rebuilding from defaults.")
+    return {}
+
+
+def find_free_port(host: str, start: int) -> int:
+    for port in range(start, start + 100):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+            try:
+                sock.bind((host, port))
+                return port
+            except OSError:
+                continue
+    return start
+
+
+def write_pointer(project_dir: Path, name: str, starter_name: str) -> str:
+    """Create or append the workflow pointer in project_dir/<name>. Returns action."""
+    target = project_dir / name
+    block = (
+        f"{POINTER_START}\n"
+        f"# Agent Workflow\n\n"
+        f"This project uses the multi-agent task-board workflow in `{starter_name}/`.\n\n"
+        f"**Before doing any workflow task, read `{starter_name}/{TEAMWORK_FILE}`**, "
+        f"then follow the role-loading instructions for your session "
+        f"(Planner / Worker / Reviewer).\n"
+        f"{POINTER_END}\n"
+    )
+    if target.exists():
+        existing = target.read_text(encoding="utf-8-sig")
+        if POINTER_START in existing:
+            return "unchanged"
+        sep = "" if existing.endswith("\n\n") else ("\n" if existing.endswith("\n") else "\n\n")
+        target.write_text(existing + sep + block, encoding="utf-8")
+        return "appended"
+    target.write_text(block, encoding="utf-8")
+    return "created"
+
+
+def main() -> None:
+    opts = parse_args(sys.argv[1:])
+
+    if not SERVER_PATH.exists():
+        sys.exit(f"Cannot find {SERVER_PATH}. Run this script from inside the starter folder.")
+
+    starter_name = STARTER_DIR.name
+    if opts["project_root"]:
+        project_dir = Path(opts["project_root"]).resolve()
+        # An explicit target is stored as an absolute path (robust, unambiguous).
+        project_root_value = project_dir.as_posix()
+    else:
+        project_dir = STARTER_DIR.parent
+        # The parent folder is always two levels up from task-board/.
+        project_root_value = "../.."
+
+    if project_dir == STARTER_DIR:
+        sys.exit("Project root cannot be the starter folder itself.")
+
+    config = load_config()
+    config.setdefault("owner", "owner")
+    config.setdefault("ownerLabel", "the project owner")
+    config.setdefault("devServerUrl", "http://localhost:3000")
+    config.setdefault("host", "127.0.0.1")
+    config.setdefault("spawn", {"claudeCommand": "claude", "codexCommand": "codex", "qwenCommand": "qwen"})
+
+    config["_comment"] = "Generated by init.py. Re-run init.py to reconfigure, or edit by hand."
+    config["projectName"] = project_dir.name
+    config["boardTitle"] = f"{project_dir.name} Task Board"
+    config["projectRoot"] = project_root_value
+
+    host = str(config.get("host") or "127.0.0.1")
+    requested_port = opts["port"] or int(config.get("port") or 4177)
+    port = requested_port if opts["port"] else find_free_port(host, requested_port)
+    config["port"] = port
+
+    CONFIG_PATH.write_text(json.dumps(config, indent=2) + "\n", encoding="utf-8")
+
+    print(f"Starter folder : {STARTER_DIR}")
+    print(f"Project root   : {project_dir}  (projectRoot = {config['projectRoot']})")
+    print(f"Board name     : {config['boardTitle']}")
+    print(f"Port           : {port}")
+
+    for name in ("CLAUDE.md", "AGENTS.md"):
+        action = write_pointer(project_dir, name, starter_name)
+        print(f"Entry point    : {project_dir / name}  [{action}]")
+
+    viewer_url = f"http://{host}:{port}/viewer.html"
+    print()
+    if not opts["start"]:
+        print("Configured. Start the backend with:")
+        print(f"    python3 {SERVER_PATH.relative_to(STARTER_DIR)}")
+        print(f"Then open: {viewer_url}")
+        return
+
+    print(f"Starting backend... open the viewer at: {viewer_url}")
+    print("(Ctrl+C to stop)\n")
+    sys.stdout.flush()
+    try:
+        subprocess.run([sys.executable, str(SERVER_PATH)], check=False)
+    except KeyboardInterrupt:
+        print("\nStopped.")
+
+
+if __name__ == "__main__":
+    main()

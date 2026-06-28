@@ -1142,194 +1142,6 @@
       text-transform: uppercase;
     }
 
-    /* Handoff intake lane */
-    .handoff-intake {
-      margin-bottom: 18px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.68);
-      overflow: hidden;
-    }
-
-    .handoff-intake-header {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--line);
-      cursor: pointer;
-      user-select: none;
-    }
-
-    .handoff-intake-header h2 {
-      margin: 0;
-      font-size: 15px;
-      font-weight: 800;
-      flex: 1 1 auto;
-    }
-
-    .handoff-intake-header .handoff-count {
-      font-size: 12px;
-      font-weight: 700;
-      color: var(--muted);
-      background: rgba(25, 24, 22, 0.06);
-      border-radius: 6px;
-      padding: 2px 7px;
-    }
-
-    .handoff-intake-header .handoff-toggle {
-      font: inherit;
-      font-size: 12px;
-      padding: 3px 8px;
-      border: 1px solid var(--line);
-      border-radius: 6px;
-      background: var(--panel);
-      color: var(--ink);
-      cursor: pointer;
-    }
-
-    .handoff-intake-header .handoff-toggle:hover { border-color: #aaa197; }
-
-    .handoff-intake-body {
-      padding: 10px 14px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      max-height: 340px;
-      overflow-y: auto;
-    }
-
-    .handoff-intake-body.is-collapsed { display: none; }
-
-    .handoff-intake-empty {
-      text-align: center;
-      color: var(--muted);
-      padding: 14px 0;
-      font-size: 13px;
-    }
-
-    .handoff-card {
-      display: flex;
-      align-items: flex-start;
-      gap: 10px;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      background: rgba(255, 255, 255, 0.82);
-      font-size: 13px;
-    }
-
-    .handoff-card-status {
-      flex: 0 0 auto;
-      width: 8px;
-      min-height: 36px;
-      border-radius: 4px;
-      align-self: stretch;
-    }
-
-    .handoff-card-status[data-status="new"] { background: #6ea8d8; }
-    .handoff-card-status[data-status="queued"] { background: #6ea8d8; }
-    .handoff-card-status[data-status="planner-working"] { background: #d3aa6c; }
-    .handoff-card-status[data-status="processed"] { background: #6ab07a; }
-    .handoff-card-status[data-status="skipped"] { background: #a8a49b; }
-    .handoff-card-status[data-status="failed"] { background: #d06a6a; }
-
-    .handoff-card-body {
-      flex: 1 1 auto;
-      min-width: 0;
-    }
-
-    .handoff-card-title {
-      font-weight: 700;
-      font-size: 13px;
-      word-break: break-all;
-      overflow-wrap: anywhere;
-    }
-
-    .handoff-card-meta {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 6px 12px;
-      margin-top: 3px;
-      font-size: 11px;
-      color: var(--muted);
-    }
-
-    .handoff-card-meta .handoff-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      padding: 1px 6px;
-      border-radius: 4px;
-      font-weight: 700;
-      text-transform: uppercase;
-      font-size: 10px;
-      letter-spacing: 0.03em;
-    }
-
-    .handoff-badge[data-status="new"] { color: #3b7cb8; background: #e4f0fa; }
-    .handoff-badge[data-status="queued"] { color: #3b7cb8; background: #e4f0fa; }
-    .handoff-badge[data-status="planner-working"] { color: #8f6d34; background: #fdf3e0; }
-    .handoff-badge[data-status="processed"] { color: #3d7a4d; background: #e6f5ea; }
-    .handoff-badge[data-status="skipped"] { color: #6b675e; background: #efede8; }
-    .handoff-badge[data-status="failed"] { color: #a03e3e; background: #fbe6e6; }
-
-    .handoff-card-actions {
-      flex: 0 0 auto;
-      display: flex;
-      flex-wrap: wrap;
-      gap: 4px;
-      align-items: center;
-      justify-content: flex-end;
-      max-width: 280px;
-    }
-
-    .handoff-card-actions button {
-      font: inherit;
-      font-size: 11px;
-      padding: 3px 8px;
-      border: 1px solid var(--line);
-      border-radius: 5px;
-      background: var(--panel);
-      color: var(--ink);
-      cursor: pointer;
-      white-space: nowrap;
-    }
-
-    .handoff-card-actions button:hover { border-color: #aaa197; }
-    .handoff-card-actions button[data-action="process"] { border-color: #6ea8d8; color: #3b7cb8; }
-    .handoff-card-actions button[data-action="retry"] { border-color: #d06a6a; color: #a03e3e; }
-
-    .handoff-card-error {
-      margin-top: 4px;
-      font-size: 11px;
-      color: #a03e3e;
-      word-break: break-word;
-    }
-
-    .handoff-card-tasks {
-      margin-top: 4px;
-      font-size: 11px;
-      color: var(--muted);
-    }
-
-    .handoff-card-task-ref {
-      display: inline;
-      color: var(--ink);
-    }
-
-    .handoff-card-statusline {
-      margin-top: 4px;
-      font-size: 11px;
-      color: var(--muted);
-      overflow-wrap: anywhere;
-    }
-
-    @media (max-width: 680px) {
-      .handoff-card { flex-wrap: wrap; }
-      .handoff-card-actions { width: 100%; max-width: none; justify-content: flex-end; margin-top: 4px; }
-    }
-
     /* Planner chat dock */
     .planner-chat-dock {
       position: fixed;
@@ -3135,18 +2947,6 @@
       </article>
     </section>
 
-    <section class="handoff-intake" id="handoffIntake" aria-label="Handoff intake">
-      <div class="handoff-intake-header" id="handoffIntakeHeader">
-        <h2>Handoff Intake</h2>
-        <span class="handoff-count" id="handoffCount">0</span>
-        <button class="handoff-toggle" type="button" id="handoffRefreshButton" title="Refresh handoff list">Refresh</button>
-        <button class="handoff-toggle" type="button" id="handoffCollapseButton">Hide</button>
-      </div>
-      <div class="handoff-intake-body" id="handoffIntakeBody">
-        <div class="handoff-intake-empty" id="handoffEmpty">No handoff files found. Upstream auditor handoffs will appear here.</div>
-      </div>
-    </section>
-
     <section class="board" id="board" aria-label="Agent task board"></section>
     <section class="workflow-board" id="workflowBoard" aria-label="Workflow graph"></section>
     <section class="archive-board" id="archiveBoard" aria-label="Archived task board"></section>
@@ -3245,7 +3045,6 @@
         worker: { enabled: false, model: "codex", maxAgents: 1, activeAgents: 0, pendingSpawns: 0 },
         review: { enabled: false, model: "codex", maxAgents: 1, activeAgents: 0, pendingSpawns: 0 }
       },
-      handoffs: { discoveredFiles: 0, tracked: 0, statusCounts: {}, actionable: 0, running: 0 },
       logs: { recentCount: 0, errorCount: 0, latestError: {}, recentErrors: [] },
       warnings: []
     };
@@ -3310,10 +3109,6 @@
     let pauseCountdownTimer = null;
     let pauseActionInFlight = false;
     let pinnedAgentRunKey = "";
-    let currentHandoffs = [];
-    let handoffIntakeCollapsed = false;
-    let handoffLoading = false;
-    let handoffActionInFlight = false;
 
     function syncViewportClientWidth() {
       document.documentElement.style.setProperty(
@@ -3661,7 +3456,6 @@
       const board = source.board && typeof source.board === "object" ? source.board : {};
       const agents = source.agents && typeof source.agents === "object" ? source.agents : {};
       const dispatch = source.dispatch && typeof source.dispatch === "object" ? source.dispatch : {};
-      const handoffs = source.handoffs && typeof source.handoffs === "object" ? source.handoffs : {};
       const logs = source.logs && typeof source.logs === "object" ? source.logs : {};
       const normalized = {
         ...fallbackSystemStatus,
@@ -3680,11 +3474,6 @@
         dispatch: {
           worker: { ...fallbackSystemStatus.dispatch.worker, ...(dispatch.worker || {}) },
           review: { ...fallbackSystemStatus.dispatch.review, ...(dispatch.review || {}) }
-        },
-        handoffs: {
-          ...fallbackSystemStatus.handoffs,
-          ...handoffs,
-          statusCounts: { ...(handoffs.statusCounts || {}) }
         },
         logs: {
           ...fallbackSystemStatus.logs,
@@ -3792,8 +3581,6 @@
           `${data.logs.errorCount || 0} errors`,
           [
             errorDetail,
-            data.handoffs.actionable ? `Handoffs needing action ${data.handoffs.actionable}` : "",
-            data.handoffs.running ? `Planner handoffs running ${data.handoffs.running}` : ""
           ],
           data.logs.errorCount ? "attention" : "ok",
           `${data.logs.recentCount || 0}`
@@ -4393,87 +4180,22 @@
       const doneCount = workflowCount(normalized, "done");
       const archivedCount = workflowCount(normalized, "archived");
       return {
-        "frontend-auditor": {
-          kind: "Upstream agent",
-          title: "Web Front-End Auditor",
-          color: "#4f7f77",
-          summary: "Visually inspects the running web UI before planning and writes a Markdown handoff. It never creates tasks or mutates the board.",
-          sections: {
-            "Start Phrase": [
-              "load as web front-end auditor"
-            ],
-            Context: [
-              "Runs before Planner when the owner wants a visual layout pass.",
-              "Uses the owner-provided app URL, or devServerUrl from task-board/config.json when no URL is given.",
-              "Checks key screens and states across mobile, tablet, and desktop viewports."
-            ],
-            Reads: [
-              "workflow/workflow-overview.md and roles/web-frontend-auditor.md at startup.",
-              "The running web app through a browser.",
-              "task-board/config.json only to find devServerUrl when the owner did not provide a target URL."
-            ],
-            Goal: [
-              "Find concrete visual issues before Planner creates implementation tasks.",
-              "Capture overflow, clipping, overlap, broken wrapping, unintended scrolling, hidden controls, and responsive regressions."
-            ],
-            Behaviors: [
-              "Inspect visible UI with browser tools, screenshots, viewport changes, and interactions where useful.",
-              "Record reproduction steps, expected behavior, actual behavior, evidence, likely areas, and suggested acceptance criteria.",
-              "Write one Markdown handoff per audit."
-            ],
-            Writes: [
-              "handoffs/frontend-audits/YYYYMMDD-HHMMSS-short-scope.md.",
-              "reference-images/frontend-audits/ only when screenshots are needed as evidence."
-            ],
-            "Role Boundary": [
-              "Never create tasks.",
-              "Never claim tasks or move board cards.",
-              "Never edit product code or review completed work."
-            ]
-          }
-        },
-        "frontend-handoff": {
-          kind: "Handoff artifact",
-          title: "Front-End Audit Handoff",
-          color: "#8c6f40",
-          summary: "Markdown evidence from an upstream visual audit. Planner reads it and decides which findings become deduplicated todo tasks.",
-          sections: {
-            Location: [
-              "handoffs/frontend-audits/"
-            ],
-            Contents: [
-              "Target URL, audit scope, auditor, created timestamp, and overall result.",
-              "Inspected targets with URLs or routes, viewports, and interactions.",
-              "Findings with severity, reproduction, expected behavior, actual behavior, evidence, likely files or areas, suggested task wording, and suggested acceptance criteria."
-            ],
-            "Planner Use": [
-              "Planner reads the handoff as input, not as a task list to copy blindly.",
-              "Planner creates only useful, actionable, deduplicated todo tasks.",
-              "Generated tasks should record the handoff path in sourceHandoffs."
-            ],
-            Guardrails: [
-              "The handoff itself does not reserve files or board scope.",
-              "Duplicate checks still happen against todo, claimed, review, reviewing, done, and archived before task creation."
-            ]
-          }
-        },
         "planning-agent": {
           kind: "Agent",
           title: "Planner",
           color: "#476f8f",
-          summary: "Turns the owner's requirements and upstream handoffs into deduplicated task-board todo cards. It does not implement or review.",
+          summary: "Turns the owner's requirements into deduplicated task-board todo cards. It does not implement or review.",
           sections: {
             "Start Phrase": [
               "load as planner"
             ],
             Context: [
-              "Consumes the owner's direct requirements and upstream handoff files.",
+              "Consumes the owner's direct requirements.",
               "Current todo count: " + todoCount + ".",
               "Checks todo, claimed, review, reviewing, done, and archived before creating or changing tasks."
             ],
             Reads: [
               "The owner's requirements from chat.",
-              "Web Front-End Auditor handoffs from handoffs/frontend-audits/ when the owner points to one.",
               "The full task board through GET /api/board when the backend is running."
             ],
             "Backend Data Seen": [
@@ -4488,8 +4210,7 @@
             ],
             Behaviors: [
               "Clarify scope into concrete requirements, acceptance criteria, relevant files, and inspection expectations.",
-              "Convert the owner's requirements and handoff findings into todo tasks only when they are actionable.",
-              "Record handoff paths in sourceHandoffs for tasks created from audit findings.",
+              "Convert the owner's requirements into todo tasks only when they are actionable.",
               "Use /api/add-task and /api/update-task when the backend is running; direct JSON edits are fallback only."
             ],
             Writes: [
@@ -4498,7 +4219,7 @@
             ],
             "Duplicate Rules": [
               "Before creating or materially changing a task, scan todo, claimed, review, reviewing, done, and archived.",
-              "Check title, scope, files, acceptance criteria, relatedTaskIds, dependsOn, sourceHandoffs, and sourceReviewTaskId.",
+              "Check title, scope, files, acceptance criteria, relatedTaskIds, dependsOn, and sourceReviewTaskId.",
               "Update or reference an existing matching task instead of creating a duplicate."
             ],
             "Role Boundary": [
@@ -4520,7 +4241,6 @@
           sections: {
             Context: [
               "Tasks arrive here from the Planner or Reviewer follow-ups.",
-              "Planner-created tasks may include sourceHandoffs when they came from an upstream audit.",
               "Each task needs a real title, requirements, acceptance criteria, and files when known."
             ],
             Goal: [
@@ -4832,7 +4552,7 @@
             ],
             "Check Against": [
               "title, scope, files, project area, requirements, acceptance criteria",
-              "relatedTaskIds, dependsOn, sourceHandoffs, sourceReviewTaskId"
+              "relatedTaskIds, dependsOn, sourceReviewTaskId"
             ],
             "Result": [
               "Update or link an existing task when it already covers the work; create a new task only when the scope is distinct."
@@ -4886,9 +4606,7 @@
       var activeReviewCount = activeAgentsForRole("review").length;
 
       var nodeDefs = {
-        auditor:  { key: "frontend-auditor",  kind: "Upstream agent", label: "Web Front-End Auditor", color: "#4f7f77", meta: "Finds visual UI issues before planning." },
-        handoff:  { key: "frontend-handoff",  kind: "Artifact",       label: "Audit Handoff",          color: "#8c6f40", meta: "Markdown findings for Planner." },
-        planner:  { key: "planning-agent",    kind: "Agent",          label: "Planner",                color: "#476f8f", meta: "Turns requirements and handoffs into todo cards.", acceptsHumanInput: true },
+        planner:  { key: "planning-agent",    kind: "Agent",          label: "Planner",                color: "#476f8f", meta: "Turns requirements into todo cards.", acceptsHumanInput: true },
         worker:   { key: "worker-agent",      kind: "Agent",          label: "Worker",                 color: "var(--claimed)", meta: "Claims todo work, implements it, and requests review." },
         reviewer: { key: "review-agent",      kind: "Agent",          label: "Reviewer",               color: "#7f6cae", meta: "Claims review work, validates it, and decides outcome." }
       };
@@ -4900,16 +4618,12 @@
       };
 
       var layout = [
-        { ids: ["auditor"] },
-        { ids: ["handoff"] },
         { ids: ["planner"] },
         { ids: ["worker"] },
         { ids: ["reviewer"] }
       ];
 
       var edges = [
-        { from: "auditor",  to: "handoff",  label: "visual findings" },
-        { from: "handoff",  to: "planner",  label: "planning input" },
         { from: "planner",  to: "worker",   label: "todo tickets" },
         { from: "worker",   to: "reviewer", label: "inspection targets + review request" }
       ];
@@ -5095,7 +4809,7 @@
 
       canvasHtml += '</div>';
 
-      return '\n        <section class="workflow-panel" id="workflow-panel" aria-hidden="' + (workflowPanelOpen ? "false" : "true") + '">\n          <div class="workflow-panel-header">\n            <div>\n              <h2>Agent Workflow Map</h2>\n              <p>Each clickable block is an agent or handoff artifact. Open one to see its context, goal, behavior, permissions, and hard rules.</p>\n            </div>\n            ' + workflowCloseButton() + '\n          </div>\n          <div class="workflow-graph">\n            ' + canvasHtml + '\n          </div>\n          <div class="workflow-stats">\n            <div class="workflow-stat"><strong>' + activeCount + '</strong><span>todo / claimed / review</span></div>\n            <div class="workflow-stat"><strong>' + doneCount + '</strong><span>done visible</span></div>\n            <div class="workflow-stat"><strong>' + archivedCount + '</strong><span>archived</span></div>\n          </div>\n        </section>\n      ';
+      return '\n        <section class="workflow-panel" id="workflow-panel" aria-hidden="' + (workflowPanelOpen ? "false" : "true") + '">\n          <div class="workflow-panel-header">\n            <div>\n              <h2>Agent Workflow Map</h2>\n              <p>Each clickable block is an agent. Open one to see its context, goal, behavior, permissions, and hard rules.</p>\n            </div>\n            ' + workflowCloseButton() + '\n          </div>\n          <div class="workflow-graph">\n            ' + canvasHtml + '\n          </div>\n          <div class="workflow-stats">\n            <div class="workflow-stat"><strong>' + activeCount + '</strong><span>todo / claimed / review</span></div>\n            <div class="workflow-stat"><strong>' + doneCount + '</strong><span>done visible</span></div>\n            <div class="workflow-stat"><strong>' + archivedCount + '</strong><span>archived</span></div>\n          </div>\n        </section>\n      ';
     }
 
     function workflowDetailSection(title, items) {
@@ -5544,214 +5258,6 @@
           triggerButton.disabled = false;
           triggerButton.textContent = previousLabel;
         }
-      }
-    }
-
-    // --- Handoff intake lane ---
-
-    async function loadHandoffs() {
-      try {
-        const data = await loadJson("/viewer/handoffs?agentName=Task%20board%20viewer", { timeoutMs: 2500 });
-        currentHandoffs = Array.isArray(data?.handoffs)
-          ? data.handoffs.filter((handoff) => handoff && typeof handoff === "object")
-          : [];
-      } catch (error) {
-        logOptionalLoadFailure("handoffs", error);
-        currentHandoffs = [];
-      }
-      try {
-        renderHandoffIntake();
-      } catch (error) {
-        console.error("Task board viewer handoff intake failed", error);
-        statusEl.textContent = `Handoff intake failed: ${error.message || error}`;
-      }
-      return currentHandoffs;
-    }
-
-    function handoffStatusLabel(status) {
-      const s = String(status || "").toLowerCase();
-      const labels = {
-        "new": "New",
-        "queued": "Queued",
-        "planner-working": "Planning",
-        "processed": "Processed",
-        "skipped": "No action",
-        "failed": "Failed",
-      };
-      return labels[s] || s || "Unknown";
-    }
-
-    function handoffCardHtml(handoff) {
-      const st = handoff.status || {};
-      const status = String(st.status || "new").toLowerCase();
-      const filename = escapeText(st.filename || handoff.filename || "");
-      const source = escapeText(st.source || "");
-      const path = escapeText(st.path || handoff.path || "");
-      const modifiedAt = escapeText(handoff.modifiedAt || "");
-      const createdAt = escapeText(handoff.createdAt || st.createdAt || "");
-      const processedAt = escapeText(st.processedAt || "");
-      const model = escapeText(st.model || "");
-      const personalName = escapeText(st.personalName || "");
-      const processId = escapeText(st.processId || "");
-      const processState = escapeText(st.processState || "");
-      const latestStatus = escapeText(st.latestStatus || "");
-      const error = escapeText(st.error || "");
-      const taskIds = Array.isArray(st.taskIds) ? st.taskIds : [];
-      const tasks = Array.isArray(st.tasks) ? st.tasks : [];
-      const logPath = escapeText(st.logPath || "");
-
-      const viewButton = `<button type="button" data-action="view" data-source="${source}" data-filename="${filename}">View</button>`;
-      const logButton = logPath ? `<button type="button" data-action="view-log" data-log="${logPath}">Log</button>` : "";
-      let actions = viewButton;
-      if (status === "new") {
-        actions += `<button type="button" data-action="process" data-source="${source}" data-filename="${filename}">Process</button>
-          <button type="button" data-action="ignore" data-source="${source}" data-filename="${filename}">Ignore</button>`;
-      } else if (status === "failed") {
-        actions += `<button type="button" data-action="retry" data-source="${source}" data-filename="${filename}">Retry</button>
-          <button type="button" data-action="ignore" data-source="${source}" data-filename="${filename}">Ignore</button>`;
-      }
-      actions += logButton;
-
-      let tasksHtml = "";
-      if (tasks.length > 0) {
-        tasksHtml = `<div class="handoff-card-tasks">Tasks: ${tasks.map(task => {
-          const taskId = escapeText(task.taskId || "");
-          const taskTitle = escapeText(task.title || "");
-          return `<span class="handoff-card-task-ref">${taskId}${taskTitle ? " - " + taskTitle : ""}</span>`;
-        }).join(", ")}</div>`;
-      } else if (taskIds.length > 0) {
-        tasksHtml = `<div class="handoff-card-tasks">Tasks: ${taskIds.map(id => `<span class="handoff-card-task-ref">${escapeText(id)}</span>`).join(", ")}</div>`;
-      }
-
-      let errorHtml = "";
-      if (error && status === "failed") {
-        errorHtml = `<div class="handoff-card-error">${error}</div>`;
-      }
-
-      let agentInfo = "";
-      if (model || personalName) {
-        const runParts = [
-          personalName ? personalName : "",
-          model ? model : "",
-          processId ? `PID ${processId}` : "",
-          processState ? `PID ${processState}` : "",
-        ].filter(Boolean);
-        agentInfo = `<span>${runParts.join(" | ")}</span>`;
-      }
-
-      const timeParts = [
-        createdAt ? `Created ${createdAt}` : "",
-        modifiedAt ? `Modified ${modifiedAt}` : "",
-        processedAt ? `Processed ${processedAt}` : "",
-      ].filter(Boolean);
-      const statusLine = latestStatus ? `<div class="handoff-card-statusline">${latestStatus}</div>` : "";
-
-      return `<div class="handoff-card">
-        <div class="handoff-card-status" data-status="${escapeText(status)}"></div>
-        <div class="handoff-card-body">
-          <div class="handoff-card-title">${filename}</div>
-          <div class="handoff-card-meta">
-            <span class="handoff-badge" data-status="${escapeText(status)}">${handoffStatusLabel(status)}</span>
-            ${source ? `<span>${source}</span>` : ""}
-            ${path ? `<span>${path}</span>` : ""}
-            ${timeParts.length ? `<span>${timeParts.join(" | ")}</span>` : ""}
-            ${agentInfo}
-          </div>
-          ${statusLine}
-          ${tasksHtml}
-          ${errorHtml}
-        </div>
-        <div class="handoff-card-actions">${actions}</div>
-      </div>`;
-    }
-
-    function renderHandoffIntake() {
-      const body = document.getElementById("handoffIntakeBody");
-      const countEl = document.getElementById("handoffCount");
-      const collapseBtn = document.getElementById("handoffCollapseButton");
-      const emptyEl = document.getElementById("handoffEmpty");
-      if (!body) return;
-
-      const total = currentHandoffs.length;
-      const newCount = currentHandoffs.filter(h => {
-        const s = String(h?.status?.status || "new").toLowerCase();
-        return s === "new" || s === "queued" || s === "failed";
-      }).length;
-      if (countEl) {
-        countEl.textContent = total > 0 ? (newCount > 0 ? `${newCount}/${total}` : `${total}`) : "0";
-      }
-
-      if (handoffIntakeCollapsed) {
-        body.classList.add("is-collapsed");
-        if (collapseBtn) collapseBtn.textContent = "Show";
-        return;
-      }
-      body.classList.remove("is-collapsed");
-      if (collapseBtn) collapseBtn.textContent = "Hide";
-
-      if (total === 0) {
-        body.innerHTML = `<div class="handoff-intake-empty">No handoff files found. Upstream auditor handoffs will appear here.</div>`;
-        return;
-      }
-
-      body.innerHTML = currentHandoffs.map(handoffCardHtml).join("");
-    }
-
-    function toggleHandoffIntake(forceState) {
-      if (typeof forceState === "boolean") {
-        handoffIntakeCollapsed = forceState;
-      } else {
-        handoffIntakeCollapsed = !handoffIntakeCollapsed;
-      }
-      renderHandoffIntake();
-    }
-
-    async function runHandoffAction(action, source, filename) {
-      if (handoffActionInFlight) return;
-      handoffActionInFlight = true;
-      const endpoints = {
-        "process": "/viewer/process-handoff",
-        "retry": "/viewer/retry-handoff",
-        "ignore": "/viewer/ignore-handoff",
-      };
-      const endpoint = endpoints[action];
-      if (!endpoint) { handoffActionInFlight = false; return; }
-
-      statusEl.textContent = action === "process" ? "Processing handoff..."
-        : action === "retry" ? "Retrying handoff..."
-        : "Marking handoff as ignored...";
-      try {
-        const response = await fetch(endpoint, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ source, filename, agentName: "Task board viewer" }),
-        });
-        const result = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          statusEl.textContent = `Handoff action failed: ${result.error || response.statusText}`;
-        } else {
-          statusEl.textContent = `Handoff ${action} complete.`;
-        }
-        await loadHandoffs();
-        await refreshSystemStatus({ silent: true }).catch(() => {});
-      } catch (error) {
-        statusEl.textContent = `Handoff action failed: ${error.message}`;
-      } finally {
-        handoffActionInFlight = false;
-      }
-    }
-
-    async function viewHandoffContent(source, filename) {
-      try {
-        const data = await loadJson(`/viewer/handoff-content?source=${encodeURIComponent(source)}&filename=${encodeURIComponent(filename)}&agentName=Task%20board%20viewer`);
-        const content = data.content || "(empty)";
-        const w = window.open("", "_blank", "width=800,height=600");
-        if (w) {
-          w.document.write(`<html><head><title>${escapeText(filename)}</title><style>body{font-family:monospace;white-space:pre-wrap;padding:20px;font-size:13px;}</style></head><body>${escapeText(content)}</body></html>`);
-          w.document.close();
-        }
-      } catch (error) {
-        statusEl.textContent = `Could not load handoff: ${error.message}`;
       }
     }
 
@@ -7044,7 +6550,6 @@
           autoRefreshInFlight = true;
           try {
             await loadDefaultBoard({ silent: true });
-            loadHandoffs();
           } finally {
             autoRefreshInFlight = false;
           }
@@ -7088,49 +6593,8 @@
       window.visualViewport.addEventListener("resize", syncViewportClientWidth);
     }
 
-    const handoffIntakeEl = document.getElementById("handoffIntake");
-    const handoffRefreshBtn = document.getElementById("handoffRefreshButton");
-    const handoffCollapseBtn = document.getElementById("handoffCollapseButton");
-    const handoffIntakeBody = document.getElementById("handoffIntakeBody");
-
-    if (handoffRefreshBtn) {
-      handoffRefreshBtn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        loadHandoffs();
-      });
-    }
-    if (handoffCollapseBtn) {
-      handoffCollapseBtn.addEventListener("click", (event) => {
-        event.stopPropagation();
-        toggleHandoffIntake();
-      });
-    }
-    if (handoffIntakeBody) {
-      handoffIntakeBody.addEventListener("click", (event) => {
-        const btn = event.target.closest("button[data-action]");
-        if (!btn) return;
-        const action = btn.dataset.action;
-        const source = btn.dataset.source || "";
-        const filename = btn.dataset.filename || "";
-        if (action === "view") {
-          viewHandoffContent(source, filename);
-        } else if (action === "view-log") {
-          const logPath = btn.dataset.log || "";
-          if (logPath) {
-            toggleAgentLogsPanel(true);
-            openAgentLogFile(logPath.split("/").pop()).catch((error) => {
-              statusEl.textContent = `Could not load handoff log: ${error.message}`;
-            });
-          }
-        } else if (["process", "retry", "ignore"].includes(action)) {
-          runHandoffAction(action, source, filename);
-        }
-      });
-    }
-
     syncViewportClientWidth();
     loadDefaultBoard().finally(startAgentLogRefresh);
-    loadHandoffs();
   </script>
 </body>
 </html>
