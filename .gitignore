@@ -12,7 +12,8 @@ task-board/task-board-viewer.log
 # Tool-local assistant state
 .qwen/
 
-# Project-local self-test/runtime workflow copies
+# Project-local workflow/runtime copies
+TEAMWORK/
 teamwork/
 
 # Generated reference images and evidence

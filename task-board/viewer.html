@@ -183,6 +183,20 @@
       border-color: #aaa197;
     }
 
+    .github-link-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      text-decoration: none;
+      white-space: nowrap;
+    }
+
+    .github-link-button:focus-visible {
+      border-color: color-mix(in srgb, var(--todo) 58%, var(--line));
+      outline: none;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--todo) 14%, transparent);
+    }
+
     .file-label input {
       display: none;
     }
@@ -873,8 +887,8 @@
       position: fixed;
       left: 0;
       bottom: 0;
-      width: min(460px, calc(100vw - var(--settings-tab-width)));
-      max-height: min(72vh, 520px);
+      width: min(520px, calc(100vw - var(--settings-tab-width)));
+      max-height: min(78vh, 620px);
       background: rgba(246, 244, 239, 0.98);
       transform: translateX(calc(-100% - 8px));
       transition: transform 220ms ease;
@@ -919,6 +933,35 @@
       gap: 12px;
     }
 
+    .settings-section {
+      display: grid;
+      gap: 10px;
+      min-width: 0;
+      padding-top: 12px;
+      margin-top: 12px;
+      border-top: 1px solid var(--line);
+    }
+
+    .settings-section:first-of-type {
+      padding-top: 0;
+      margin-top: 0;
+      border-top: 0;
+    }
+
+    .settings-section-title {
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 760;
+      line-height: 1.2;
+      text-transform: uppercase;
+    }
+
+    .settings-role-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+
     .settings-field {
       display: grid;
       gap: 6px;
@@ -932,7 +975,8 @@
       text-transform: uppercase;
     }
 
-    .settings-command-input {
+    .settings-command-input,
+    .settings-role-select {
       width: 100%;
       min-height: 38px;
       min-width: 0;
@@ -941,15 +985,28 @@
       background: var(--panel);
       color: var(--ink);
       padding: 8px 10px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
       font-size: 13px;
       line-height: 1.3;
     }
 
-    .settings-command-input:focus {
+    .settings-command-input {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .settings-role-select {
+      font-weight: 760;
+    }
+
+    .settings-command-input:focus,
+    .settings-role-select:focus {
       border-color: color-mix(in srgb, var(--todo) 58%, var(--line));
       outline: none;
       box-shadow: 0 0 0 3px color-mix(in srgb, var(--todo) 14%, transparent);
+    }
+
+    .settings-role-select:disabled {
+      cursor: progress;
+      opacity: 0.62;
     }
 
     .settings-actions {
@@ -2957,6 +3014,10 @@
         padding-bottom: calc(16px + var(--settings-tab-height));
       }
 
+      .settings-role-grid {
+        grid-template-columns: 1fr;
+      }
+
       .workflow-state-line,
       .workflow-state-stack,
       .wf-graph-row,
@@ -3150,6 +3211,7 @@
             <span class="pause-label">Pause status loading</span>
           </div>
         </div>
+        <a class="button github-link-button" href="https://github.com/reatured/orchia-auto" target="_blank" rel="noopener noreferrer" aria-label="Open GitHub repository for orchia-auto" title="Open GitHub repository">GitHub</a>
         <button class="button" type="button" id="reloadButton">Reload JSON</button>
         <button class="button" type="button" id="autoRefreshButton" aria-pressed="false">Auto refresh: Off</button>
         <label class="file-label">
@@ -3234,6 +3296,9 @@
         codex: "codex",
         qwen: "qwen"
       },
+      planner: {
+        model: "claude"
+      },
       worker: {
         enabled: false,
         model: "codex",
@@ -3280,6 +3345,7 @@
       pause: fallbackPauseStatus,
       agents: { total: 0, active: 0, stale: 0, pendingSpawns: 0, pausedRuns: 0 },
       dispatch: {
+        planner: { model: "claude" },
         worker: { enabled: false, model: "codex", maxAgents: 1, activeAgents: 0, pendingSpawns: 0 },
         review: { enabled: false, model: "codex", maxAgents: 1, activeAgents: 0, pendingSpawns: 0 }
       },
@@ -3781,6 +3847,7 @@
         pause: normalizePauseStatus(source.pause || currentPauseStatus || fallbackPauseStatus),
         agents: { ...fallbackSystemStatus.agents, ...agents },
         dispatch: {
+          planner: { ...fallbackSystemStatus.dispatch.planner, ...(dispatch.planner || {}) },
           worker: { ...fallbackSystemStatus.dispatch.worker, ...(dispatch.worker || {}) },
           review: { ...fallbackSystemStatus.dispatch.review, ...(dispatch.review || {}) }
         },
@@ -3826,9 +3893,11 @@
       const activeWork = Number(counts.todo || 0) + Number(counts.claimed || 0) + Number(counts.review || 0) + Number(counts.reviewing || 0);
       const boardWarnings = Number(data.board.warningCount || 0);
       const agentIssues = Number(data.agents.stale || 0) + Number(data.agents.pausedRuns || 0);
+      const plannerDispatch = data.dispatch.planner || {};
       const workerDispatch = data.dispatch.worker || {};
       const reviewDispatch = data.dispatch.review || {};
       const dispatchSummary = [
+        `Planner chat ${plannerDispatch.model || "claude"}`,
         `Worker ${workerDispatch.enabled ? "auto on" : "auto off"} (${workerDispatch.model || "codex"} x${workerDispatch.maxAgents ?? 0})`,
         `Review ${reviewDispatch.enabled ? "auto on" : "auto off"} (${reviewDispatch.model || "codex"} x${reviewDispatch.maxAgents ?? 0})`
       ];
@@ -4227,9 +4296,6 @@
       const safeRole = escapeText(role);
       const roleLabel = role === "worker" ? "Worker" : role === "review" ? "Review" : role;
       const dispatch = dispatchSettingsForRole(role);
-      const codexSelected = dispatch.model === "codex" ? "selected" : "";
-      const claudeSelected = dispatch.model === "claude" ? "selected" : "";
-      const qwenSelected = dispatch.model === "qwen" ? "selected" : "";
       const autoLabel = dispatch.enabled ? "Auto: On" : "Auto: Off";
       const paused = Boolean(currentPauseStatus?.isPaused);
       const pausedClass = paused ? " is-paused" : "";
@@ -4246,9 +4312,7 @@
       return `
         <span class="dispatch-controls${pausedClass}" role="group" aria-label="${escapeText(roleLabel)} dispatch controls">
           <select class="dispatch-select" data-dispatch-model="${safeRole}" title="${escapeText(roleLabel)} model" ${pausedAttr}>
-            <option value="codex" ${codexSelected}>Codex</option>
-            <option value="claude" ${claudeSelected}>Claude</option>
-            <option value="qwen" ${qwenSelected}>Qwen</option>
+            ${dispatchModelOptionsMarkup(dispatch.model)}
           </select>
           <input class="dispatch-max" type="number" min="0" max="8" step="1" value="${escapeText(dispatch.maxAgents)}" data-dispatch-max="${safeRole}" title="Maximum active ${escapeText(roleLabel)} agents" ${pausedAttr}>
           <button class="spawn-button${pausedClass}" type="button" data-spawn-agent="${safeRole}" title="${escapeText(spawnTitle)}" ${pausedAttr}>${paused ? "Paused" : "Spawn"}</button>
@@ -5386,10 +5450,14 @@
       try {
         const settings = await loadJson("/viewer/dispatch-settings", { timeoutMs: 1500 });
         currentDispatchSettings = settings && typeof settings === "object" ? settings : fallbackDispatchSettings;
+        syncSettingsRoleModelControls();
+        syncPlannerChatModelControl();
         return currentDispatchSettings;
       } catch (error) {
         logOptionalLoadFailure("dispatch settings", error);
         currentDispatchSettings = fallbackDispatchSettings;
+        syncSettingsRoleModelControls();
+        syncPlannerChatModelControl();
         return currentDispatchSettings;
       }
     }
@@ -5472,10 +5540,12 @@
     }
 
     function dispatchSettingsForRole(role) {
-      const settings = currentDispatchSettings?.[role] || fallbackDispatchSettings[role] || {};
+      const key = role === "planning" ? "planner" : role;
+      const settings = currentDispatchSettings?.[key] || fallbackDispatchSettings[key] || {};
       const maxAgents = Number.parseInt(settings.maxAgents, 10);
       const validModels = ["claude", "codex", "qwen"];
-      const model = validModels.includes(settings.model) ? settings.model : "codex";
+      const fallbackModel = key === "planner" ? "claude" : "codex";
+      const model = validModels.includes(settings.model) ? settings.model : fallbackModel;
       return {
         enabled: Boolean(settings.enabled),
         model,
@@ -5493,6 +5563,48 @@
       };
     }
 
+    function dispatchRoleLabel(role) {
+      if (role === "planner" || role === "planning") return "Planner chat";
+      if (role === "worker") return "Worker";
+      if (role === "review") return "Review";
+      return role || "Agent";
+    }
+
+    function dispatchModelOptionsMarkup(selectedModel) {
+      return [
+        ["codex", "Codex"],
+        ["claude", "Claude"],
+        ["qwen", "Qwen"]
+      ].map(([value, label]) => {
+        const selected = selectedModel === value ? "selected" : "";
+        return `<option value="${escapeText(value)}" ${selected}>${escapeText(label)}</option>`;
+      }).join("");
+    }
+
+    function settingsRoleModelMarkup(role) {
+      const dispatch = dispatchSettingsForRole(role);
+      const roleLabel = dispatchRoleLabel(role);
+      const id = `settings-${String(role || "agent").replace(/[^a-z0-9]+/gi, "-")}-model`;
+      return `
+        <div class="settings-field">
+          <label for="${escapeText(id)}">${escapeText(roleLabel)} model</label>
+          <select class="settings-role-select" id="${escapeText(id)}" data-settings-role-model="${escapeText(role)}" autocomplete="off">
+            ${dispatchModelOptionsMarkup(dispatch.model)}
+          </select>
+        </div>
+      `;
+    }
+
+    function syncSettingsRoleModelControls() {
+      settingsEl.querySelectorAll("[data-settings-role-model]").forEach((control) => {
+        const role = control.dataset.settingsRoleModel;
+        const model = dispatchSettingsForRole(role).model;
+        if (!control.disabled && model) {
+          control.value = model;
+        }
+      });
+    }
+
     async function saveDispatchSettings(role, updates) {
       const current = dispatchSettingsForRole(role);
       const payload = {
@@ -5503,6 +5615,8 @@
       };
       const settings = await postJson("/viewer/dispatch-settings", payload);
       currentDispatchSettings = settings && typeof settings === "object" ? settings : currentDispatchSettings;
+      syncSettingsRoleModelControls();
+      syncPlannerChatModelControl();
       await refreshSystemStatus({ silent: true }).catch(() => {});
       renderBoard(currentBoard, currentSourceLabel);
       return currentDispatchSettings;
@@ -5601,17 +5715,28 @@
               <button class="icon-button" type="button" data-settings-close aria-label="Close settings" title="Close settings">&times;</button>
             </div>
             <div class="settings-fields">
-              <div class="settings-field">
-                <label for="settingsCodexCommand">Codex command</label>
-                <input class="settings-command-input" id="settingsCodexCommand" name="codex" type="text" value="${escapeText(commands.codex)}" autocomplete="off" autocapitalize="none" spellcheck="false">
+              <div class="settings-section">
+                <div class="settings-section-title">Agent models</div>
+                <div class="settings-role-grid">
+                  ${settingsRoleModelMarkup("planner")}
+                  ${settingsRoleModelMarkup("worker")}
+                  ${settingsRoleModelMarkup("review")}
+                </div>
               </div>
-              <div class="settings-field">
-                <label for="settingsClaudeCommand">Claude Code command</label>
-                <input class="settings-command-input" id="settingsClaudeCommand" name="claude" type="text" value="${escapeText(commands.claude)}" autocomplete="off" autocapitalize="none" spellcheck="false">
-              </div>
-              <div class="settings-field">
-                <label for="settingsQwenCommand">Qwen command</label>
-                <input class="settings-command-input" id="settingsQwenCommand" name="qwen" type="text" value="${escapeText(commands.qwen)}" autocomplete="off" autocapitalize="none" spellcheck="false">
+              <div class="settings-section">
+                <div class="settings-section-title">CLI commands</div>
+                <div class="settings-field">
+                  <label for="settingsCodexCommand">Codex command</label>
+                  <input class="settings-command-input" id="settingsCodexCommand" name="codex" type="text" value="${escapeText(commands.codex)}" autocomplete="off" autocapitalize="none" spellcheck="false">
+                </div>
+                <div class="settings-field">
+                  <label for="settingsClaudeCommand">Claude Code command</label>
+                  <input class="settings-command-input" id="settingsClaudeCommand" name="claude" type="text" value="${escapeText(commands.claude)}" autocomplete="off" autocapitalize="none" spellcheck="false">
+                </div>
+                <div class="settings-field">
+                  <label for="settingsQwenCommand">Qwen command</label>
+                  <input class="settings-command-input" id="settingsQwenCommand" name="qwen" type="text" value="${escapeText(commands.qwen)}" autocomplete="off" autocapitalize="none" spellcheck="false">
+                </div>
               </div>
             </div>
             <div class="settings-actions">
@@ -6486,6 +6611,28 @@
       }
     });
 
+    settingsEl.addEventListener("change", (event) => {
+      const modelControl = event.target.closest("[data-settings-role-model]");
+      if (!modelControl) return;
+
+      const role = modelControl.dataset.settingsRoleModel;
+      const model = modelControl.value;
+      const roleLabel = dispatchRoleLabel(role);
+      modelControl.disabled = true;
+      statusEl.textContent = `Saving ${roleLabel} model...`;
+      saveDispatchSettings(role, { model })
+        .then(() => {
+          statusEl.textContent = `${roleLabel} model set to ${agentToolLabel(model)}.`;
+        })
+        .catch((error) => {
+          modelControl.value = dispatchSettingsForRole(role).model;
+          statusEl.textContent = `${roleLabel} model update failed: ${error.message}`;
+        })
+        .finally(() => {
+          modelControl.disabled = false;
+        });
+    });
+
     settingsEl.addEventListener("submit", (event) => {
       const form = event.target.closest("[data-settings-form]");
       if (!form) return;
@@ -6539,8 +6686,34 @@
       pollTimer: null,
       sending: false,
       lastSignature: "",
+      messages: [],
       queue: []
     };
+
+    function syncPlannerChatModelControl(options = {}) {
+      if (!plannerChat.toolEl) return;
+      const model = dispatchSettingsForRole("planner").model;
+      if (options.force || !plannerChat.toolEl.disabled) {
+        plannerChat.toolEl.value = model;
+      }
+    }
+
+    async function savePlannerChatModelSelection() {
+      if (!plannerChat.toolEl) return;
+      const model = plannerChat.toolEl.value;
+      plannerChat.toolEl.disabled = true;
+      statusEl.textContent = "Saving Planner chat model...";
+      try {
+        await saveDispatchSettings("planner", { model });
+        syncPlannerChatModelControl({ force: true });
+        statusEl.textContent = `Planner chat model set to ${agentToolLabel(model)}.`;
+      } catch (error) {
+        plannerChat.toolEl.value = dispatchSettingsForRole("planner").model;
+        statusEl.textContent = `Planner chat model update failed: ${error.message}`;
+      } finally {
+        applyPlannerChatControls(plannerChat.messages || []);
+      }
+    }
 
     function buildPlannerChatDock() {
       if (plannerChat.dock) return;
@@ -6555,9 +6728,7 @@
           </div>
           <div class="planner-chat-controls">
             <select class="planner-chat-tool" data-planner-chat-tool aria-label="Planner model" title="Model for this conversation">
-              <option value="claude">Claude</option>
-              <option value="codex">Codex</option>
-              <option value="qwen">Qwen</option>
+              ${dispatchModelOptionsMarkup(dispatchSettingsForRole("planner").model)}
             </select>
             <button class="planner-chat-iconbtn planner-chat-newbtn" type="button" data-planner-chat-new title="Start a new chat and clear this Planner conversation" aria-label="Start a new Planner chat and clear this conversation">New chat</button>
             <button class="planner-chat-iconbtn" type="button" data-planner-chat-details title="Open planner details" aria-label="Open planner details">&#9432;</button>
@@ -6581,6 +6752,7 @@
       plannerChat.toolEl = dock.querySelector("[data-planner-chat-tool]");
       plannerChat.titleEl = dock.querySelector("[data-planner-chat-title]");
       plannerChat.subEl = dock.querySelector("[data-planner-chat-sub]");
+      syncPlannerChatModelControl({ force: true });
 
       dock.querySelector("[data-planner-chat-close]").addEventListener("click", closePlannerChat);
       dock.querySelector("[data-planner-chat-new]").addEventListener("click", newPlannerConversation);
@@ -6608,6 +6780,7 @@
           sendPlannerMessage();
         }
       });
+      plannerChat.toolEl.addEventListener("change", savePlannerChatModelSelection);
     }
 
     function openPlannerChat(opts) {
@@ -6641,6 +6814,9 @@
         plannerChat.toolEl.title = started
           ? "Model is locked for this conversation — start a new chat to switch"
           : "Model for this conversation";
+        if (!started) {
+          syncPlannerChatModelControl();
+        }
       }
       if (plannerChat.sendEl && !plannerChat.sending) {
         plannerChat.sendEl.disabled = running;
@@ -6650,6 +6826,7 @@
 
     function renderPlannerMessages(messages) {
       const list = Array.isArray(messages) ? messages : [];
+      plannerChat.messages = list;
       applyPlannerChatControls(list);
       const signature = JSON.stringify(list.map((m) => [m.id, m.status, (m.result || m.output || "").length, (m.text || "").length]));
       if (signature === plannerChat.lastSignature) return;
@@ -6711,6 +6888,7 @@
       plannerChat.hasMessages = false;
       plannerChat.queue = [];
       renderPlannerMessages([]);
+      syncPlannerChatModelControl({ force: true });
       if (plannerChat.inputEl) plannerChat.inputEl.focus();
       statusEl.textContent = "Started a new planner conversation.";
     }
@@ -6780,7 +6958,7 @@
         plannerChat.inputEl.focus();
         return;
       }
-      const tool = plannerChat.toolEl ? plannerChat.toolEl.value : "claude";
+      const tool = plannerChat.toolEl ? plannerChat.toolEl.value : dispatchSettingsForRole("planner").model;
       plannerChat.inputEl.value = "";
 
       // If the planner is currently responding, queue the message.
