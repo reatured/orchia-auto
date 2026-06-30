@@ -86,16 +86,17 @@ Approve only when:
 1. Move the reviewed task from `columns.reviewing` to `columns.done`. If the backend is running, prefer `POST /api/approve-review` and include your `agentId`; otherwise update `board.json` directly.
 2. Set `status` to `done`, `doneAt` to the current timestamp.
 3. Add `reviewedBy`, `reviewedAt`, and `reviewDecision: "approved"`.
-4. Add concise approval notes describing what was checked.
-5. Update board `updatedAt`.
-6. Report the approval and evidence to the owner.
-7. Call `POST /api/heartbeat-agent` with the latest `currentTaskId`.
-8. Call `POST /api/claim-next-review` again (or re-read `columns.review`/`columns.reviewing` from `board.json` when the backend is not running) to find the next eligible review task. If the response has `claimed: true`, fetch full details through `GET /api/task-detail?taskId=...&agentId=...` and continue. If `claimed: false`, report that the review list is clear, all blocked, or paused.
+4. Include `reviewerTokens` (an integer) in the approve-review payload if you know your token usage for this review. The backend auto-computes elapsed time from `reviewClaimedAt`; tokens must be self-reported. If unknown, omit the field and the viewer shows a dash.
+5. Add concise approval notes describing what was checked.
+6. Update board `updatedAt`.
+7. Report the approval and evidence to the owner.
+8. Call `POST /api/heartbeat-agent` with the latest `currentTaskId`.
+9. Call `POST /api/claim-next-review` again (or re-read `columns.review`/`columns.reviewing` from `board.json` when the backend is not running) to find the next eligible review task. If the response has `claimed: true`, fetch full details through `GET /api/task-detail?taskId=...&agentId=...` and continue. If `claimed: false`, report that the review list is clear, all blocked, or paused.
 
 ## If Not Approved
 
 1. Move the reviewed task from `columns.reviewing` to the top of `columns.done` as a closed failed task replaced by follow-up work. If the backend is running, prefer `POST /api/request-changes` and include your `agentId`; otherwise update `board.json` directly.
-2. Add `reviewedBy`, `reviewedAt`, and `reviewDecision: "changes_requested"` to the reviewed task.
+2. Add `reviewedBy`, `reviewedAt`, and `reviewDecision: "changes_requested"` to the reviewed task. Include `reviewerTokens` (an integer) in the request-changes payload if you know your token usage for this review. The backend auto-computes elapsed time from `reviewClaimedAt`; tokens must be self-reported. If unknown, omit the field and the viewer shows a dash.
 3. Add a failed-review brief at the top of the failed original task:
    - `failureExpected`: what should be true if the task passed.
    - `failureActual`: what is actually happening.

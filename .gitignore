@@ -3,7 +3,6 @@
 *.json.tmp
 task-board/active-agents.json
 task-board/agent-dispatch-settings.json
-task-board/handoff-state.json
 task-board/codex-sqlite-state/
 task-board/spawned-agent-logs/
 task-board/planner-chat/
@@ -16,8 +15,7 @@ task-board/task-board-viewer.log
 # Project-local self-test/runtime workflow copies
 teamwork/
 
-# Generated upstream handoff notes
-handoffs/
+# Generated reference images and evidence
 reference-images/
 
 # Local reference material from specific projects
