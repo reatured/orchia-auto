@@ -2914,6 +2914,115 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         )
         return prompt
 
+    def interactive_spawn_command_args(self, tool: str, start_phrase: str) -> list[str]:
+        args = self.spawn_command_args(tool)
+        if tool == "qwen":
+            args.extend(["--prompt-interactive", start_phrase])
+        else:
+            args.append(start_phrase)
+        return args
+
+    def terminal_env_overrides(self, tool: str) -> dict[str, str]:
+        env = agent_subprocess_env(tool)
+        keys = ("CODEX_SQLITE_HOME", "FORCE_COLOR", "NO_COLOR", "QWEN_CODE_DEBUG")
+        return {
+            key: str(env.get(key) or "")
+            for key in keys
+            if str(env.get(key) or "").strip()
+        }
+
+    def interactive_shell_command(self, args: list[str], working_dir: str, tool: str) -> str:
+        env_overrides = self.terminal_env_overrides(tool)
+        if os.name == "nt":
+            command = f"cd /d {subprocess.list2cmdline([working_dir])}"
+            for key, value in env_overrides.items():
+                command += f" && set {subprocess.list2cmdline([f'{key}={value}'])}"
+            return f"{command} && {subprocess.list2cmdline(args)}"
+
+        command = f"cd {shlex.quote(working_dir)} && "
+        env_parts = [
+            f"{key}={shlex.quote(value)}"
+            for key, value in env_overrides.items()
+        ]
+        if env_parts:
+            command += f"env {' '.join(env_parts)} "
+        command += shlex.join(args)
+        return command
+
+    def launch_interactive_terminal(self, shell_command: str, title: str) -> dict:
+        if sys.platform == "darwin":
+            script = [
+                'tell application "Terminal"',
+                f"do script {json.dumps(shell_command)}",
+                "activate",
+                "end tell",
+            ]
+            result = subprocess.run(
+                ["osascript", *sum((["-e", line] for line in script), [])],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=10,
+                check=False,
+            )
+            if result.returncode != 0:
+                detail = (result.stderr or result.stdout or "").strip()
+                raise RuntimeError(f"Could not open Terminal: {detail or 'osascript failed'}")
+            return {"terminal": "Terminal", "launcher": "osascript"}
+
+        if os.name == "nt":
+            process = subprocess.Popen(
+                ["cmd.exe", "/c", "start", title, "cmd.exe", "/k", shell_command],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+            )
+            return {"terminal": "cmd.exe", "launcherProcessId": process.pid}
+
+        terminal_commands = [
+            ("x-terminal-emulator", ["x-terminal-emulator", "-e", "bash", "-lc", shell_command]),
+            ("gnome-terminal", ["gnome-terminal", "--", "bash", "-lc", shell_command]),
+            ("konsole", ["konsole", "-e", "bash", "-lc", shell_command]),
+            ("xfce4-terminal", ["xfce4-terminal", "--command", f"bash -lc {shlex.quote(shell_command)}"]),
+            ("xterm", ["xterm", "-e", "bash", "-lc", shell_command]),
+        ]
+        for name, command in terminal_commands:
+            if shutil.which(name):
+                process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    close_fds=True,
+                )
+                return {"terminal": name, "launcherProcessId": process.pid}
+        raise RuntimeError("No supported terminal app was found for interactive mode.")
+
+    def spawn_interactive_agent(
+        self,
+        role: str,
+        tool: str,
+        personal_name: str,
+        backend_base_url: str,
+        start_phrase: str,
+        working_dir: str,
+    ) -> dict:
+        args = self.interactive_spawn_command_args(tool, start_phrase)
+        shell_command = self.interactive_shell_command(args, working_dir, tool)
+        title = f"Task Board {role} {tool}"
+        terminal = self.launch_interactive_terminal(shell_command, title)
+        return {
+            "spawned": True,
+            "mode": "interactive",
+            "role": role,
+            "tool": tool,
+            "personalName": personal_name,
+            "cliCommand": self.spawn_command_for_tool(tool),
+            "startPhrase": start_phrase,
+            "backendBaseUrl": backend_base_url,
+            "workingDirectory": working_dir,
+            **terminal,
+        }
+
     def agent_health_check(self, board: dict, columns: dict, payload: dict) -> dict:
         del board, columns
         tool = self.normalize_agent_model(payload.get("tool") or payload.get("model"))
@@ -4379,6 +4488,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         return {"taskIds": [task_id, follow_up_id], "followUpTaskId": follow_up_id}
 
     def spawn_agent(self, board: dict, columns: dict, payload: dict) -> dict:
+        del columns
         role = self.normalize_agent_role(payload.get("role"))
         tool = self.normalize_agent_model(payload.get("tool") or payload.get("model"))
         if role not in SPAWNABLE_AGENT_ROLES:
@@ -4408,6 +4518,17 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         )
 
         working_dir = str(PROJECT_ROOT)
+        mode = str(payload.get("mode") or payload.get("spawnMode") or "non-interactive").strip().lower()
+        if mode in {"interactive", "terminal", "manual"}:
+            return self.spawn_interactive_agent(
+                role,
+                tool,
+                personal_name,
+                backend_base_url,
+                start_phrase,
+                working_dir,
+            )
+
         if tool == "codex":
             args = self.spawn_command_args(tool)
             args.extend(["exec", "--skip-git-repo-check", start_phrase])
