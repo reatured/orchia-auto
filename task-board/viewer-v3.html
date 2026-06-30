@@ -1,0 +1,2950 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mission Workspace — Organic v3</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='28' fill='%23e8e0d5'/%3E%3Ccircle cx='32' cy='32' r='18' fill='%236b7f5e'/%3E%3Ccircle cx='32' cy='26' r='8' fill='%232d3436'/%3E%3C/svg%3E">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap');
+
+    :root {
+      /* Organic palette */
+      --bg-primary: #f5f0eb;
+      --bg-secondary: #ede6dd;
+      --bg-card: #faf7f3;
+      --bg-card-hover: #f5f0ea;
+      --text-primary: #2d3436;
+      --text-secondary: #636e72;
+      --text-muted: #95a5a6;
+      --border-light: #e0d8ce;
+      --border-medium: #d4c9bc;
+
+      /* Accent colors */
+      --accent-green: #6b7f5e;
+      --accent-green-light: #8fa87e;
+      --accent-green-dark: #4a5a42;
+      --accent-sage: #9caf88;
+      --accent-olive: #7d8471;
+
+      /* Status colors */
+      --status-online: #27ae60;
+      --status-idle: #f39c12;
+      --status-offline: #95a5a6;
+      --status-active: #6b7f5e;
+
+      /* Role colors */
+      --role-leader: #d4a574;
+      --role-manager: #7eb1d6;
+      --role-worker: #9caf88;
+      --role-archived: #b8b0a5;
+
+      /* Shadows */
+      --shadow-sm: 0 2px 8px rgba(45, 52, 54, 0.06);
+      --shadow-md: 0 4px 16px rgba(45, 52, 54, 0.08);
+      --shadow-lg: 0 8px 32px rgba(45, 52, 54, 0.12);
+      --shadow-xl: 0 12px 48px rgba(45, 52, 54, 0.16);
+
+      /* Typography */
+      --font-serif: 'Playfair Display', Georgia, serif;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+      /* Spacing */
+      --sidebar-width: 240px;
+      --header-height: 72px;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    /* Layout */
+    .app-container {
+      display: flex;
+      min-height: 100vh;
+    }
+
+    /* Sidebar */
+    .sidebar {
+      width: var(--sidebar-width);
+      background: var(--bg-secondary);
+      border-right: 1px solid var(--border-light);
+      padding: 24px 0;
+      position: fixed;
+      height: 100vh;
+      overflow-y: auto;
+      z-index: 100;
+    }
+
+    .sidebar-logo {
+      padding: 0 24px 32px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .logo-icon {
+      width: 40px;
+      height: 40px;
+      background: var(--accent-green);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 700;
+      font-size: 18px;
+    }
+
+    .logo-text {
+      font-family: var(--font-serif);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .nav-section {
+      padding: 0 16px;
+      margin-bottom: 24px;
+    }
+
+    .nav-item {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      margin-bottom: 4px;
+      color: var(--text-secondary);
+      font-weight: 500;
+    }
+
+    .nav-item:hover {
+      background: var(--bg-card);
+      color: var(--text-primary);
+    }
+
+    .nav-item.active {
+      background: var(--bg-card);
+      color: var(--text-primary);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .nav-icon {
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .nav-badge {
+      margin-left: auto;
+      background: var(--accent-green);
+      color: white;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    .sidebar-footer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 16px 24px;
+      border-top: 1px solid var(--border-light);
+      background: var(--bg-secondary);
+    }
+
+    .user-profile {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+    }
+
+    .user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 14px;
+    }
+
+    .user-info {
+      flex: 1;
+    }
+
+    .user-name {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+
+    .user-role {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    /* Main content */
+    .main-content {
+      flex: 1;
+      margin-left: var(--sidebar-width);
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .header {
+      height: var(--header-height);
+      background: var(--bg-primary);
+      border-bottom: 1px solid var(--border-light);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .breadcrumb {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .breadcrumb-item {
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+
+    .breadcrumb-item:hover {
+      color: var(--text-primary);
+    }
+
+    .breadcrumb-item.active {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--status-online);
+    }
+
+    .mission-status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .time-display {
+      text-align: right;
+    }
+
+    .time-main {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .time-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .interactive-launcher {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 6px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 10px;
+    }
+
+    .terminal-select {
+      height: 30px;
+      border: 1px solid var(--border-light);
+      border-radius: 8px;
+      background: var(--bg-primary);
+      color: var(--text-secondary);
+      font: 600 12px var(--font-sans);
+      padding: 0 8px;
+      cursor: pointer;
+    }
+
+    .terminal-select:focus {
+      outline: none;
+      border-color: var(--accent-green);
+    }
+
+    .icon-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      border: 1px solid var(--border-light);
+      background: var(--bg-card);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .icon-btn:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--border-medium);
+    }
+
+    .icon-btn.is-working {
+      opacity: 0.7;
+      pointer-events: none;
+    }
+
+    .interactive-status {
+      max-width: 240px;
+      font-size: 12px;
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .interactive-status.error {
+      color: #c0392b;
+    }
+
+    /* Page content */
+    .page-content {
+      padding: 32px;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .view {
+      display: none;
+    }
+
+    .view.active {
+      display: block;
+    }
+
+    /* Page header */
+    .page-header {
+      margin-bottom: 32px;
+    }
+
+    .page-title {
+      font-family: var(--font-serif);
+      font-size: 36px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .page-subtitle {
+      font-size: 15px;
+      color: var(--text-secondary);
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: var(--shadow-sm);
+      transition: all 0.2s ease;
+    }
+
+    .card:hover {
+      box-shadow: var(--shadow-md);
+    }
+
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .card-action {
+      font-size: 13px;
+      color: var(--accent-green);
+      cursor: pointer;
+      font-weight: 500;
+    }
+
+    .card-action:hover {
+      text-decoration: underline;
+    }
+
+    /* Agent Registry View */
+    .registry-grid {
+      display: grid;
+      gap: 32px;
+    }
+
+    .role-section {
+      margin-bottom: 8px;
+    }
+
+    .role-label {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-bottom: 16px;
+    }
+
+    .agent-cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px;
+    }
+
+    .agent-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      position: relative;
+    }
+
+    .agent-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+
+    .agent-card-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .agent-avatar {
+      width: 56px;
+      height: 56px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 20px;
+      flex-shrink: 0;
+      position: relative;
+    }
+
+    .agent-avatar.leader {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    }
+
+    .agent-avatar.manager {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .agent-avatar.worker {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .agent-avatar.archived {
+      background: linear-gradient(135deg, #a8a8a8 0%, #d4d4d4 100%);
+    }
+
+    .agent-status-badge {
+      position: absolute;
+      bottom: 2px;
+      right: 2px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      border: 2px solid var(--bg-card);
+    }
+
+    .agent-status-badge.online {
+      background: var(--status-online);
+    }
+
+    .agent-status-badge.idle {
+      background: var(--status-idle);
+    }
+
+    .agent-info {
+      flex: 1;
+    }
+
+    .agent-name {
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--text-primary);
+      margin-bottom: 2px;
+    }
+
+    .agent-role {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .agent-quality {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .quality-ring {
+      width: 48px;
+      height: 48px;
+      position: relative;
+    }
+
+    .quality-ring svg {
+      transform: rotate(-90deg);
+    }
+
+    .quality-ring circle {
+      fill: none;
+      stroke-width: 4;
+    }
+
+    .quality-ring .bg {
+      stroke: var(--border-light);
+    }
+
+    .quality-ring .progress {
+      stroke: var(--accent-green);
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.3s ease;
+    }
+
+    .quality-value {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .quality-label {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .agent-card-arrow {
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      color: var(--text-muted);
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .agent-card:hover .agent-card-arrow {
+      opacity: 1;
+    }
+
+    /* Agent Detail Panel */
+    .detail-panel {
+      position: fixed;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 420px;
+      background: var(--bg-card);
+      border-left: 1px solid var(--border-light);
+      box-shadow: var(--shadow-xl);
+      z-index: 200;
+      overflow-y: auto;
+      transform: translateX(100%);
+      transition: transform 0.3s ease;
+    }
+
+    .detail-panel.open {
+      transform: translateX(0);
+    }
+
+    .detail-header {
+      padding: 32px 24px;
+      border-bottom: 1px solid var(--border-light);
+      position: relative;
+    }
+
+    .detail-close {
+      position: absolute;
+      top: 16px;
+      right: 16px;
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      transition: all 0.2s;
+    }
+
+    .detail-close:hover {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+    }
+
+    .detail-avatar-section {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .detail-avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 28px;
+    }
+
+    .detail-title {
+      font-family: var(--font-serif);
+      font-size: 24px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .detail-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .detail-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 12px;
+      background: rgba(39, 174, 96, 0.1);
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--status-online);
+      margin-top: 8px;
+    }
+
+    .detail-section {
+      padding: 24px;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .detail-section-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .detail-quote {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: 14px;
+      color: var(--text-secondary);
+      line-height: 1.6;
+      padding: 16px;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      border-left: 3px solid var(--accent-green);
+    }
+
+    .performance-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    .perf-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .perf-value {
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .perf-label {
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .skill-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .skill-tag {
+      padding: 6px 12px;
+      background: var(--bg-secondary);
+      border-radius: 16px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .skill-dots {
+      display: flex;
+      gap: 2px;
+    }
+
+    .skill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent-green);
+    }
+
+    .skill-dot.empty {
+      background: var(--border-light);
+    }
+
+    .work-log-item {
+      display: flex;
+      gap: 12px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .work-log-item:last-child {
+      border-bottom: none;
+    }
+
+    .work-log-time {
+      font-size: 12px;
+      color: var(--text-muted);
+      min-width: 70px;
+    }
+
+    .work-log-text {
+      flex: 1;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .work-log-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--accent-green);
+      margin-top: 6px;
+    }
+
+    .todo-item {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+      padding: 12px 0;
+    }
+
+    .todo-checkbox {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      border: 2px solid var(--border-medium);
+      cursor: pointer;
+      flex-shrink: 0;
+      margin-top: 2px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .todo-checkbox.checked {
+      background: var(--accent-green);
+      border-color: var(--accent-green);
+    }
+
+    .todo-checkbox.checked::after {
+      content: '✓';
+      color: white;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .todo-text {
+      flex: 1;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+
+    .todo-text.completed {
+      text-decoration: line-through;
+      color: var(--text-muted);
+    }
+
+    /* Mission Intake View */
+    .intake-container {
+      max-width: 800px;
+      margin: 0 auto;
+    }
+
+    .intake-header {
+      text-align: center;
+      margin-bottom: 48px;
+    }
+
+    .intake-title {
+      font-family: var(--font-serif);
+      font-size: 42px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+    }
+
+    .intake-subtitle {
+      font-size: 16px;
+      color: var(--text-secondary);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    .intake-form {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 16px;
+      padding: 32px;
+      box-shadow: var(--shadow-md);
+    }
+
+    .form-group {
+      margin-bottom: 24px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .form-hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-weight: 400;
+      margin-left: 8px;
+    }
+
+    .form-textarea {
+      width: 100%;
+      min-height: 120px;
+      padding: 16px;
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      background: var(--bg-primary);
+      font-family: var(--font-sans);
+      font-size: 14px;
+      resize: vertical;
+      transition: border-color 0.2s;
+    }
+
+    .form-textarea:focus {
+      outline: none;
+      border-color: var(--accent-green);
+    }
+
+    .form-textarea::placeholder {
+      color: var(--text-muted);
+    }
+
+    .clarify-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .clarify-item {
+      padding: 16px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .clarify-item:hover {
+      border-color: var(--accent-green);
+      background: var(--bg-card-hover);
+    }
+
+    .clarify-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      background: var(--bg-secondary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--accent-green);
+    }
+
+    .clarify-text {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .classify-section {
+      margin-top: 32px;
+    }
+
+    .classify-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+      margin-top: 16px;
+    }
+
+    .classify-item {
+      padding: 16px;
+      background: var(--bg-primary);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .classify-item:hover {
+      border-color: var(--accent-green);
+    }
+
+    .classify-item.selected {
+      background: var(--accent-green);
+      color: white;
+      border-color: var(--accent-green);
+    }
+
+    .form-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 32px;
+      padding-top: 24px;
+      border-top: 1px solid var(--border-light);
+    }
+
+    .privacy-note {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .btn-primary {
+      padding: 12px 24px;
+      background: var(--accent-green);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-green-dark);
+    }
+
+    /* Mission Workspace Map View */
+    .workspace-container {
+      position: relative;
+      height: calc(100vh - var(--header-height) - 64px);
+      background: var(--bg-card);
+      border-radius: 16px;
+      border: 1px solid var(--border-light);
+      overflow: hidden;
+    }
+
+    .workspace-canvas {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+    }
+
+    .workspace-bg {
+      position: absolute;
+      inset: 0;
+      background: 
+        radial-gradient(circle at 20% 30%, rgba(156, 175, 136, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 80% 70%, rgba(126, 177, 214, 0.1) 0%, transparent 50%),
+        radial-gradient(circle at 50% 50%, rgba(212, 165, 116, 0.05) 0%, transparent 70%);
+    }
+
+    .agent-node {
+      position: absolute;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      cursor: pointer;
+      transition: transform 0.2s;
+    }
+
+    .agent-node:hover {
+      transform: scale(1.05);
+    }
+
+    .agent-node-avatar {
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 24px;
+      box-shadow: var(--shadow-md);
+      position: relative;
+    }
+
+    .agent-node-avatar.leader {
+      background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+      width: 80px;
+      height: 80px;
+      font-size: 28px;
+    }
+
+    .agent-node-avatar.manager {
+      background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+    }
+
+    .agent-node-avatar.worker {
+      background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
+    }
+
+    .agent-node-status {
+      position: absolute;
+      bottom: 4px;
+      right: 4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 3px solid var(--bg-card);
+    }
+
+    .agent-node-status.online {
+      background: var(--status-online);
+    }
+
+    .agent-node-status.idle {
+      background: var(--status-idle);
+    }
+
+    .agent-node-label {
+      margin-top: 8px;
+      text-align: center;
+    }
+
+    .agent-node-name {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text-primary);
+    }
+
+    .agent-node-role {
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+
+    .team-cluster {
+      position: absolute;
+      border: 2px dashed var(--border-light);
+      border-radius: 50%;
+      background: rgba(250, 247, 243, 0.5);
+    }
+
+    .team-cluster-label {
+      position: absolute;
+      bottom: -24px;
+      left: 50%;
+      transform: translateX(-50%);
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-muted);
+    }
+
+    .connection-path {
+      position: absolute;
+      pointer-events: none;
+    }
+
+    .workspace-controls {
+      position: absolute;
+      bottom: 24px;
+      left: 50%;
+      transform: translateX(-50%);
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 12px 24px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 24px;
+      box-shadow: var(--shadow-md);
+    }
+
+    .control-btn {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      border: 1px solid var(--border-light);
+      background: var(--bg-primary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .control-btn:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .control-toggle {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .toggle-switch {
+      width: 36px;
+      height: 20px;
+      background: var(--border-light);
+      border-radius: 10px;
+      position: relative;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .toggle-switch.active {
+      background: var(--accent-green);
+    }
+
+    .toggle-switch::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: white;
+      border-radius: 50%;
+      transition: transform 0.2s;
+    }
+
+    .toggle-switch.active::after {
+      transform: translateX(16px);
+    }
+
+    /* Outputs View */
+    .outputs-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 32px;
+    }
+
+    .outputs-column {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .outputs-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .outputs-title {
+      font-family: var(--font-serif);
+      font-size: 20px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .outputs-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .output-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 12px;
+      padding: 20px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .output-card:hover {
+      box-shadow: var(--shadow-md);
+      transform: translateY(-2px);
+    }
+
+    .output-card-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .output-type {
+      padding: 4px 8px;
+      background: var(--bg-secondary);
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--text-secondary);
+    }
+
+    .output-title {
+      font-weight: 600;
+      font-size: 15px;
+      color: var(--text-primary);
+      margin-bottom: 8px;
+    }
+
+    .output-meta {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .output-status {
+      margin-left: auto;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+
+    .output-status.ready {
+      background: var(--status-online);
+    }
+
+    .output-status.pending {
+      background: var(--status-idle);
+    }
+
+    .converter-node {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .converter-avatar {
+      width: 72px;
+      height: 72px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-weight: 600;
+      font-size: 24px;
+      box-shadow: var(--shadow-lg);
+    }
+
+    .converter-label {
+      text-align: center;
+    }
+
+    .converter-name {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--text-primary);
+    }
+
+    .converter-role {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Summary Panel */
+    .summary-panel {
+      position: fixed;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      width: 360px;
+      background: var(--bg-card);
+      border-left: 1px solid var(--border-light);
+      box-shadow: var(--shadow-xl);
+      z-index: 200;
+      overflow-y: auto;
+      padding: 32px 24px;
+    }
+
+    .summary-section {
+      margin-bottom: 32px;
+    }
+
+    .summary-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .summary-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--border-light);
+    }
+
+    .summary-item:last-child {
+      border-bottom: none;
+    }
+
+    .summary-label {
+      font-size: 13px;
+      color: var(--text-secondary);
+    }
+
+    .summary-value {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-primary);
+    }
+
+    .recommendation-card {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .recommendation-title {
+      font-weight: 600;
+      font-size: 13px;
+      color: var(--text-primary);
+      margin-bottom: 4px;
+    }
+
+    .recommendation-text {
+      font-size: 12px;
+      color: var(--text-secondary);
+      margin-bottom: 12px;
+    }
+
+    .recommendation-btn {
+      padding: 6px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border-light);
+      border-radius: 6px;
+      font-size: 12px;
+      color: var(--text-secondary);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .recommendation-btn:hover {
+      background: var(--bg-card-hover);
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .agent-cards {
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      }
+    }
+
+    @media (max-width: 768px) {
+      .sidebar {
+        transform: translateX(-100%);
+      }
+      .main-content {
+        margin-left: 0;
+      }
+      .detail-panel, .summary-panel {
+        width: 100%;
+      }
+      .outputs-container {
+        grid-template-columns: 1fr;
+      }
+      .classify-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+      .header-right {
+        gap: 10px;
+      }
+      .interactive-launcher {
+        gap: 4px;
+      }
+      .terminal-select {
+        max-width: 82px;
+      }
+      .interactive-status {
+        display: none;
+      }
+    }
+
+    /* Animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .view.active {
+      animation: fadeIn 0.3s ease;
+    }
+
+    /* Decorative elements */
+    .deco-stone {
+      position: absolute;
+      border-radius: 50%;
+      background: linear-gradient(135deg, #d4c9bc 0%, #b8b0a5 100%);
+      opacity: 0.3;
+    }
+
+    .deco-plant {
+      position: absolute;
+      opacity: 0.2;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Sidebar -->
+    <aside class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-icon">M</div>
+        <div class="logo-text">Mission</div>
+      </div>
+
+      <nav class="nav-section">
+        <div class="nav-item" data-view="overview">
+          <div class="nav-icon">⊞</div>
+          <span>Overview</span>
+        </div>
+        <div class="nav-item active" data-view="missions">
+          <div class="nav-icon">⌂</div>
+          <span>Missions</span>
+          <span class="nav-badge">3</span>
+        </div>
+        <div class="nav-item" data-view="registry">
+          <div class="nav-icon">☰</div>
+          <span>Registry</span>
+        </div>
+        <div class="nav-item" data-view="memory">
+          <div class="nav-icon">◎</div>
+          <span>Memory</span>
+        </div>
+        <div class="nav-item" data-view="outputs">
+          <div class="nav-icon">⊡</div>
+          <span>Outputs</span>
+        </div>
+        <div class="nav-item" data-view="settings">
+          <div class="nav-icon">⚙</div>
+          <span>Settings</span>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <div class="user-profile">
+          <div class="user-avatar">AL</div>
+          <div class="user-info">
+            <div class="user-name">Ari Levin</div>
+            <div class="user-role">Mission Lead</div>
+          </div>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="main-content">
+      <!-- Header -->
+      <header class="header">
+        <div class="header-left">
+          <div class="breadcrumb">
+            <span class="breadcrumb-item">Mission Workspace</span>
+            <span>›</span>
+            <span class="breadcrumb-item active" id="current-view-name">Registry</span>
+          </div>
+        </div>
+        <div class="header-right">
+          <div class="status-indicator">
+            <div class="status-dot"></div>
+            <span>12 Agents Online</span>
+          </div>
+          <div class="mission-status">
+            <span>⚡</span>
+            <span>Mission Active</span>
+          </div>
+          <div class="time-display">
+            <div class="time-main">11:42 AM</div>
+            <div class="time-sub">May 14, 2025</div>
+          </div>
+          <div class="header-actions">
+            <div class="interactive-launcher" aria-label="Interactive agent launcher">
+              <select class="terminal-select" id="interactive-role" title="Agent role">
+                <option value="worker">Worker</option>
+                <option value="review">Review</option>
+              </select>
+              <select class="terminal-select" id="interactive-tool" title="Agent model">
+                <option value="codex">Codex</option>
+                <option value="claude">Claude</option>
+                <option value="qwen">Qwen</option>
+              </select>
+              <button class="icon-btn" type="button" data-open-interactive-agent aria-label="Open interactive agent terminal" title="Open interactive agent terminal">&gt;_</button>
+            </div>
+            <div class="interactive-status" id="interactive-status" aria-live="polite"></div>
+            <button class="icon-btn">☀</button>
+          </div>
+        </div>
+      </header>
+
+      <!-- Page Content -->
+      <div class="page-content">
+        <!-- Registry View -->
+        <div class="view active" id="view-registry">
+          <div class="page-header">
+            <h1 class="page-title">Agent Registry</h1>
+            <p class="page-subtitle">Your team of AI agents. Built for clarity. Aligned to mission.</p>
+          </div>
+
+          <div class="registry-grid">
+            <!-- Leader Section -->
+            <div class="role-section">
+              <div class="role-label">Leader</div>
+              <div class="agent-cards">
+                <div class="agent-card" data-agent="lena">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar leader">
+                      LA
+                      <div class="agent-status-badge online"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Lena Atlas</div>
+                      <div class="agent-role">Leader</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="3.8"></circle>
+                      </svg>
+                      <div class="quality-value">97</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Managers Section -->
+            <div class="role-section">
+              <div class="role-label">Managers</div>
+              <div class="agent-cards">
+                <div class="agent-card" data-agent="nyla">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar manager">
+                      NW
+                      <div class="agent-status-badge online"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Nyla Wu</div>
+                      <div class="agent-role">Sub-Manager · Strategy</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="10"></circle>
+                      </svg>
+                      <div class="quality-value">92</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+
+                <div class="agent-card" data-agent="maya">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar manager">
+                      MC
+                      <div class="agent-status-badge online"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Maya Chen</div>
+                      <div class="agent-role">Sub-Manager · Content</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="12.6"></circle>
+                      </svg>
+                      <div class="quality-value">90</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+
+                <div class="agent-card" data-agent="ethan">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar manager">
+                      EP
+                      <div class="agent-status-badge idle"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Ethan Park</div>
+                      <div class="agent-role">Sub-Manager · Operations</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="13.8"></circle>
+                      </svg>
+                      <div class="quality-value">89</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Workers Section -->
+            <div class="role-section">
+              <div class="role-label">Workers</div>
+              <div class="agent-cards">
+                <div class="agent-card" data-agent="research">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar worker">
+                      RA
+                      <div class="agent-status-badge online"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Research Agent</div>
+                      <div class="agent-role">Worker</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="15"></circle>
+                      </svg>
+                      <div class="quality-value">88</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+
+                <div class="agent-card" data-agent="analysis">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar worker">
+                      AA
+                      <div class="agent-status-badge online"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Analysis Agent</div>
+                      <div class="agent-role">Worker</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="17.6"></circle>
+                      </svg>
+                      <div class="quality-value">86</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+
+                <div class="agent-card" data-agent="editor">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar worker">
+                      EA
+                      <div class="agent-status-badge online"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Editor Agent</div>
+                      <div class="agent-role">Worker</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="18.8"></circle>
+                      </svg>
+                      <div class="quality-value">85</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+
+                <div class="agent-card" data-agent="fact">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar worker">
+                      FC
+                      <div class="agent-status-badge online"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Fact Checker</div>
+                      <div class="agent-role">Worker</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="20"></circle>
+                      </svg>
+                      <div class="quality-value">84</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+
+                <div class="agent-card" data-agent="reviewer">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar worker">
+                      RA
+                      <div class="agent-status-badge online"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Reviewer Agent</div>
+                      <div class="agent-role">Worker</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="21.3"></circle>
+                      </svg>
+                      <div class="quality-value">83</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+
+                <div class="agent-card" data-agent="designer">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar worker">
+                      DA
+                      <div class="agent-status-badge online"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Designer Agent</div>
+                      <div class="agent-role">Worker</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="22.6"></circle>
+                      </svg>
+                      <div class="quality-value">82</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+
+                <div class="agent-card" data-agent="automator">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar worker">
+                      AA
+                      <div class="agent-status-badge idle"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Automator Agent</div>
+                      <div class="agent-role">Worker</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="23.8"></circle>
+                      </svg>
+                      <div class="quality-value">81</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+
+                <div class="agent-card" data-agent="integrator">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar worker">
+                      IA
+                      <div class="agent-status-badge idle"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Integrator Agent</div>
+                      <div class="agent-role">Worker</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="25"></circle>
+                      </svg>
+                      <div class="quality-value">80</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Archived Section -->
+            <div class="role-section">
+              <div class="role-label">Archived</div>
+              <div class="agent-cards">
+                <div class="agent-card" data-agent="legacy">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar archived">
+                      LC
+                      <div class="agent-status-badge offline"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Legacy Crawler</div>
+                      <div class="agent-role">Archived</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="31.4"></circle>
+                      </svg>
+                      <div class="quality-value">72</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+
+                <div class="agent-card" data-agent="old-summarizer">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar archived">
+                      OS
+                      <div class="agent-status-badge offline"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Old Summarizer</div>
+                      <div class="agent-role">Archived</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="35.2"></circle>
+                      </svg>
+                      <div class="quality-value">70</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+
+                <div class="agent-card" data-agent="beta">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar archived">
+                      BA
+                      <div class="agent-status-badge offline"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Beta Analyst</div>
+                      <div class="agent-role">Archived</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="40"></circle>
+                      </svg>
+                      <div class="quality-value">68</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+
+                <div class="agent-card" data-agent="temp">
+                  <div class="agent-card-header">
+                    <div class="agent-avatar archived">
+                      TF
+                      <div class="agent-status-badge offline"></div>
+                    </div>
+                    <div class="agent-info">
+                      <div class="agent-name">Temp Formatter</div>
+                      <div class="agent-role">Archived</div>
+                    </div>
+                  </div>
+                  <div class="agent-quality">
+                    <div class="quality-ring">
+                      <svg width="48" height="48">
+                        <circle class="bg" cx="24" cy="24" r="20"></circle>
+                        <circle class="progress" cx="24" cy="24" r="20" stroke-dasharray="125.6" stroke-dashoffset="43.8"></circle>
+                      </svg>
+                      <div class="quality-value">65</div>
+                    </div>
+                    <div class="quality-label">Quality Score</div>
+                  </div>
+                  <div class="agent-card-arrow">›</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="text-align: center; margin-top: 32px;">
+            <button class="btn-primary" type="button" data-open-interactive-agent style="margin: 0 auto;">
+              <span>⊕</span>
+              <span>Invite New Agent</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Mission Intake View -->
+        <div class="view" id="view-missions">
+          <div class="intake-container">
+            <div class="intake-header">
+              <h1 class="intake-title">What do you want to complete?</h1>
+              <p class="intake-subtitle">Describe your mission in your own words. We'll help clarify, scope, and assemble the right team to get it done.</p>
+            </div>
+
+            <div class="intake-form">
+              <div class="form-group">
+                <textarea class="form-textarea" placeholder="Example: Analyze our Q1 user feedback to identify top friction points, prioritize by impact, and propose solutions."></textarea>
+                <div style="text-align: right; margin-top: 8px; font-size: 12px; color: var(--text-muted);">0 / 2000</div>
+              </div>
+
+              <div class="form-group">
+                <div class="form-label">Clarify your mission <span class="form-hint">These help us understand what matters most.</span></div>
+                <div class="clarify-grid">
+                  <div class="clarify-item">
+                    <div class="clarify-icon">✦</div>
+                    <div class="clarify-text">What's the desired outcome?</div>
+                  </div>
+                  <div class="clarify-item">
+                    <div class="clarify-icon">👤</div>
+                    <div class="clarify-text">Who is this for?</div>
+                  </div>
+                  <div class="clarify-item">
+                    <div class="clarify-icon">🕐</div>
+                    <div class="clarify-text">What's the deadline?</div>
+                  </div>
+                  <div class="clarify-item">
+                    <div class="clarify-icon"></div>
+                    <div class="clarify-text">Are there any constraints?</div>
+                  </div>
+                  <div class="clarify-item">
+                    <div class="clarify-icon">💡</div>
+                    <div class="clarify-text">What resources or data should we use?</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="classify-section">
+                <div class="form-label">Classify your mission <span class="form-hint">Select the domain that best fits your mission.</span></div>
+                <div class="classify-grid">
+                  <div class="classify-item">Strategy</div>
+                  <div class="classify-item">Operations</div>
+                  <div class="classify-item selected">Research</div>
+                  <div class="classify-item">Marketing</div>
+                  <div class="classify-item">Product</div>
+                  <div class="classify-item">Data & Analytics</div>
+                  <div class="classify-item">Other / Custom</div>
+                </div>
+              </div>
+
+              <div class="form-footer">
+                <div class="privacy-note">
+                  <span>🔒</span>
+                  <span>Your mission details are private and only visible to you.</span>
+                </div>
+                <button class="btn-primary">
+                  <span>Continue</span>
+                  <span>→</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Workspace Map View -->
+        <div class="view" id="view-workspace">
+          <div class="page-header">
+            <h1 class="page-title">Mission Workspace</h1>
+            <p class="page-subtitle">Observe, guide, and empower your AI team.</p>
+          </div>
+
+          <div class="workspace-container">
+            <div class="workspace-canvas">
+              <div class="workspace-bg"></div>
+
+              <!-- Team Clusters -->
+              <div class="team-cluster" style="width: 300px; height: 300px; top: 300px; left: 100px;">
+                <div class="team-cluster-label">Strategy</div>
+              </div>
+              <div class="team-cluster" style="width: 350px; height: 350px; top: 250px; left: 450px;">
+                <div class="team-cluster-label">Content</div>
+              </div>
+              <div class="team-cluster" style="width: 280px; height: 280px; top: 320px; left: 850px;">
+                <div class="team-cluster-label">Operations</div>
+              </div>
+
+              <!-- Leader -->
+              <div class="agent-node" style="top: 80px; left: 50%; transform: translateX(-50%);">
+                <div class="agent-node-avatar leader">
+                  LA
+                  <div class="agent-node-status online"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Lena Atlas</div>
+                  <div class="agent-node-role">Leader</div>
+                </div>
+              </div>
+
+              <!-- Managers -->
+              <div class="agent-node" style="top: 200px; left: 200px;">
+                <div class="agent-node-avatar manager">
+                  NW
+                  <div class="agent-node-status online"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Noah Vito</div>
+                  <div class="agent-node-role">Sub-Manager · Strategy</div>
+                </div>
+              </div>
+
+              <div class="agent-node" style="top: 200px; left: 50%; transform: translateX(-50%);">
+                <div class="agent-node-avatar manager">
+                  MC
+                  <div class="agent-node-status online"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Maya Chen</div>
+                  <div class="agent-node-role">Sub-Manager · Content</div>
+                </div>
+              </div>
+
+              <div class="agent-node" style="top: 200px; right: 200px;">
+                <div class="agent-node-avatar manager">
+                  EP
+                  <div class="agent-node-status idle"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Ethan Park</div>
+                  <div class="agent-node-role">Sub-Manager · Operations</div>
+                </div>
+              </div>
+
+              <!-- Strategy Workers -->
+              <div class="agent-node" style="top: 350px; left: 150px;">
+                <div class="agent-node-avatar worker">
+                  RA
+                  <div class="agent-node-status online"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Research Agent</div>
+                </div>
+              </div>
+
+              <div class="agent-node" style="top: 350px; left: 280px;">
+                <div class="agent-node-avatar worker">
+                  MA
+                  <div class="agent-node-status online"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Market Analyst</div>
+                </div>
+              </div>
+
+              <div class="agent-node" style="top: 480px; left: 150px;">
+                <div class="agent-node-avatar worker">
+                  DS
+                  <div class="agent-node-status online"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Data Scout</div>
+                </div>
+              </div>
+
+              <div class="agent-node" style="top: 480px; left: 280px;">
+                <div class="agent-node-avatar worker">
+                  IS
+                  <div class="agent-node-status online"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Insight Synth</div>
+                </div>
+              </div>
+
+              <!-- Content Workers -->
+              <div class="agent-node" style="top: 320px; left: 500px;">
+                <div class="agent-node-avatar worker">
+                  WA
+                  <div class="agent-node-status online"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Writer Agent</div>
+                </div>
+              </div>
+
+              <div class="agent-node" style="top: 420px; left: 450px;">
+                <div class="agent-node-avatar worker">
+                  SW
+                  <div class="agent-node-status online"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">SEO Writer</div>
+                </div>
+              </div>
+
+              <div class="agent-node" style="top: 420px; left: 600px;">
+                <div class="agent-node-avatar worker">
+                  FC
+                  <div class="agent-node-status online"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Fact Checker</div>
+                </div>
+              </div>
+
+              <div class="agent-node" style="top: 520px; left: 520px;">
+                <div class="agent-node-avatar worker">
+                  CD
+                  <div class="agent-node-status online"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Content Designer</div>
+                </div>
+              </div>
+
+              <!-- Operations Workers -->
+              <div class="agent-node" style="top: 350px; left: 880px;">
+                <div class="agent-node-avatar worker">
+                  OA
+                  <div class="agent-node-status idle"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Ops Agent</div>
+                </div>
+              </div>
+
+              <div class="agent-node" style="top: 350px; left: 1010px;">
+                <div class="agent-node-avatar worker">
+                  AA
+                  <div class="agent-node-status idle"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Automator Agent</div>
+                </div>
+              </div>
+
+              <div class="agent-node" style="top: 460px; left: 880px;">
+                <div class="agent-node-avatar worker">
+                  IA
+                  <div class="agent-node-status idle"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Integrator Agent</div>
+                </div>
+              </div>
+
+              <div class="agent-node" style="top: 460px; left: 1010px;">
+                <div class="agent-node-avatar worker">
+                  QA
+                  <div class="agent-node-status idle"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">QA Agent</div>
+                </div>
+              </div>
+
+              <div class="agent-node" style="top: 560px; left: 945px;">
+                <div class="agent-node-avatar worker">
+                  SA
+                  <div class="agent-node-status idle"></div>
+                </div>
+                <div class="agent-node-label">
+                  <div class="agent-node-name">Scheduler Agent</div>
+                </div>
+              </div>
+            </div>
+
+            <div class="workspace-controls">
+              <button class="control-btn"></button>
+              <button class="control-btn">⟲</button>
+              <div class="control-toggle">
+                <span>Show Paths</span>
+                <div class="toggle-switch active"></div>
+              </div>
+              <button class="control-btn">−</button>
+              <button class="control-btn">+</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Outputs View -->
+        <div class="view" id="view-outputs">
+          <div class="page-header">
+            <h1 class="page-title">Outputs & Deliverables</h1>
+            <p class="page-subtitle">Review, refine, and publish mission outputs.</p>
+          </div>
+
+          <div style="text-align: center; margin-bottom: 32px;">
+            <p style="font-family: var(--font-serif); font-style: italic; font-size: 18px; color: var(--text-secondary);">"From raw thoughts to ready-to-publish."</p>
+          </div>
+
+          <div class="outputs-container">
+            <!-- Drafts Column -->
+            <div class="outputs-column">
+              <div class="outputs-header">
+                <div class="outputs-title">✎ Fast Markdown Drafts</div>
+                <div class="outputs-subtitle">Quick iterations, captured in real-time.</div>
+              </div>
+
+              <div class="output-card">
+                <div class="output-card-header">
+                  <div class="output-type">MD</div>
+                </div>
+                <div class="output-title">Positioning Brief (v1)</div>
+                <div class="output-meta">
+                  <span>10:15 AM</span>
+                  <span>•</span>
+                  <span>Lena Atlas</span>
+                  <div class="output-status ready"></div>
+                </div>
+              </div>
+
+              <div class="output-card">
+                <div class="output-card-header">
+                  <div class="output-type">MD</div>
+                </div>
+                <div class="output-title">Market Context (v1)</div>
+                <div class="output-meta">
+                  <span>9:58 AM</span>
+                  <span>•</span>
+                  <span>Maya Chen</span>
+                  <div class="output-status ready"></div>
+                </div>
+              </div>
+
+              <div class="output-card">
+                <div class="output-card-header">
+                  <div class="output-type">MD</div>
+                </div>
+                <div class="output-title">Audience Insights (v1)</div>
+                <div class="output-meta">
+                  <span>9:41 AM</span>
+                  <span>•</span>
+                  <span>Noah Yu</span>
+                  <div class="output-status ready"></div>
+                </div>
+              </div>
+
+              <div class="output-card">
+                <div class="output-card-header">
+                  <div class="output-type">MD</div>
+                </div>
+                <div class="output-title">Key Messages (v1)</div>
+                <div class="output-meta">
+                  <span>9:22 AM</span>
+                  <span>•</span>
+                  <span>Ethan Park</span>
+                  <div class="output-status pending"></div>
+                </div>
+              </div>
+
+              <div class="output-card">
+                <div class="output-card-header">
+                  <div class="output-type">MD</div>
+                </div>
+                <div class="output-title">Competitive Scan (v1)</div>
+                <div class="output-meta">
+                  <span>9:05 AM</span>
+                  <span>•</span>
+                  <span>Sofia Patel</span>
+                  <div class="output-status ready"></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Polished Column -->
+            <div class="outputs-column">
+              <div class="outputs-header">
+                <div class="outputs-title">✦ Polished HTML Outputs</div>
+                <div class="outputs-subtitle">Clean, styled, and ready to share.</div>
+              </div>
+
+              <div class="output-card">
+                <div class="output-card-header">
+                  <div class="output-type">HTML</div>
+                </div>
+                <div class="output-title">Positioning Brief</div>
+                <div class="output-meta">
+                  <span>10:28 AM</span>
+                  <span>•</span>
+                  <span>Lena Atlas</span>
+                  <div class="output-status ready"></div>
+                </div>
+              </div>
+
+              <div class="output-card">
+                <div class="output-card-header">
+                  <div class="output-type">HTML</div>
+                </div>
+                <div class="output-title">Market Context</div>
+                <div class="output-meta">
+                  <span>10:28 AM</span>
+                  <span>•</span>
+                  <span>Maya Chen</span>
+                  <div class="output-status ready"></div>
+                </div>
+              </div>
+
+              <div class="output-card">
+                <div class="output-card-header">
+                  <div class="output-type">HTML</div>
+                </div>
+                <div class="output-title">Audience Insights</div>
+                <div class="output-meta">
+                  <span>10:28 AM</span>
+                  <span>•</span>
+                  <span>Noah Yu</span>
+                  <div class="output-status ready"></div>
+                </div>
+              </div>
+
+              <div class="output-card">
+                <div class="output-card-header">
+                  <div class="output-type">HTML</div>
+                </div>
+                <div class="output-title">Key Messages</div>
+                <div class="output-meta">
+                  <span>10:28 AM</span>
+                  <span>•</span>
+                  <span>Ethan Park</span>
+                  <div class="output-status ready"></div>
+                </div>
+              </div>
+
+              <div class="output-card">
+                <div class="output-card-header">
+                  <div class="output-type">HTML</div>
+                </div>
+                <div class="output-title">Competitive Scan</div>
+                <div class="output-meta">
+                  <span>10:28 AM</span>
+                  <span>•</span>
+                  <span>Sofia Patel</span>
+                  <div class="output-status ready"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style="text-align: center; margin-top: 32px;">
+            <div style="display: inline-flex; align-items: center; gap: 12px; padding: 12px 24px; background: var(--bg-card); border: 1px solid var(--border-light); border-radius: 24px;">
+              <span style="color: var(--accent-green);">✓</span>
+              <span style="font-size: 13px; color: var(--text-secondary);">5 / 5 drafts processed</span>
+              <span style="font-size: 12px; color: var(--text-muted);">All outputs up to date</span>
+            </div>
+          </div>
+
+          <div class="workspace-controls" style="position: relative; margin-top: 32px;">
+            <button class="control-btn">⟲</button>
+            <button class="control-btn"></button>
+            <div class="control-toggle">
+              <span>Show Flow</span>
+              <div class="toggle-switch active"></div>
+            </div>
+            <button class="control-btn">−</button>
+            <button class="control-btn">+</button>
+          </div>
+        </div>
+
+        <!-- Overview View (placeholder) -->
+        <div class="view" id="view-overview">
+          <div class="page-header">
+            <h1 class="page-title">Overview</h1>
+            <p class="page-subtitle">Mission dashboard and key metrics.</p>
+          </div>
+          <div class="card">
+            <p>Overview content coming soon...</p>
+          </div>
+        </div>
+
+        <!-- Memory View (placeholder) -->
+        <div class="view" id="view-memory">
+          <div class="page-header">
+            <h1 class="page-title">Memory</h1>
+            <p class="page-subtitle">Agent knowledge and learning.</p>
+          </div>
+          <div class="card">
+            <p>Memory content coming soon...</p>
+          </div>
+        </div>
+
+        <!-- Settings View (placeholder) -->
+        <div class="view" id="view-settings">
+          <div class="page-header">
+            <h1 class="page-title">Settings</h1>
+            <p class="page-subtitle">Configure your mission workspace.</p>
+          </div>
+          <div class="card">
+            <p>Settings content coming soon...</p>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <!-- Detail Panel (for agent profiles) -->
+    <div class="detail-panel" id="detail-panel">
+      <div class="detail-header">
+        <button class="detail-close" onclick="closeDetailPanel()">✕</button>
+        <div class="detail-avatar-section">
+          <div class="detail-avatar" id="detail-avatar">MC</div>
+          <div>
+            <div class="detail-title" id="detail-name">Maya Chen</div>
+            <div class="detail-subtitle" id="detail-role">Sub-Manager · Content</div>
+            <div class="detail-status">
+              <div class="status-dot"></div>
+              <span>Online</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-quote">
+          "Crafting clarity. Driving engagement. Elevating every idea."
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">
+          <span>Role & Focus</span>
+          <span class="card-action">Edit</span>
+        </div>
+        <p style="font-size: 13px; color: var(--text-secondary); margin-bottom: 12px;">
+          Leads the content team in creating high-quality, audience-focused content.
+        </p>
+        <div class="skill-tags">
+          <div class="skill-tag">Content Strategy</div>
+          <div class="skill-tag">Editorial</div>
+          <div class="skill-tag">Quality</div>
+          <div class="skill-tag">+2</div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">
+          <span>Skills</span>
+          <span class="card-action">View all</span>
+        </div>
+        <div class="skill-tags">
+          <div class="skill-tag">
+            Long-form Writing
+            <div class="skill-dots">
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot empty"></div>
+              <div class="skill-dot empty"></div>
+            </div>
+          </div>
+          <div class="skill-tag">
+            Editing
+            <div class="skill-dots">
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot empty"></div>
+              <div class="skill-dot empty"></div>
+            </div>
+          </div>
+          <div class="skill-tag">
+            SEO Writing
+            <div class="skill-dots">
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot empty"></div>
+              <div class="skill-dot empty"></div>
+            </div>
+          </div>
+          <div class="skill-tag">
+            Storytelling
+            <div class="skill-dots">
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot empty"></div>
+              <div class="skill-dot empty"></div>
+            </div>
+          </div>
+          <div class="skill-tag">
+            Brand Voice
+            <div class="skill-dots">
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot empty"></div>
+              <div class="skill-dot empty"></div>
+            </div>
+          </div>
+          <div class="skill-tag">
+            Audience Empathy
+            <div class="skill-dots">
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot"></div>
+              <div class="skill-dot empty"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">
+          <span>Work Log</span>
+          <span class="card-action">View all</span>
+        </div>
+        <div class="work-log-item">
+          <div class="work-log-time">11:25 AM</div>
+          <div class="work-log-text">Assigned brief from Noah Vito</div>
+          <div class="work-log-dot"></div>
+        </div>
+        <div class="work-log-item">
+          <div class="work-log-time">10:42 AM</div>
+          <div class="work-log-text">Drafted section 2.1 "Positioning"</div>
+          <div class="work-log-dot"></div>
+        </div>
+        <div class="work-log-item">
+          <div class="work-log-time">09:18 AM</div>
+          <div class="work-log-text">Requested feedback from Editor Agent</div>
+          <div class="work-log-dot"></div>
+        </div>
+        <div class="work-log-item">
+          <div class="work-log-time">08:50 AM</div>
+          <div class="work-log-text">Refined outline and key points</div>
+          <div class="work-log-dot"></div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">
+          <span>Current Task</span>
+          <span class="card-action">Edit</span>
+        </div>
+        <div class="todo-item">
+          <div class="todo-checkbox checked"></div>
+          <div class="todo-text completed">Drafting section 2.1 "Positioning"</div>
+        </div>
+        <div style="margin-top: 12px; padding: 12px; background: var(--bg-secondary); border-radius: 8px;">
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+            <span style="font-size: 12px; color: var(--text-muted);">Progress</span>
+            <span style="font-size: 12px; font-weight: 600; color: var(--accent-green);">60%</span>
+          </div>
+          <div style="height: 6px; background: var(--border-light); border-radius: 3px; overflow: hidden;">
+            <div style="height: 100%; width: 60%; background: var(--accent-green); border-radius: 3px;"></div>
+          </div>
+          <div style="margin-top: 8px; font-size: 11px; color: var(--text-muted);">Due in 2h 15m</div>
+        </div>
+      </div>
+
+      <div class="detail-section">
+        <div class="detail-section-title">
+          <span>To-Dos</span>
+          <span class="card-action">Add</span>
+        </div>
+        <div class="todo-item">
+          <div class="todo-checkbox checked"></div>
+          <div class="todo-text completed">Align on key messaging</div>
+        </div>
+        <div class="todo-item">
+          <div class="todo-checkbox checked"></div>
+          <div class="todo-text completed">Outline structure</div>
+        </div>
+        <div class="todo-item">
+          <div class="todo-checkbox"></div>
+          <div class="todo-text">Write first draft</div>
+        </div>
+        <div class="todo-item">
+          <div class="todo-checkbox"></div>
+          <div class="todo-text">Internal review</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Summary Panel (for outputs) -->
+    <div class="summary-panel" id="summary-panel" style="display: none;">
+      <div class="summary-section">
+        <div class="summary-title">
+          <span>Mission Summary</span>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <div class="status-dot"></div>
+            <span style="font-size: 13px; color: var(--status-online);">On track</span>
+            <span style="cursor: pointer;">⋯</span>
+          </div>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Mission</span>
+          <span class="summary-value">Writer Agent</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Progress</span>
+          <span class="summary-value">76%</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Agents Active</span>
+          <span class="summary-value">12 / 12</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Drafts Created</span>
+          <span class="summary-value">5</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Outputs Ready</span>
+          <span class="summary-value">5</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">Last Updated</span>
+          <span class="summary-value">11:28 AM</span>
+        </div>
+      </div>
+
+      <div class="summary-section">
+        <div class="summary-title">
+          <span>Review Status</span>
+          <span class="card-action">View all</span>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">5 Ready for review</span>
+          <div class="output-status ready"></div>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">0 In review</span>
+          <div class="output-status pending"></div>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">0 Changes requested</span>
+          <div class="output-status" style="background: #e74c3c;"></div>
+        </div>
+        <div class="summary-item">
+          <span class="summary-label">0 Approved</span>
+          <div class="output-status ready"></div>
+        </div>
+      </div>
+
+      <div class="summary-section">
+        <div class="summary-title">Recommendations</div>
+        <div class="recommendation-card">
+          <div class="recommendation-title">Refine Key Messages</div>
+          <div class="recommendation-text">Consider tightening the message around differentiation.</div>
+          <button class="recommendation-btn">Open draft</button>
+        </div>
+        <div class="recommendation-card">
+          <div class="recommendation-title">Enhance Market Context</div>
+          <div class="recommendation-text">Add recent data points to strengthen credibility.</div>
+          <button class="recommendation-btn">Open draft</button>
+        </div>
+        <div class="recommendation-card">
+          <div class="recommendation-title">Review Audience Insights</div>
+          <div class="recommendation-text">Validate assumptions with internal stakeholders.</div>
+          <button class="recommendation-btn">Open draft</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Navigation
+    const navItems = document.querySelectorAll('.nav-item');
+    const views = document.querySelectorAll('.view');
+    const breadcrumbActive = document.getElementById('current-view-name');
+
+    const viewNames = {
+      'overview': 'Overview',
+      'missions': 'Missions',
+      'registry': 'Registry',
+      'memory': 'Memory',
+      'outputs': 'Outputs',
+      'settings': 'Settings',
+      'workspace': 'Workspace'
+    };
+
+    navItems.forEach(item => {
+      item.addEventListener('click', () => {
+        const viewName = item.dataset.view;
+        
+        // Update nav
+        navItems.forEach(n => n.classList.remove('active'));
+        item.classList.add('active');
+        
+        // Update views
+        views.forEach(v => v.classList.remove('active'));
+        const targetView = document.getElementById(`view-${viewName}`);
+        if (targetView) {
+          targetView.classList.add('active');
+        }
+        
+        // Update breadcrumb
+        if (viewNames[viewName]) {
+          breadcrumbActive.textContent = viewNames[viewName];
+        }
+      });
+    });
+
+    // Agent card clicks - open detail panel
+    const agentCards = document.querySelectorAll('.agent-card');
+    const detailPanel = document.getElementById('detail-panel');
+
+    agentCards.forEach(card => {
+      card.addEventListener('click', () => {
+        detailPanel.classList.add('open');
+      });
+    });
+
+    function closeDetailPanel() {
+      detailPanel.classList.remove('open');
+    }
+
+    // Classify items
+    const classifyItems = document.querySelectorAll('.classify-item');
+    classifyItems.forEach(item => {
+      item.addEventListener('click', () => {
+        classifyItems.forEach(i => i.classList.remove('selected'));
+        item.classList.add('selected');
+      });
+    });
+
+    // Toggle switches
+    const toggleSwitches = document.querySelectorAll('.toggle-switch');
+    toggleSwitches.forEach(toggle => {
+      toggle.addEventListener('click', () => {
+        toggle.classList.toggle('active');
+      });
+    });
+
+    // Todo checkboxes
+    const todoCheckboxes = document.querySelectorAll('.todo-checkbox');
+    todoCheckboxes.forEach(checkbox => {
+      checkbox.addEventListener('click', () => {
+        checkbox.classList.toggle('checked');
+        const todoText = checkbox.nextElementSibling;
+        if (todoText) {
+          todoText.classList.toggle('completed');
+        }
+      });
+    });
+
+    // Interactive terminal launcher
+    const interactiveRole = document.getElementById('interactive-role');
+    const interactiveTool = document.getElementById('interactive-tool');
+    const interactiveStatus = document.getElementById('interactive-status');
+    const interactiveButtons = document.querySelectorAll('[data-open-interactive-agent]');
+
+    function setInteractiveStatus(message, isError = false) {
+      if (!interactiveStatus) return;
+      interactiveStatus.textContent = message;
+      interactiveStatus.classList.toggle('error', Boolean(isError));
+      interactiveStatus.title = message;
+    }
+
+    async function postJson(path, payload) {
+      const response = await fetch(path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(body.error || `Request failed (${response.status})`);
+      }
+      return body;
+    }
+
+    async function openInteractiveAgent(button) {
+      const role = interactiveRole?.value || 'worker';
+      const tool = interactiveTool?.value || 'codex';
+      const label = role === 'review' ? 'Reviewer' : 'Worker';
+      button?.classList.add('is-working');
+      if (button) button.disabled = true;
+      setInteractiveStatus(`Opening ${label} terminal...`);
+      try {
+        const result = await postJson('/viewer/spawn-agent', {
+          role,
+          tool,
+          mode: 'interactive'
+        });
+        const name = result.personalName ? ` as ${result.personalName}` : '';
+        setInteractiveStatus(`Opened ${label} ${tool}${name}.`);
+      } catch (error) {
+        setInteractiveStatus(error.message || 'Interactive launch failed.', true);
+      } finally {
+        button?.classList.remove('is-working');
+        if (button) button.disabled = false;
+      }
+    }
+
+    interactiveButtons.forEach(button => {
+      button.addEventListener('click', () => openInteractiveAgent(button));
+    });
+
+    // Close panels when clicking outside
+    document.addEventListener('click', (e) => {
+      if (detailPanel.classList.contains('open') && 
+          !detailPanel.contains(e.target) && 
+          !e.target.closest('.agent-card')) {
+        detailPanel.classList.remove('open');
+      }
+    });
+
+    // Keyboard shortcuts
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        detailPanel.classList.remove('open');
+      }
+    });
+  </script>
+</body>
+</html>
