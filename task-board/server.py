@@ -207,6 +207,8 @@ VIEWER_POST_ACTIONS = {
 }
 SPAWNABLE_AGENT_ROLES = {"worker", "review"}
 SPAWNABLE_TOOLS = {"claude", "codex", "qwen"}
+DEFAULT_PLANNER_MODEL = "claude"
+DEFAULT_DISPATCH_MODEL = "codex"
 BOARD_COLUMN_ORDER = ["todo", "claimed", "review", "reviewing", "done", "archived"]
 PRIORITY_ORDER = {"high": 0, "normal": 1, "low": 2}
 TASK_TERMINAL_COLUMNS = {"done", "archived"}
@@ -308,14 +310,17 @@ def default_dispatch_settings() -> dict:
             "codex": CODEX_COMMAND,
             "qwen": QWEN_COMMAND,
         },
+        "planner": {
+            "model": DEFAULT_PLANNER_MODEL,
+        },
         "worker": {
             "enabled": False,
-            "model": "codex",
+            "model": DEFAULT_DISPATCH_MODEL,
             "maxAgents": 1,
         },
         "review": {
             "enabled": False,
-            "model": "codex",
+            "model": DEFAULT_DISPATCH_MODEL,
             "maxAgents": 1,
         },
         "pause": {
@@ -329,11 +334,22 @@ def default_dispatch_settings() -> dict:
     }
 
 
-def normalize_dispatch_model(value: object, fallback: str = "codex") -> str:
+def normalize_dispatch_model(value: object, fallback: str = DEFAULT_DISPATCH_MODEL) -> str:
     model = str(value or "").strip().lower()
     if model in SPAWNABLE_TOOLS:
         return model
-    return fallback if fallback in SPAWNABLE_TOOLS else "codex"
+    return fallback if fallback in SPAWNABLE_TOOLS else DEFAULT_DISPATCH_MODEL
+
+
+def normalize_dispatch_role(value: object) -> str:
+    role = str(value or "").strip().lower().replace("_", "-").replace(" ", "-")
+    if role in {"planner", "planning", "planner-chat", "planning-agent"}:
+        return "planner"
+    if role in {"worker", "worker-agent"}:
+        return "worker"
+    if role in {"review", "reviewer", "review-agent", "reviewer-agent"}:
+        return "review"
+    return role
 
 
 def normalize_max_agents(value: object, fallback: int = 1) -> int:
@@ -588,6 +604,14 @@ def normalize_dispatch_settings(settings: dict | None) -> dict:
         "claude": normalize_spawn_command(source_commands.get("claude"), CLAUDE_COMMAND),
         "codex": normalize_spawn_command(source_commands.get("codex"), CODEX_COMMAND),
         "qwen": normalize_spawn_command(source_commands.get("qwen"), QWEN_COMMAND),
+    }
+    planner_source = settings.get("planner")
+    if not isinstance(planner_source, dict):
+        planner_source = settings.get("planning")
+    if not isinstance(planner_source, dict):
+        planner_source = {}
+    normalized["planner"] = {
+        "model": normalize_dispatch_model(planner_source.get("model"), normalized["planner"]["model"]),
     }
     for role in ("worker", "review"):
         source = settings.get(role)
@@ -887,6 +911,13 @@ def spawned_process_status(spawn: object) -> dict:
         }
     pid = parse_process_id(spawn.get("processId"))
     if not pid:
+        if str(spawn.get("mode") or "").strip().lower() == "interactive":
+            return {
+                "processId": 0,
+                "isRunning": True,
+                "state": "interactive-terminal",
+                "checkedAt": now_iso(),
+            }
         return {
             "processId": 0,
             "isRunning": False,
@@ -999,7 +1030,7 @@ def is_live_pending_spawn(
         return False
     status = process_status if isinstance(process_status, dict) else spawned_process_status(spawn)
     process_state = str(status.get("state") or "").strip().lower()
-    return bool(status.get("isRunning")) and process_state == "running"
+    return bool(status.get("isRunning")) and process_state in {"running", "interactive-terminal"}
 
 
 def is_recent_spawn(spawn: object, role: str, now: datetime) -> bool:
@@ -2253,11 +2284,15 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             status = "watch"
 
         dispatch = {}
+        planner_settings = settings.get("planner") if isinstance(settings.get("planner"), dict) else {}
+        dispatch["planner"] = {
+            "model": normalize_dispatch_model(planner_settings.get("model"), DEFAULT_PLANNER_MODEL),
+        }
         for role in ("worker", "review"):
             role_settings = settings.get(role) if isinstance(settings.get(role), dict) else {}
             dispatch[role] = {
                 "enabled": bool(role_settings.get("enabled")),
-                "model": normalize_dispatch_model(role_settings.get("model"), "codex"),
+                "model": normalize_dispatch_model(role_settings.get("model"), DEFAULT_DISPATCH_MODEL),
                 "maxAgents": normalize_max_agents(role_settings.get("maxAgents"), 1),
                 "activeAgents": len([
                     agent for agent in active_agents
@@ -2637,8 +2672,9 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             for key, value in env_overrides.items()
         ]
         if env_parts:
-            command += f"env {' '.join(env_parts)} "
-        command += shlex.join(args)
+            command += f"exec env {' '.join(env_parts)} {shlex.join(args)}"
+        else:
+            command += f"exec {shlex.join(args)}"
         return command
 
     def launch_interactive_terminal(self, shell_command: str, title: str) -> dict:
@@ -2697,6 +2733,8 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         backend_base_url: str,
         start_phrase: str,
         working_dir: str,
+        log_path: Path | None = None,
+        resume_run: dict | None = None,
     ) -> dict:
         args = self.interactive_spawn_command_args(tool, start_phrase)
         shell_command = self.interactive_shell_command(args, working_dir, tool)
@@ -2712,6 +2750,9 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "startPhrase": start_phrase,
             "backendBaseUrl": backend_base_url,
             "workingDirectory": working_dir,
+            "logPath": str(log_path) if log_path else "",
+            "resumeOfProcessId": resume_run.get("processId", "") if isinstance(resume_run, dict) else "",
+            "terminalCommand": shell_command,
             **terminal,
         }
 
@@ -2808,27 +2849,33 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
 
     def update_dispatch_settings(self, board: dict, columns: dict, payload: dict) -> dict:
         settings = load_dispatch_settings()
-        role = self.normalize_agent_role(payload.get("role"))
+        role = normalize_dispatch_role(payload.get("role"))
         roles_payload = payload.get("roles")
         commands_payload = payload.get("commands")
         if isinstance(roles_payload, dict):
             role_updates = {
-                self.normalize_agent_role(role_name): role_value
+                normalize_dispatch_role(role_name): role_value
                 for role_name, role_value in roles_payload.items()
                 if isinstance(role_value, dict)
             }
-        elif role in {"worker", "review"}:
+        elif role in {"planner", "worker", "review"}:
             role_updates = {role: payload}
         else:
             role_updates = {}
 
         for role_name, updates in role_updates.items():
+            if role_name == "planner":
+                current = settings.get("planner", {})
+                settings["planner"] = {
+                    "model": normalize_dispatch_model(updates.get("model"), current.get("model", DEFAULT_PLANNER_MODEL)),
+                }
+                continue
             if role_name not in {"worker", "review"}:
                 continue
             current = settings.get(role_name, {})
             settings[role_name] = {
                 "enabled": bool(updates.get("enabled", current.get("enabled", False))),
-                "model": normalize_dispatch_model(updates.get("model"), current.get("model", "codex")),
+                "model": normalize_dispatch_model(updates.get("model"), current.get("model", DEFAULT_DISPATCH_MODEL)),
                 "maxAgents": normalize_max_agents(updates.get("maxAgents"), current.get("maxAgents", 1)),
             }
 
@@ -4248,58 +4295,25 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         log_file.write(f"Prompt: {start_phrase}\n\n")
         log_file.flush()
 
-        # Try interactive Terminal.app spawn on macOS
-        if sys.platform == "darwin" and shutil.which("osascript"):
-            try:
-                base_command = self.spawn_command_for_tool(tool)
-                if tool == "codex":
-                    shell_cmd = f"cd {shlex.quote(working_dir)} && exec {base_command}"
-                else:
-                    shell_cmd = f"cd {shlex.quote(working_dir)} && exec {base_command} {shlex.quote(start_phrase)}"
-
-                script_fd, script_path = tempfile.mkstemp(suffix=".sh", prefix=f"spawn-{role}-{tool}-")
-                with os.fdopen(script_fd, "w") as sf:
-                    sf.write("#!/bin/bash\n")
-                    sf.write(shell_cmd + "\n")
-                os.chmod(script_path, 0o755)
-
-                applescript_path = script_path.replace("\\", "\\\\").replace('"', '\\"')
-                osascript_cmd = [
-                    "osascript", "-e",
-                    f'tell application "Terminal" to do script "{applescript_path}"',
-                ]
-                osa_proc = subprocess.run(
-                    osascript_cmd, capture_output=True, timeout=15,
-                )
-                if osa_proc.returncode != 0:
-                    raise RuntimeError(
-                        f"osascript failed (exit {osa_proc.returncode}): "
-                        f"{osa_proc.stderr.decode(errors='replace').strip()}"
-                    )
-
-                log_file.write(f"Interactive spawn via Terminal.app\n")
-                log_file.write(f"Script: {script_path}\n")
-                log_file.write(f"Command: {shell_cmd}\n")
-                log_file.close()
-
-                return {
-                    "spawned": True,
-                    "mode": "interactive",
-                    "role": role,
-                    "tool": tool,
-                    "personalName": personal_name,
-                    "cliCommand": cli_command_text,
-                    "startPhrase": start_phrase,
-                    "backendBaseUrl": backend_base_url,
-                    "processId": os.getpid(),
-                    "logPath": str(log_path),
-                    "workingDirectory": working_dir,
-                    "resumeOfProcessId": resume_run.get("processId", "") if resume_run else "",
-                    "scriptPath": script_path,
-                }
-            except Exception as exc:
-                log_file.write(f"Interactive spawn failed: {exc}; falling back to non-interactive\n")
-                log_file.flush()
+        # Prefer an interactive terminal so the owner can watch and take over.
+        try:
+            interactive_result = self.spawn_interactive_agent(
+                role,
+                tool,
+                personal_name,
+                backend_base_url,
+                start_phrase,
+                working_dir,
+                log_path=log_path,
+                resume_run=resume_run,
+            )
+            log_file.write("Interactive spawn via terminal\n")
+            log_file.write(f"Command: {interactive_result.get('terminalCommand', '')}\n")
+            log_file.close()
+            return interactive_result
+        except Exception as exc:
+            log_file.write(f"Interactive spawn failed: {exc}; falling back to non-interactive\n")
+            log_file.flush()
 
         # Fallback: non-interactive subprocess (also the path on non-macOS)
         if tool == "codex":
@@ -4722,8 +4736,15 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         if not message:
             raise ValueError("Planner chat message must not be blank")
 
-        requested_tool = str(payload.get("tool") or payload.get("model") or "claude").strip().lower()
-        tool = requested_tool if requested_tool in SPAWNABLE_TOOLS else "claude"
+        settings = load_dispatch_settings()
+        planner_settings = settings.get("planner") if isinstance(settings.get("planner"), dict) else {}
+        saved_tool = normalize_dispatch_model(planner_settings.get("model"), DEFAULT_PLANNER_MODEL)
+        requested_tool = str(payload.get("tool") or payload.get("model") or saved_tool).strip().lower()
+        tool = requested_tool if requested_tool in SPAWNABLE_TOOLS else saved_tool
+        if tool != saved_tool:
+            settings["planner"] = {"model": tool}
+            settings["updatedAt"] = now_iso()
+            persist_dispatch_settings(settings)
 
         # Read conversation state and block overlapping turns up front.
         with PLANNER_CHAT_LOCK:
@@ -5053,6 +5074,7 @@ def resume_paused_runs(
                 "model": model,
                 "personalName": personal_name,
                 "spawnedAt": now_iso(),
+                "mode": result.get("mode", ""),
                 "processId": result.get("processId", ""),
                 "logPath": result.get("logPath", ""),
                 "resumeOfProcessId": run.get("processId", ""),
@@ -5141,6 +5163,7 @@ def run_auto_dispatch_once(server: ThreadingHTTPServer) -> None:
                     "model": model,
                     "personalName": personal_name,
                     "spawnedAt": now_iso(),
+                    "mode": result.get("mode", ""),
                     "processId": result.get("processId", ""),
                     "logPath": result.get("logPath", ""),
                 }

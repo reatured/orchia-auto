@@ -10,6 +10,8 @@ Use this guide when the local task-board backend is running:
 - Dispatch settings: `task-board/agent-dispatch-settings.json`
 - Spawned agent output: `task-board/spawned-agent-logs/`
 
+Dispatch settings normalize and persist independent model selections for `planner.model`, `worker.model`, and `review.model`. Missing or invalid `planner.model` values fall back to `claude`, matching the resumable Planner chat default; missing or invalid Worker and Review model values fall back to `codex`. `planner.model` controls the Planner chat selector only; Worker and Review settings keep their existing auto-dispatch `enabled` and `maxAgents` fields.
+
 Spawned agents are given the current `backendBaseUrl` in their start prompt. Use that exact URL, including port.
 
 Agents use `/api/...` endpoints. The HTML viewer uses `/viewer/...` endpoints and writes to `task-board-viewer.log`, so viewer reads and the owner's viewer actions do not mix with agent API calls.
@@ -454,6 +456,12 @@ Invoke-RestMethod -Uri "$base/viewer/unclaim-task" -Method Post -ContentType "ap
 # Control auto-dispatch
 Invoke-RestMethod -Uri "$base/viewer/dispatch-settings" -Method Post -ContentType "application/json" `
   -Body (@{ role = "worker"; enabled = $true; model = "codex"; maxAgents = 2 } | ConvertTo-Json)
+# Persist the Planner chat model selector independently from Worker/Review
+Invoke-RestMethod -Uri "$base/viewer/dispatch-settings" -Method Post -ContentType "application/json" `
+  -Body (@{ role = "planner"; model = "codex" } | ConvertTo-Json)
+# Persist Review or Worker model selectors from Settings/column controls
+Invoke-RestMethod -Uri "$base/viewer/dispatch-settings" -Method Post -ContentType "application/json" `
+  -Body (@{ role = "review"; model = "qwen" } | ConvertTo-Json)
 # Update spawn command names
 Invoke-RestMethod -Uri "$base/viewer/dispatch-settings" -Method Post -ContentType "application/json" `
   -Body (@{ commands = @{ codex = "codex"; claude = "cc" } } | ConvertTo-Json)
