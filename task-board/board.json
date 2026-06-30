@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "boardName": "Project Task Board",
-  "updatedAt": "",
+  "updatedAt": "2026-06-30T11:07:39-07:00",
   "workflowDocs": {
     "overview": "../workflow/workflow-overview.md",
     "planner": "../roles/planner.md",
@@ -29,12 +29,1055 @@
     "hardRule": "Planner must not review completed work, claim tasks, edit product code, run implementation, or make code changes. Reviewer may update only board.json (plus reference images when recorded on a follow-up task). Reviewer must not plan general work, claim todo tasks, edit code, edit docs, edit the HTML viewer, run implementation, or make code changes."
   },
   "columns": {
-    "todo": [],
+    "todo": [
+      {
+        "id": "TASK-20260630-007",
+        "title": "Show version and branch in frontend corner",
+        "project": "Task board viewer",
+        "priority": "normal",
+        "type": "implementation",
+        "status": "todo",
+        "requestedBy": "owner",
+        "createdBy": "finn",
+        "createdAt": "2026-06-30T11:07:39-07:00",
+        "agentName": "finn",
+        "claimedBy": "",
+        "claimedAt": "",
+        "reviewClaimedBy": "",
+        "reviewClaimedAt": "",
+        "reviewRequestedAt": "",
+        "doneAt": "",
+        "reviewedBy": "",
+        "reviewedAt": "",
+        "redoCount": 0,
+        "summary": "Add a small, unobtrusive frontend indicator that shows the current app version and git branch in a corner of the viewer interface.",
+        "requirements": [
+          "Display both the repository version and current git branch in a fixed corner location of the frontend interface.",
+          "Use the existing VERSION file as the source for the version value, currently 0.3.1 on the live repo.",
+          "Use the current git branch as the branch value when available, currently master on the live repo, with a graceful fallback such as unknown when it cannot be determined.",
+          "Keep the indicator visually subtle and ensure it does not block or overlap primary controls, task content, agent tabs, or small-screen navigation.",
+          "If both viewer frontends are actively used, keep the visible version/branch treatment consistent across them."
+        ],
+        "acceptanceCriteria": [
+          "The frontend shows a corner label containing version and branch values, including version 0.3.1 and branch master when run from the current live repo.",
+          "The version value matches the contents of VERSION without hardcoding a stale copy into the UI.",
+          "The branch value reflects the current git branch when git metadata is available.",
+          "The indicator remains readable on desktop and mobile viewports and does not interfere with existing interactions.",
+          "The implementation handles missing git metadata without breaking page rendering.",
+          "Worker notes identify the URL or file path used to inspect the completed UI."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [],
+        "files": [
+          "VERSION",
+          "task-board/viewer.html",
+          "task-board/viewer-v3.html",
+          "task-board/server.py"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Task board viewer version indicator",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop and mobile",
+            "state": "Open the viewer normally with the task-board backend running.",
+            "notes": "Confirm the version/branch indicator appears in a corner and does not cover board controls, agent tabs, or task cards."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Created after confirming the visible backend is serving /Users/richard26/2026/7-orchia-auto/orchia-auto/task-board rather than the initial local workspace path.",
+        "lastApiAction": "add-task",
+        "lastApiActor": "finn",
+        "lastApiAt": "2026-06-30T11:07:39-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "finn",
+            "at": "2026-06-30T11:07:39-07:00"
+          }
+        ]
+      }
+    ],
     "claimed": [],
-    "review": [],
+    "review": [
+      {
+        "id": "TASK-20260630-004",
+        "title": "Fix activity log placement so it does not overlap toolbar controls",
+        "project": "Task board viewer",
+        "priority": "normal",
+        "type": "implementation",
+        "status": "review",
+        "requestedBy": "Review Agent",
+        "createdBy": "ada",
+        "createdAt": "2026-06-30T10:52:44-07:00",
+        "agentName": "ada",
+        "claimedBy": "ada",
+        "claimedAt": "2026-06-30T11:00:39-07:00",
+        "reviewRequestedAt": "2026-06-30T11:06:41-07:00",
+        "doneAt": "",
+        "reviewedBy": "",
+        "reviewedAt": "",
+        "reviewClaimedBy": "",
+        "reviewClaimedAt": "",
+        "redoCount": 1,
+        "sourceReviewTaskId": "TASK-20260630-002",
+        "summary": "Reposition or integrate the Activity log toggle/panel so it remains top-right and collapsible without covering existing viewer controls.",
+        "requirements": [
+          "Place the Activity toggle in the existing toolbar or reserve explicit responsive space so the collapsed toggle does not cover Pause, Reload JSON, Auto refresh, or Load JSON file controls.",
+          "Keep the log accessible from the top-right area and keep it toggleable/collapsible.",
+          "Ensure the expanded panel is width-constrained within the viewport and does not create horizontal overflow on narrow screens.",
+          "Continue rendering recent events from apiAuditLog with timestamp, agent name, action description, and task id when present.",
+          "Preserve the current empty-state behavior when no audit entries are available."
+        ],
+        "acceptanceCriteria": [
+          "On desktop, the collapsed Activity control does not overlap or obscure any existing topbar toolbar control.",
+          "When expanded, the activity panel is readable and does not overlap controls or task cards in an incoherent way.",
+          "On a narrow/mobile viewport, the Activity control and panel stay within the viewport without horizontal overflow.",
+          "The panel still shows recent apiAuditLog entries with timestamp, agent/action text, and task id where available.",
+          "The panel can be closed and reopened without breaking auto-refresh or board rendering."
+        ],
+        "files": [
+          "task-board/viewer.html"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Activity log placement",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop and mobile",
+            "state": "Open the viewer, inspect the topbar, then open and close the Activity log.",
+            "notes": "Verify the Activity toggle does not cover existing toolbar controls and the expanded panel remains readable within the viewport while showing audit log entries."
+          }
+        ],
+        "blockers": [],
+        "notes": "Follow-up from failed review of TASK-20260630-002. Data rendering is wired, but fixed top-right placement collides with the existing topbar toolbar.\n\nMoved Activity log toggle into the toolbar flow so it sits alongside other controls (Pause, Reload JSON, Auto refresh, Load JSON file) instead of floating fixed-positioned at top-right. Panel drops down as an absolute-positioned dropdown anchored to the toggle. Added responsive rule at 680px breakpoint for narrow viewports.",
+        "lastApiAction": "move-to-review",
+        "lastApiActor": "ada",
+        "lastApiAt": "2026-06-30T11:06:41-07:00",
+        "apiHistory": [
+          {
+            "action": "request-changes-follow-up-create",
+            "agentName": "ada",
+            "at": "2026-06-30T10:52:44-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "ada",
+            "at": "2026-06-30T11:00:39-07:00"
+          },
+          {
+            "action": "move-to-review",
+            "agentName": "ada",
+            "at": "2026-06-30T11:06:41-07:00"
+          }
+        ],
+        "completedBy": "ada",
+        "workerTimeSeconds": 362,
+        "workerTime": "6m 2s"
+      },
+      {
+        "id": "TASK-20260630-006",
+        "title": "Switch agent spawn from non-interactive to interactive Terminal mode",
+        "project": "task-board",
+        "priority": "high",
+        "type": "implementation",
+        "status": "review",
+        "requestedBy": "owner",
+        "createdBy": "Iris",
+        "createdAt": "2026-06-30T10:54:29-07:00",
+        "agentName": "Iris",
+        "claimedBy": "dane",
+        "claimedAt": "2026-06-30T10:54:50-07:00",
+        "reviewClaimedBy": "",
+        "reviewClaimedAt": "",
+        "reviewRequestedAt": "2026-06-30T11:02:25-07:00",
+        "doneAt": "",
+        "reviewedBy": "",
+        "reviewedAt": "",
+        "redoCount": 0,
+        "summary": "Change spawn_agent() in server.py to open a visible Terminal.app window (via osascript) instead of running headless subprocess with -p/exec flags. The CLI should run in its normal interactive mode so the owner can watch and interact with the spawned agent.",
+        "requirements": [
+          "Modify spawn_agent() in server.py (around line 4090) to use osascript to open a new Terminal.app tab running the CLI in interactive mode, instead of subprocess.Popen with -p/exec flags and stdin=DEVNULL",
+          "For each tool (claude, qwen, codex), build the interactive CLI command without headless flags: claude gets the start phrase as a positional arg, qwen gets the start phrase as a positional arg (no -p, no -y, no -o stream-json), codex runs without exec subcommand",
+          "Use a temp shell script + osascript approach to avoid complex quoting: write the CLI command to a .sh file, then use osascript to tell Terminal.app to open a new tab that runs the script",
+          "Keep writing spawn metadata (role, tool, backend URL, start phrase, timestamp) to the log file in SPAWN_LOG_DIR for audit trail, even though live output goes to Terminal",
+          "Update the response dict: change mode from non-interactive to interactive, keep processId (of the osascript/shell process), logPath, and other fields",
+          "On non-macOS systems (or if osascript is unavailable), fall back to the current non-interactive subprocess approach",
+          "Update the viewer spawnAgent() JS function (viewer.html around line 5855) to say interactively instead of non-interactively in the status message",
+          "Ensure auto-dispatch (run_auto_dispatch_once) still works - it calls the same /viewer/spawn-agent endpoint so it should pick up changes automatically"
+        ],
+        "acceptanceCriteria": [
+          "Clicking Spawn Worker or Spawn Reviewer in the viewer opens a new Terminal.app tab with the CLI running in interactive mode",
+          "The spawned agent can see and respond to the start phrase (registers with the backend, claims tasks, etc.)",
+          "The owner can type additional commands or interact with the agent in the Terminal window",
+          "Auto-dispatch also opens Terminal windows when spawning agents",
+          "Spawn metadata is still logged to SPAWN_LOG_DIR",
+          "The viewer status bar shows Spawned interactively instead of non-interactively",
+          "On non-macOS, the existing non-interactive path is used as fallback"
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [],
+        "files": [
+          "task-board/server.py",
+          "task-board/viewer.html"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Interactive spawn test",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/server.py",
+            "viewport": "desktop",
+            "state": "Click Spawn Worker or Spawn Reviewer in the viewer Settings tab.",
+            "notes": "A new Terminal.app tab should open with the CLI running interactively. The status bar should say Spawned ... interactively."
+          },
+          {
+            "label": "Spawn log verification",
+            "url": "",
+            "path": "task-board/spawned-agent-logs/",
+            "viewport": "",
+            "state": "Check the latest log file in spawned-agent-logs/.",
+            "notes": "Should show Interactive spawn via Terminal.app with script path and command."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Implemented interactive Terminal.app spawn for agent spawning on macOS.\n\nChanges:\n1. server.py spawn_agent(): Added interactive spawn path using osascript + temp shell script. On macOS, opens a visible Terminal.app tab running the CLI in interactive mode (no -p/-y/-o flags). Falls back to non-interactive subprocess on non-macOS or if osascript fails.\n2. server.py: Added tempfile import for temp script creation.\n3. viewer.html spawnAgent(): Status message now shows interactively/non-interactively based on response mode field.\n\nTested: Spawned qwen worker via /viewer/spawn-agent, confirmed mode=interactive, Terminal.app opened, CLI running with start phrase, metadata logged to SPAWN_LOG_DIR.\n\nAuto-dispatch uses the same /viewer/spawn-agent endpoint so it picks up changes automatically.",
+        "lastApiAction": "move-to-review",
+        "lastApiActor": "dane",
+        "lastApiAt": "2026-06-30T11:02:25-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "Iris",
+            "at": "2026-06-30T10:54:29-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "dane",
+            "at": "2026-06-30T10:54:50-07:00"
+          },
+          {
+            "action": "move-to-review",
+            "agentName": "dane",
+            "at": "2026-06-30T11:02:25-07:00"
+          }
+        ],
+        "completedBy": "dane",
+        "workerTimeSeconds": 455,
+        "workerTime": "7m 35s"
+      }
+    ],
     "reviewing": [],
-    "done": [],
-    "archived": []
+    "done": [
+      {
+        "id": "TASK-20260630-003",
+        "title": "Reload backend and verify done-card agent metrics",
+        "project": "Task board",
+        "priority": "high",
+        "type": "implementation",
+        "status": "done",
+        "requestedBy": "Review Agent",
+        "createdBy": "ada",
+        "createdAt": "2026-06-30T10:50:15-07:00",
+        "agentName": "ada",
+        "claimedBy": "dane",
+        "claimedAt": "2026-06-30T10:50:48-07:00",
+        "reviewRequestedAt": "2026-06-30T10:54:42-07:00",
+        "doneAt": "2026-06-30T10:58:16-07:00",
+        "reviewedBy": "ada",
+        "reviewedAt": "2026-06-30T10:58:16-07:00",
+        "reviewClaimedBy": "ada",
+        "reviewClaimedAt": "2026-06-30T10:56:49-07:00",
+        "redoCount": 1,
+        "sourceReviewTaskId": "TASK-20260630-001",
+        "summary": "Activate the metrics implementation in the running task-board backend and verify Worker/Reviewer time and token fields appear on a done-column card.",
+        "requirements": [
+          "Reload or restart the task-board backend at http://127.0.0.1:4177 so the current task-board/server.py metrics code is active.",
+          "Move a claimed task to review through the active backend with workerTokens supplied, and verify the task stores workerTimeSeconds, workerTime, and workerTokens.",
+          "Finish a review through the active backend with reviewerTokens supplied, and verify the done task stores reviewerTimeSeconds, reviewerTime, and reviewerTokens.",
+          "Verify task-board/viewer.html renders the Worker and Reviewer metrics panel on a done-column card with metrics.",
+          "Verify older done tasks without metrics data still omit the metrics panel or show graceful dashes only when partial metrics exist."
+        ],
+        "acceptanceCriteria": [
+          "A live task moved to review through http://127.0.0.1:4177/api/move-to-review contains workerTimeSeconds, workerTime, and workerTokens when workerTokens is provided.",
+          "A live task approved or failed through http://127.0.0.1:4177/api/approve-review or /api/request-changes contains reviewerTimeSeconds, reviewerTime, and reviewerTokens when reviewerTokens is provided.",
+          "The viewer done column displays a readable Worker/Reviewer metrics panel for a task with metrics.",
+          "Existing done tasks without metrics data do not show an empty or misleading metrics panel."
+        ],
+        "files": [
+          "task-board/server.py",
+          "task-board/viewer.html",
+          "roles/worker.md",
+          "roles/reviewer.md"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Done-column card metrics panel",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop",
+            "state": "Open the viewer and expand TASK-20260630-005 in the Done column.",
+            "notes": "Should show Worker: 8s \u00b7 42000 tokens and Reviewer: 5s \u00b7 15000 tokens."
+          },
+          {
+            "label": "Older done task without metrics",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop",
+            "state": "Expand TASK-20260630-001 or TASK-20260627-001 in the Done column.",
+            "notes": "Should NOT show any metrics panel."
+          },
+          {
+            "label": "Partial metrics done task",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop",
+            "state": "Expand TASK-20260630-002 in the Done column.",
+            "notes": "Should show metrics panel with Reviewer: 2m 17s and dashes for missing Worker time and token fields."
+          }
+        ],
+        "blockers": [],
+        "notes": "Follow-up from failed review of TASK-20260630-001. The source implementation looks wired, but the live backend process predates the source changes, so current API transitions are not writing worker metrics.\n\nBackend reloaded and metrics verified end-to-end.\n\n1. Restarted backend (killed PID 81868, restarted server.py) \u2014 metrics code now active.\n2. Created test task TASK-20260630-005, claimed it, moved to review with workerTokens=42000. Verified: workerTimeSeconds=8, workerTime=8s, workerTokens=42000 stored correctly.\n3. Claimed review, approved with reviewerTokens=15000. Verified: reviewerTimeSeconds=5, reviewerTime=5s, reviewerTokens=15000 stored correctly.\n4. Viewer doneMetricsPanel logic verified: renders Worker/Reviewer metrics panel when any metric present, returns empty string when all four fields are missing.\n5. Older done tasks checked: TASK-20260630-001 and TASK-20260627-001 have no metrics \u2192 no panel shown. TASK-20260630-002 has partial metrics (reviewerTime only) \u2192 panel shows dashes for missing fields.\n\nReview approved (2026-06-30T10:58:16-07:00): Approved. Verified the live backend at http://127.0.0.1:4177 is the restarted server.py process from 2026-06-30 10:52:09. Verified TASK-20260630-005 in the live API stores workerTimeSeconds=8, workerTime=8s, workerTokens=42000, reviewerTimeSeconds=5, reviewerTime=5s, and reviewerTokens=15000 after move-to-review and approve-review. Verified older done tasks TASK-20260630-001 and TASK-20260627-001 have no metrics fields, while partial TASK-20260630-002 has reviewerTime only. Verified the served viewer.html includes doneMetricsPanel, omits the panel when all four metric fields are missing, renders Worker and Reviewer rows when any metric exists, and uses dashes for missing partial values. The in-app browser was unavailable in this session, so visual verification is based on served viewer code plus live task data rather than a screenshot.",
+        "lastApiAction": "approve-review",
+        "lastApiActor": "ada",
+        "lastApiAt": "2026-06-30T10:58:16-07:00",
+        "apiHistory": [
+          {
+            "action": "request-changes-follow-up-create",
+            "agentName": "ada",
+            "at": "2026-06-30T10:50:15-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "dane",
+            "at": "2026-06-30T10:50:48-07:00"
+          },
+          {
+            "action": "move-to-review",
+            "agentName": "dane",
+            "at": "2026-06-30T10:54:42-07:00"
+          },
+          {
+            "action": "claim-next-review",
+            "agentName": "ada",
+            "at": "2026-06-30T10:56:49-07:00"
+          },
+          {
+            "action": "approve-review",
+            "agentName": "ada",
+            "at": "2026-06-30T10:58:16-07:00"
+          }
+        ],
+        "completedBy": "dane",
+        "workerTimeSeconds": 234,
+        "workerTime": "3m 54s",
+        "reviewDecision": "approved",
+        "reviewerTimeSeconds": 87,
+        "reviewerTime": "1m 27s",
+        "reviewNotes": "Approved. Verified the live backend at http://127.0.0.1:4177 is the restarted server.py process from 2026-06-30 10:52:09. Verified TASK-20260630-005 in the live API stores workerTimeSeconds=8, workerTime=8s, workerTokens=42000, reviewerTimeSeconds=5, reviewerTime=5s, and reviewerTokens=15000 after move-to-review and approve-review. Verified older done tasks TASK-20260630-001 and TASK-20260627-001 have no metrics fields, while partial TASK-20260630-002 has reviewerTime only. Verified the served viewer.html includes doneMetricsPanel, omits the panel when all four metric fields are missing, renders Worker and Reviewer rows when any metric exists, and uses dashes for missing partial values. The in-app browser was unavailable in this session, so visual verification is based on served viewer code plus live task data rather than a screenshot."
+      },
+      {
+        "id": "TASK-20260630-005",
+        "title": "Metrics verification test task",
+        "project": "Task board",
+        "priority": "low",
+        "type": "testing",
+        "status": "done",
+        "requestedBy": "owner",
+        "createdBy": "dane",
+        "createdAt": "2026-06-30T10:52:44-07:00",
+        "agentName": "dane",
+        "claimedBy": "dane",
+        "claimedAt": "2026-06-30T10:52:53-07:00",
+        "reviewClaimedBy": "dane",
+        "reviewClaimedAt": "2026-06-30T10:53:26-07:00",
+        "reviewRequestedAt": "2026-06-30T10:53:01-07:00",
+        "doneAt": "2026-06-30T10:53:31-07:00",
+        "reviewedBy": "dane",
+        "reviewedAt": "2026-06-30T10:53:31-07:00",
+        "redoCount": 0,
+        "summary": "Temporary task to verify worker/reviewer metrics are stored correctly by the reloaded backend.",
+        "requirements": [
+          "Verify workerTokens and workerTime are stored on move-to-review",
+          "Verify reviewerTokens and reviewerTime are stored on approve-review"
+        ],
+        "acceptanceCriteria": [
+          "Task moved to review with workerTokens contains workerTimeSeconds, workerTime, workerTokens",
+          "Task approved with reviewerTokens contains reviewerTimeSeconds, reviewerTime, reviewerTokens"
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [],
+        "files": [
+          "task-board/server.py"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Claiming for metrics verification test.\n\nMoving to review with workerTokens for metrics test.\n\nReview approved (2026-06-30T10:53:31-07:00): Metrics verification approved.",
+        "lastApiAction": "approve-review",
+        "lastApiActor": "dane",
+        "lastApiAt": "2026-06-30T10:53:31-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "dane",
+            "at": "2026-06-30T10:52:44-07:00"
+          },
+          {
+            "action": "claim-task",
+            "agentName": "dane",
+            "at": "2026-06-30T10:52:53-07:00"
+          },
+          {
+            "action": "move-to-review",
+            "agentName": "dane",
+            "at": "2026-06-30T10:53:01-07:00"
+          },
+          {
+            "action": "claim-review",
+            "agentName": "dane",
+            "at": "2026-06-30T10:53:26-07:00"
+          },
+          {
+            "action": "approve-review",
+            "agentName": "dane",
+            "at": "2026-06-30T10:53:31-07:00"
+          }
+        ],
+        "completedBy": "dane",
+        "workerTimeSeconds": 8,
+        "workerTime": "8s",
+        "workerTokens": 42000,
+        "reviewDecision": "approved",
+        "reviewerTimeSeconds": 5,
+        "reviewerTime": "5s",
+        "reviewerTokens": 15000,
+        "reviewNotes": "Metrics verification approved."
+      },
+      {
+        "id": "TASK-20260630-002",
+        "title": "Add activity log panel in top-right of viewer",
+        "project": "Task board viewer",
+        "priority": "normal",
+        "type": "implementation",
+        "status": "done",
+        "requestedBy": "owner",
+        "createdBy": "Orchia",
+        "createdAt": "2026-06-30T10:15:58-07:00",
+        "agentName": "Orchia",
+        "claimedBy": "ben",
+        "claimedAt": "2026-06-30T10:17:31-07:00",
+        "reviewClaimedBy": "",
+        "reviewClaimedAt": "",
+        "reviewRequestedAt": "2026-06-30T10:43:56-07:00",
+        "doneAt": "2026-06-30T10:52:44-07:00",
+        "reviewedBy": "ada",
+        "reviewedAt": "2026-06-30T10:52:44-07:00",
+        "redoCount": 1,
+        "summary": "Add a log panel positioned in the top-right corner of the task board viewer that shows recent system activity and agent events.",
+        "requirements": [
+          "Add a log/activity panel in the top-right area of the viewer UI.",
+          "The log should show recent events such as agent registrations, task claims, moves, reviews, and completions.",
+          "Each log entry should include a timestamp, agent name, and action description.",
+          "The panel should be collapsible or toggleable so it does not permanently obstruct the board.",
+          "Log entries should be populated from the apiAuditLog or a similar backend data source."
+        ],
+        "acceptanceCriteria": [
+          "A log panel is visible in the top-right area of the viewer.",
+          "Recent board events appear as timestamped log entries.",
+          "The panel can be collapsed or hidden without breaking the layout.",
+          "Log entries are readable and do not overlap with other UI elements."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [
+          "TASK-20260630-001"
+        ],
+        "files": [
+          "task-board/viewer.html",
+          "task-board/server.py"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Activity log panel in viewer",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop",
+            "state": "Open the viewer; click the Activity button in the top-right corner to expand the panel.",
+            "notes": "Verify the panel shows timestamped log entries with agent names and action descriptions. Verify it collapses when clicking Close or the toggle button."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Added collapsible activity log panel in top-right of viewer. Panel shows recent board events from apiAuditLog with timestamps, agent names, and action descriptions. Toggle button shows entry count badge. Defaults to collapsed so it does not obstruct the board.\n\nChanges requested (2026-06-30T10:52:44-07:00): Reviewed task-board/viewer.html and live /api/board data. The panel markup, toggle handlers, action labels, and apiAuditLog rendering are wired: the live board has audit entries including add-task, claim-next-worker, move-to-review, request-changes, archive, and claim-next-review events. The issue is layout. The new fixed .activity-log uses top:16px/right:16px/z-index:20, while the existing topbar toolbar is already anchored at the same right edge of the viewport. Because no margin/padding/toolbar integration is added, the Activity toggle remains visible over the toolbar even when collapsed. The in-app browser was unavailable in this session, so this decision is based on source geometry and live board data rather than a screenshot.\n\nClosed as replaced (2026-06-30T10:52:44-07:00): follow-up task TASK-20260630-004 replaces this failed review task.",
+        "lastApiAction": "request-changes",
+        "lastApiActor": "ada",
+        "lastApiAt": "2026-06-30T10:52:44-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "Orchia",
+            "at": "2026-06-30T10:15:58-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "ben",
+            "at": "2026-06-30T10:17:31-07:00"
+          },
+          {
+            "action": "move-to-review",
+            "agentName": "ben",
+            "at": "2026-06-30T10:43:56-07:00"
+          },
+          {
+            "action": "claim-next-review",
+            "agentName": "ada",
+            "at": "2026-06-30T10:50:27-07:00"
+          },
+          {
+            "action": "request-changes",
+            "agentName": "ada",
+            "at": "2026-06-30T10:52:44-07:00"
+          }
+        ],
+        "completedBy": "ben",
+        "reviewerTimeSeconds": 137,
+        "reviewerTime": "2m 17s",
+        "reviewDecision": "changes_requested",
+        "closedAs": "replaced_by_follow_up",
+        "reviewNotes": "Reviewed task-board/viewer.html and live /api/board data. The panel markup, toggle handlers, action labels, and apiAuditLog rendering are wired: the live board has audit entries including add-task, claim-next-worker, move-to-review, request-changes, archive, and claim-next-review events. The issue is layout. The new fixed .activity-log uses top:16px/right:16px/z-index:20, while the existing topbar toolbar is already anchored at the same right edge of the viewport. Because no margin/padding/toolbar integration is added, the Activity toggle remains visible over the toolbar even when collapsed. The in-app browser was unavailable in this session, so this decision is based on source geometry and live board data rather than a screenshot.",
+        "failureExpected": "The activity log toggle and expanded panel should be visible in the top-right area while remaining collapsible and not overlapping existing viewer controls or board content in a confusing way.",
+        "failureActual": "The implementation fixes .activity-log at top: 16px; right: 16px with z-index 20, while the existing toolbar is also at the top-right of the shell with a 16px right edge. No layout space or responsive offset is reserved, so the collapsed Activity toggle can permanently cover existing toolbar buttons such as Load JSON file / Auto refresh.",
+        "failureDecision": "The log data rendering is present, but the placement fails the no-overlap/readability acceptance criteria. The control needs to be integrated into the toolbar or positioned with reserved responsive space.",
+        "failureBrief": {
+          "expected": "The activity log toggle and expanded panel should be visible in the top-right area while remaining collapsible and not overlapping existing viewer controls or board content in a confusing way.",
+          "actual": "The implementation fixes .activity-log at top: 16px; right: 16px with z-index 20, while the existing toolbar is also at the top-right of the shell with a 16px right edge. No layout space or responsive offset is reserved, so the collapsed Activity toggle can permanently cover existing toolbar buttons such as Load JSON file / Auto refresh.",
+          "decision": "The log data rendering is present, but the placement fails the no-overlap/readability acceptance criteria. The control needs to be integrated into the toolbar or positioned with reserved responsive space."
+        },
+        "latestFollowUpTaskId": "TASK-20260630-004",
+        "replacedByTaskId": "TASK-20260630-004"
+      },
+      {
+        "id": "TASK-20260630-001",
+        "title": "Record response time and token usage for Worker and Reviewer agents on done tickets",
+        "project": "Task board",
+        "priority": "high",
+        "type": "implementation",
+        "status": "done",
+        "requestedBy": "owner",
+        "createdBy": "Orchia",
+        "createdAt": "2026-06-30T10:15:44-07:00",
+        "agentName": "Orchia",
+        "claimedBy": "ada",
+        "claimedAt": "2026-06-30T10:16:20-07:00",
+        "reviewClaimedBy": "",
+        "reviewClaimedAt": "",
+        "reviewRequestedAt": "2026-06-30T10:28:58-07:00",
+        "doneAt": "2026-06-30T10:50:15-07:00",
+        "reviewedBy": "ada",
+        "reviewedAt": "2026-06-30T10:50:15-07:00",
+        "redoCount": 1,
+        "summary": "Each Worker and Reviewer agent should record how long it took and how many tokens were used to complete a task. These metrics should be displayed on the task ticket in the done column.",
+        "requirements": [
+          "Worker agents must record elapsed time and token usage when completing a task (moving to review).",
+          "Reviewer agents must record elapsed time and token usage when finishing a review (approve or request-changes).",
+          "The backend should store these metrics on the task object (e.g. workerTime, workerTokens, reviewerTime, reviewerTokens).",
+          "The viewer must display these metrics on done-column task tickets.",
+          "Metrics should be per-agent-per-task, not aggregated."
+        ],
+        "acceptanceCriteria": [
+          "After a Worker completes a task, the task ticket shows worker elapsed time and token count.",
+          "After a Reviewer finishes review, the task ticket shows reviewer elapsed time and token count.",
+          "Metrics are visible on done-column cards in the viewer.",
+          "Missing metrics (e.g. no token count available) degrade gracefully with a dash or N/A."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [
+          "TASK-20260629-001"
+        ],
+        "files": [
+          "task-board/server.py",
+          "task-board/viewer.html",
+          "roles/worker.md",
+          "roles/reviewer.md"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Done-column card metrics panel",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop",
+            "state": "Open the viewer and expand a done-column task card",
+            "notes": "Check that the metrics panel appears below the lifecycle timestamps showing Worker and Reviewer time + tokens. For existing done tasks without metrics data, no panel should appear."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Implemented agent metrics (worker/reviewer time and tokens). Server auto-computes elapsed time from claimedAt/reviewClaimedAt timestamps and stores workerTime/reviewerTime (human-readable) plus workerTimeSeconds/reviewerTimeSeconds on the task. Token counts are self-reported via workerTokens/reviewerTokens payload fields. Viewer renders a metrics panel on done-column cards showing Worker and Reviewer time + tokens, degrading gracefully with dashes when data is missing. Updated worker.md and reviewer.md finish rules to instruct agents to report token usage.\n\nChanges requested (2026-06-30T10:50:15-07:00): Reviewed task-board/server.py, task-board/viewer.html, roles/worker.md, and roles/reviewer.md. Source code computes worker/reviewer elapsed time and accepts self-reported token counts, and viewer rendering is wired for done-column cards. However, lsof/ps show the backend at http://127.0.0.1:4177 is still the Python process started on 2026-06-29 19:28:08, before server.py was modified on 2026-06-30 10:24:52. Live API task details for TASK-20260630-001 and TASK-20260630-002, both moved to review after that source edit, lack workerTime/workerTokens. The implementation is therefore not active in the running board and cannot satisfy the live inspection target yet.\n\nClosed as replaced (2026-06-30T10:50:15-07:00): follow-up task TASK-20260630-003 replaces this failed review task.",
+        "lastApiAction": "request-changes",
+        "lastApiActor": "ada",
+        "lastApiAt": "2026-06-30T10:50:15-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "Orchia",
+            "at": "2026-06-30T10:15:44-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "ada",
+            "at": "2026-06-30T10:16:20-07:00"
+          },
+          {
+            "action": "move-to-review",
+            "agentName": "ada",
+            "at": "2026-06-30T10:28:58-07:00"
+          },
+          {
+            "action": "claim-next-review",
+            "agentName": "ada",
+            "at": "2026-06-30T10:46:30-07:00"
+          },
+          {
+            "action": "request-changes",
+            "agentName": "ada",
+            "at": "2026-06-30T10:50:15-07:00"
+          }
+        ],
+        "completedBy": "ada",
+        "reviewDecision": "changes_requested",
+        "closedAs": "replaced_by_follow_up",
+        "reviewNotes": "Reviewed task-board/server.py, task-board/viewer.html, roles/worker.md, and roles/reviewer.md. Source code computes worker/reviewer elapsed time and accepts self-reported token counts, and viewer rendering is wired for done-column cards. However, lsof/ps show the backend at http://127.0.0.1:4177 is still the Python process started on 2026-06-29 19:28:08, before server.py was modified on 2026-06-30 10:24:52. Live API task details for TASK-20260630-001 and TASK-20260630-002, both moved to review after that source edit, lack workerTime/workerTokens. The implementation is therefore not active in the running board and cannot satisfy the live inspection target yet.",
+        "failureExpected": "The active task-board backend records worker elapsed time/tokens on move-to-review and reviewer elapsed time/tokens on review completion, so done-column cards can render the metrics.",
+        "failureActual": "The running backend process started before the metrics source changes were loaded. TASK-20260630-001 and TASK-20260630-002 were moved to review through the live API after the source edit, but their live task records still have no workerTime or workerTokens fields.",
+        "failureDecision": "The source changes are present, but the active task-board behavior does not meet the review acceptance criteria until the backend is reloaded and the metrics are verified on a done card.",
+        "failureBrief": {
+          "expected": "The active task-board backend records worker elapsed time/tokens on move-to-review and reviewer elapsed time/tokens on review completion, so done-column cards can render the metrics.",
+          "actual": "The running backend process started before the metrics source changes were loaded. TASK-20260630-001 and TASK-20260630-002 were moved to review through the live API after the source edit, but their live task records still have no workerTime or workerTokens fields.",
+          "decision": "The source changes are present, but the active task-board behavior does not meet the review acceptance criteria until the backend is reloaded and the metrics are verified on a done card."
+        },
+        "latestFollowUpTaskId": "TASK-20260630-003",
+        "replacedByTaskId": "TASK-20260630-003"
+      },
+      {
+        "id": "TASK-20260627-001",
+        "title": "Add concise chat history to planner chat prompt for non-Claude tools",
+        "project": "Planner chat",
+        "priority": "high",
+        "type": "implementation",
+        "status": "done",
+        "requestedBy": "owner",
+        "createdBy": "Orchia",
+        "createdAt": "2026-06-27T18:44:25-07:00",
+        "agentName": "Orchia",
+        "claimedBy": "ada",
+        "claimedAt": "2026-06-27T18:45:58-07:00",
+        "reviewClaimedBy": "ben",
+        "reviewClaimedAt": "2026-06-27T18:48:22-07:00",
+        "reviewRequestedAt": "2026-06-27T18:47:51-07:00",
+        "doneAt": "2026-06-27T18:49:24-07:00",
+        "reviewedBy": "ben",
+        "reviewedAt": "2026-06-27T18:49:24-07:00",
+        "redoCount": 0,
+        "summary": "When the owner sends a follow-up message in the planner chat window using Qwen or Codex, the spawned agent receives only the current message with no context of prior turns. Add a concise chat history section to the prompt so the planner agent knows what was discussed before.",
+        "requirements": [
+          "In server.py, add a helper method (e.g. build_planner_chat_history) that builds a concise history string from prior messages in the planner chat session (owner text + planner result/reply).",
+          "In planner_chat_send, when spawning a non-Claude tool (qwen, codex) and prior messages exist, include the concise history in the phrase passed to the agent.",
+          "History format should be compact: e.g. Owner: <text> / Planner: <summary> per prior turn, truncated to a reasonable character limit to avoid prompt bloat.",
+          "For the first message (no prior history), behavior stays unchanged \u2014 use build_planner_chat_phrase as-is.",
+          "For Claude, no change needed \u2014 it already uses --resume for session continuity.",
+          "planner_chat_clear resets history automatically since it clears the messages array."
+        ],
+        "acceptanceCriteria": [
+          "Send a message to the planner chat via Qwen, then send a follow-up referencing the first message topic. The planner agent should understand the reference.",
+          "The prompt passed to qwen/codex includes a concise history section when prior messages exist.",
+          "First message in a new chat has no history section (no regression).",
+          "Claude tool behavior is unchanged (still uses --resume).",
+          "History does not grow unbounded \u2014 long conversations are truncated to stay within a reasonable token budget."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [],
+        "files": [
+          "task-board/server.py"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "planner_chat_send history injection",
+            "path": "task-board/server.py",
+            "viewport": "n/a",
+            "state": "Lines ~4528-4534: history built and injected into phrase for non-continuing turns",
+            "notes": "Check build_planner_chat_history helper (~line 4456) and its call site in planner_chat_send (~line 4530). Verify history is omitted when messages list is empty or only has running planner entries."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Implementation approach: (1) Add a build_planner_chat_history(messages, max_chars=3000) helper that iterates prior messages[], collecting owner text (msg[text]) and planner replies (msg[result] or msg[output]). Format as compact lines: \"Owner: <text>\" / \"Planner: <reply>\". Truncate total to max_chars. (2) In planner_chat_send, after loading data and before building the phrase, call the helper with data[messages]. (3) Modify the non-continuing branch (~line 4495): if history is non-empty, inject it into the phrase between the role-setup preamble and the current owner message \u2014 either by extending build_planner_chat_phrase to accept an optional history param, or by string-concatenating after the call. (4) Key data fields: owner messages have role=owner + text; planner messages have role=planner + result (clean reply) or output (raw). Use result first, fall back to output.\n\nImplemented concise chat history for non-Claude planner chat. Added build_planner_chat_history(messages, max_chars=3000) helper that builds compact Owner:/Planner: lines from prior messages, truncating at 3000 chars. In planner_chat_send, when not continuing (non-Claude tools), history is injected between the role-setup preamble and the current owner message. First message (no prior history) is unchanged. Claude behavior unchanged (uses --resume).\n\nReview approved (2026-06-27T18:49:24-07:00): Approved. build_planner_chat_history helper correctly builds compact Owner:/Planner: lines from prior messages, truncates at 3000 chars, and skips running planner entries. History is injected into the phrase for non-Claude tools only, between the preamble and the current owner message. First message (empty history) is unchanged. Claude path is unaffected (uses --resume). History is built before the current owner message is appended to the messages array, so no current-turn leakage. planner_chat_clear resets history implicitly by clearing messages. All 5 acceptance criteria met.",
+        "lastApiAction": "approve-review",
+        "lastApiActor": "ben",
+        "lastApiAt": "2026-06-27T18:49:24-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "Orchia",
+            "at": "2026-06-27T18:44:25-07:00"
+          },
+          {
+            "action": "update-task",
+            "agentName": "Orchia",
+            "at": "2026-06-27T18:44:50-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "ada",
+            "at": "2026-06-27T18:45:58-07:00"
+          },
+          {
+            "action": "move-to-review",
+            "agentName": "ada",
+            "at": "2026-06-27T18:47:51-07:00"
+          },
+          {
+            "action": "claim-next-review",
+            "agentName": "ben",
+            "at": "2026-06-27T18:48:22-07:00"
+          },
+          {
+            "action": "approve-review",
+            "agentName": "ben",
+            "at": "2026-06-27T18:49:24-07:00"
+          }
+        ],
+        "lastEditedBy": "Orchia",
+        "lastEditedAt": "2026-06-27T18:44:50-07:00",
+        "completedBy": "ada",
+        "reviewDecision": "approved",
+        "reviewNotes": "Approved. build_planner_chat_history helper correctly builds compact Owner:/Planner: lines from prior messages, truncates at 3000 chars, and skips running planner entries. History is injected into the phrase for non-Claude tools only, between the preamble and the current owner message. First message (empty history) is unchanged. Claude path is unaffected (uses --resume). History is built before the current owner message is appended to the messages array, so no current-turn leakage. planner_chat_clear resets history implicitly by clearing messages. All 5 acceptance criteria met."
+      }
+    ],
+    "archived": [
+      {
+        "id": "TASK-20260629-001",
+        "title": "Show response latency for each planner AI reply",
+        "project": "Planner chat",
+        "priority": "normal",
+        "type": "implementation",
+        "status": "archived",
+        "requestedBy": "owner",
+        "createdBy": "Orchia",
+        "createdAt": "2026-06-29T22:03:01-07:00",
+        "agentName": "Orchia",
+        "claimedBy": "ada",
+        "claimedAt": "2026-06-29T22:03:42-07:00",
+        "reviewClaimedBy": "ben",
+        "reviewClaimedAt": "2026-06-29T22:09:43-07:00",
+        "reviewRequestedAt": "2026-06-29T22:09:07-07:00",
+        "doneAt": "2026-06-29T22:33:51-07:00",
+        "reviewedBy": "ben",
+        "reviewedAt": "2026-06-29T22:33:51-07:00",
+        "redoCount": 0,
+        "summary": "For every AI response in the planner chat window, display how long the round-trip took (time from sending the request to receiving the result).",
+        "requirements": [
+          "Measure the elapsed time between sending a planner chat request and receiving the AI response.",
+          "Display the elapsed time alongside or within each planner response in the chat UI.",
+          "The timing should be per-message, not an aggregate or average."
+        ],
+        "acceptanceCriteria": [
+          "Each planner reply in the chat shows a visible response-time indicator (e.g. 1.2s).",
+          "The displayed time accurately reflects the request-to-response round trip.",
+          "The indicator does not interfere with reading the conversational text."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [],
+        "files": [
+          "task-board/viewer.html"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Planner chat window \u2014 AI reply latency",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop",
+            "state": "Open the planner chat panel (Agent Workflow Map \u2192 Planner node \u2192 chat window). Send a message and wait for the AI reply.",
+            "notes": "Each completed planner reply should show a response-time indicator (e.g. 31s) next to the Planner status label in the message meta area. The indicator should not interfere with reading the reply text."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Implemented response latency display for planner chat AI replies. The backend already captures spawnedAt and finishedAt per planner message. Added frontend computation and display of elapsed time in the message meta area. Sub-10s shows one decimal (e.g. 1.2s), 10s+ rounds to whole seconds. Latency badge is styled with reduced opacity and tabular-nums for clean alignment.\n\nReview approved (2026-06-29T22:33:51-07:00): Approved. Latency display is correctly computed from backend spawnedAt/finishedAt timestamps. All 5 completed planner messages show accurate labels (31s, 59s, 120s, 21s, 47s). Formatting logic is correct: sub-10s uses one decimal, 10s+ rounds to whole seconds. CSS styling (opacity 0.6, margin-left 6px, tabular-nums) keeps the badge subtle and non-intrusive. Only shows for completed messages, not while running.",
+        "lastApiAction": "archive",
+        "lastApiActor": "owner via task board viewer",
+        "lastApiAt": "2026-06-30T10:18:24-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "Orchia",
+            "at": "2026-06-29T22:03:01-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "ada",
+            "at": "2026-06-29T22:03:42-07:00"
+          },
+          {
+            "action": "move-to-review",
+            "agentName": "ada",
+            "at": "2026-06-29T22:09:07-07:00"
+          },
+          {
+            "action": "claim-next-review",
+            "agentName": "ben",
+            "at": "2026-06-29T22:09:43-07:00"
+          },
+          {
+            "action": "approve-review",
+            "agentName": "ben",
+            "at": "2026-06-29T22:33:51-07:00"
+          },
+          {
+            "action": "archive",
+            "agentName": "owner via task board viewer",
+            "at": "2026-06-30T10:18:24-07:00"
+          }
+        ],
+        "completedBy": "ada",
+        "reviewDecision": "approved",
+        "reviewNotes": "Approved. Latency display is correctly computed from backend spawnedAt/finishedAt timestamps. All 5 completed planner messages show accurate labels (31s, 59s, 120s, 21s, 47s). Formatting logic is correct: sub-10s uses one decimal, 10s+ rounds to whole seconds. CSS styling (opacity 0.6, margin-left 6px, tabular-nums) keeps the badge subtle and non-intrusive. Only shows for completed messages, not while running.",
+        "archivedAt": "2026-06-30T10:18:24-07:00",
+        "archivedBy": "Task board viewer"
+      }
+    ]
   },
-  "apiAuditLog": []
+  "apiAuditLog": [
+    {
+      "action": "add-task",
+      "agentName": "Orchia",
+      "taskId": "TASK-20260627-001",
+      "at": "2026-06-27T18:44:25-07:00"
+    },
+    {
+      "action": "update-task",
+      "agentName": "Orchia",
+      "taskId": "TASK-20260627-001",
+      "at": "2026-06-27T18:44:50-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "ada",
+      "taskId": "TASK-20260627-001",
+      "at": "2026-06-27T18:45:58-07:00"
+    },
+    {
+      "action": "move-to-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260627-001",
+      "at": "2026-06-27T18:47:51-07:00"
+    },
+    {
+      "action": "claim-next-review",
+      "agentName": "ben",
+      "taskId": "TASK-20260627-001",
+      "at": "2026-06-27T18:48:22-07:00"
+    },
+    {
+      "action": "approve-review",
+      "agentName": "ben",
+      "taskId": "TASK-20260627-001",
+      "at": "2026-06-27T18:49:24-07:00"
+    },
+    {
+      "action": "add-task",
+      "agentName": "Orchia",
+      "taskId": "TASK-20260629-001",
+      "at": "2026-06-29T22:03:01-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "ada",
+      "taskId": "TASK-20260629-001",
+      "at": "2026-06-29T22:03:42-07:00"
+    },
+    {
+      "action": "move-to-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260629-001",
+      "at": "2026-06-29T22:09:07-07:00"
+    },
+    {
+      "action": "claim-next-review",
+      "agentName": "ben",
+      "taskId": "TASK-20260629-001",
+      "at": "2026-06-29T22:09:43-07:00"
+    },
+    {
+      "action": "approve-review",
+      "agentName": "ben",
+      "taskId": "TASK-20260629-001",
+      "at": "2026-06-29T22:33:51-07:00"
+    },
+    {
+      "action": "add-task",
+      "agentName": "Orchia",
+      "taskId": "TASK-20260630-001",
+      "at": "2026-06-30T10:15:44-07:00"
+    },
+    {
+      "action": "add-task",
+      "agentName": "Orchia",
+      "taskId": "TASK-20260630-002",
+      "at": "2026-06-30T10:15:58-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "ada",
+      "taskId": "TASK-20260630-001",
+      "at": "2026-06-30T10:16:20-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "ben",
+      "taskId": "TASK-20260630-002",
+      "at": "2026-06-30T10:17:31-07:00"
+    },
+    {
+      "action": "archive",
+      "agentName": "owner via task board viewer",
+      "taskId": "TASK-20260629-001",
+      "at": "2026-06-30T10:18:24-07:00"
+    },
+    {
+      "action": "move-to-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260630-001",
+      "at": "2026-06-30T10:28:58-07:00"
+    },
+    {
+      "action": "move-to-review",
+      "agentName": "ben",
+      "taskId": "TASK-20260630-002",
+      "at": "2026-06-30T10:43:56-07:00"
+    },
+    {
+      "action": "claim-next-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260630-001",
+      "at": "2026-06-30T10:46:30-07:00"
+    },
+    {
+      "action": "request-changes",
+      "agentName": "ada",
+      "taskId": "TASK-20260630-001",
+      "at": "2026-06-30T10:50:15-07:00"
+    },
+    {
+      "action": "claim-next-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260630-002",
+      "at": "2026-06-30T10:50:27-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "dane",
+      "taskId": "TASK-20260630-003",
+      "at": "2026-06-30T10:50:48-07:00"
+    },
+    {
+      "action": "request-changes",
+      "agentName": "ada",
+      "taskId": "TASK-20260630-002",
+      "at": "2026-06-30T10:52:44-07:00"
+    },
+    {
+      "action": "add-task",
+      "agentName": "dane",
+      "taskId": "TASK-20260630-005",
+      "at": "2026-06-30T10:52:44-07:00"
+    },
+    {
+      "action": "claim-task",
+      "agentName": "dane",
+      "taskId": "TASK-20260630-005",
+      "at": "2026-06-30T10:52:53-07:00"
+    },
+    {
+      "action": "move-to-review",
+      "agentName": "dane",
+      "taskId": "TASK-20260630-005",
+      "at": "2026-06-30T10:53:01-07:00"
+    },
+    {
+      "action": "claim-review",
+      "agentName": "dane",
+      "taskId": "TASK-20260630-005",
+      "at": "2026-06-30T10:53:26-07:00"
+    },
+    {
+      "action": "approve-review",
+      "agentName": "dane",
+      "taskId": "TASK-20260630-005",
+      "at": "2026-06-30T10:53:31-07:00"
+    },
+    {
+      "action": "add-task",
+      "agentName": "Iris",
+      "taskId": "TASK-20260630-006",
+      "at": "2026-06-30T10:54:29-07:00"
+    },
+    {
+      "action": "move-to-review",
+      "agentName": "dane",
+      "taskId": "TASK-20260630-003",
+      "at": "2026-06-30T10:54:42-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "dane",
+      "taskId": "TASK-20260630-006",
+      "at": "2026-06-30T10:54:50-07:00"
+    },
+    {
+      "action": "claim-next-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260630-003",
+      "at": "2026-06-30T10:56:49-07:00"
+    },
+    {
+      "action": "approve-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260630-003",
+      "at": "2026-06-30T10:58:16-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "ada",
+      "taskId": "TASK-20260630-004",
+      "at": "2026-06-30T11:00:39-07:00"
+    },
+    {
+      "action": "move-to-review",
+      "agentName": "dane",
+      "taskId": "TASK-20260630-006",
+      "at": "2026-06-30T11:02:25-07:00"
+    },
+    {
+      "action": "move-to-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260630-004",
+      "at": "2026-06-30T11:06:41-07:00"
+    },
+    {
+      "action": "add-task",
+      "agentName": "finn",
+      "taskId": "TASK-20260630-007",
+      "at": "2026-06-30T11:07:39-07:00"
+    }
+  ]
 }

@@ -1302,9 +1302,36 @@
     }
 
     .planner-msg.planner .planner-result {
-      white-space: pre-wrap;
+      white-space: normal;
       overflow-wrap: anywhere;
     }
+    .planner-msg.planner .planner-result p { margin: 2px 0; }
+    .planner-msg.planner .planner-result ul,
+    .planner-msg.planner .planner-result ol { margin: 4px 0; padding-left: 20px; }
+    .planner-msg.planner .planner-result li { margin: 1px 0; }
+    .planner-msg.planner .planner-result code {
+      background: rgba(0,0,0,0.06);
+      padding: 1px 4px;
+      border-radius: 3px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 12px;
+    }
+    .planner-msg.planner .planner-result pre {
+      background: rgba(0,0,0,0.04);
+      padding: 8px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 4px 0;
+    }
+    .planner-msg.planner .planner-result pre code {
+      background: none;
+      padding: 0;
+    }
+    .planner-msg.planner .planner-result a {
+      color: var(--workflow, #4a90d9);
+      text-decoration: underline;
+    }
+    .planner-msg.planner .planner-result strong { font-weight: 600; }
 
     .planner-diagnostics-toggle {
       display: inline-block;
@@ -1365,6 +1392,12 @@
       border-radius: 50%;
       background: #c98a3d;
       animation: planner-pulse 1s ease-in-out infinite;
+    }
+
+    .planner-msg-latency {
+      margin-left: 6px;
+      opacity: 0.6;
+      font-variant-numeric: tabular-nums;
     }
 
     @keyframes planner-pulse {
@@ -2425,6 +2458,34 @@
       white-space: nowrap;
     }
 
+    .ticket-metrics {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px 16px;
+      margin-bottom: 8px;
+      padding: 6px 8px;
+      font-size: 11px;
+      color: var(--muted);
+      background: color-mix(in srgb, var(--lane-color) 6%, transparent);
+      border: 1px solid color-mix(in srgb, var(--lane-color) 18%, transparent);
+      border-radius: 6px;
+    }
+
+    .ticket-metrics-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .ticket-metrics-label {
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .ticket-metrics-value {
+      white-space: nowrap;
+    }
+
     .ticket h2 {
       margin: 0;
       font-size: 14px;
@@ -2803,6 +2864,13 @@
         margin-top: 14px;
       }
 
+      .activity-log-panel {
+        width: calc(100vw - var(--side-tab-gutter) - var(--shell-edge-gap) - 32px);
+        max-width: 340px;
+        right: auto;
+        left: 0;
+      }
+
       .pause-control {
         width: 100%;
         justify-content: flex-start;
@@ -2909,6 +2977,160 @@
         grid-template-columns: 1fr;
       }
     }
+
+    .activity-log {
+      position: relative;
+      display: inline-flex;
+      align-items: stretch;
+      font-size: 12px;
+    }
+
+    .activity-log-toggle {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 8px 12px;
+      cursor: pointer;
+      font-weight: 760;
+      font-size: 12px;
+      box-shadow: 0 1px 0 rgba(25, 24, 22, 0.04);
+      white-space: nowrap;
+    }
+
+    .activity-log-toggle:hover {
+      border-color: #aaa197;
+      background: #fbfaf7;
+    }
+
+    .activity-log-toggle .activity-log-badge {
+      min-width: 18px;
+      border-radius: 999px;
+      background: var(--todo);
+      color: #fff;
+      padding: 1px 6px;
+      text-align: center;
+      font-size: 10px;
+      font-weight: 760;
+      line-height: 1.4;
+    }
+
+    .activity-log-panel {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 6px;
+      width: 340px;
+      max-width: calc(100vw - 32px);
+      max-height: 420px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.96);
+      box-shadow: 0 14px 34px rgba(23, 32, 42, 0.12);
+      z-index: 30;
+    }
+
+    .activity-log-panel[hidden] {
+      display: none;
+    }
+
+    .activity-log-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.72);
+    }
+
+    .activity-log-header h3 {
+      margin: 0;
+      font-size: 11px;
+      text-transform: uppercase;
+      color: var(--muted);
+      letter-spacing: 0;
+    }
+
+    .activity-log-clear {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--muted);
+      padding: 2px 7px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .activity-log-clear:hover {
+      border-color: #aaa197;
+      color: var(--ink);
+    }
+
+    .activity-log-list {
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow-y: auto;
+      padding: 6px 0;
+    }
+
+    .activity-log-entry {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 4px 8px;
+      padding: 5px 12px;
+      border-bottom: 1px solid rgba(214, 221, 232, 0.4);
+      align-items: baseline;
+    }
+
+    .activity-log-entry:last-child {
+      border-bottom: 0;
+    }
+
+    .activity-log-time {
+      color: var(--muted);
+      font-size: 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      white-space: nowrap;
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    .activity-log-action {
+      font-size: 11px;
+      color: var(--ink);
+      grid-column: 2;
+      grid-row: 1;
+      overflow-wrap: anywhere;
+    }
+
+    .activity-log-action strong {
+      font-weight: 700;
+      color: var(--todo);
+    }
+
+    .activity-log-task {
+      font-size: 10px;
+      color: var(--muted);
+      grid-column: 2;
+      grid-row: 2;
+      overflow-wrap: anywhere;
+    }
+
+    .activity-log-empty {
+      padding: 18px 12px;
+      text-align: center;
+      color: var(--muted);
+      font-size: 11px;
+    }
   </style>
 </head>
 <body>
@@ -2934,6 +3156,21 @@
           Load JSON file
           <input type="file" id="fileInput" accept="application/json,.json">
         </label>
+        <div class="activity-log" id="activityLog">
+          <button class="activity-log-toggle" type="button" id="activityLogToggle" aria-expanded="false">
+            <span>Activity</span>
+            <span class="activity-log-badge" id="activityLogBadge">0</span>
+          </button>
+          <div class="activity-log-panel" id="activityLogPanel" hidden>
+            <div class="activity-log-header">
+              <h3>Recent Activity</h3>
+              <button class="activity-log-clear" type="button" id="activityLogClose">Close</button>
+            </div>
+            <div class="activity-log-list" id="activityLogList">
+              <div class="activity-log-empty">No activity yet.</div>
+            </div>
+          </div>
+        </div>
       </div>
     </header>
 
@@ -2953,6 +3190,7 @@
     <section class="agent-logs-board" id="agentLogsBoard" aria-label="Agent logs"></section>
     <section class="settings-board" id="settingsBoard" aria-label="Settings"></section>
   </main>
+
 
   <script>
     const visualColumns = [
@@ -3086,6 +3324,7 @@
     let agentLogsPanelOpen = false;
     let doneFocusOpen = false;
     let settingsPanelOpen = false;
+    let activityLogOpen = false;
     let currentBoard = fallbackBoard;
     let currentSourceLabel = "fallback";
     let currentAgents = fallbackAgents;
@@ -3124,6 +3363,76 @@
         .replaceAll(">", "&gt;")
         .replaceAll('"', "&quot;")
         .replaceAll("'", "&#039;");
+    }
+
+    function renderInlineMarkdown(text) {
+      let s = escapeText(text);
+      s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+      s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      s = s.replace(/(?<!\*)\*(?!\*)(.+?)(?<!\*)\*(?!\*)/g, "<em>$1</em>");
+      s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      return s;
+    }
+
+    function renderMarkdown(text) {
+      if (!text) return "";
+      const lines = text.split("\n");
+      const out = [];
+      let inCodeBlock = false;
+      let codeLines = [];
+      let inList = false;
+      let listType = "";
+      const closeList = () => { if (inList) { out.push(listType === "ol" ? "</ol>" : "</ul>"); inList = false; } };
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+
+        if (trimmed.startsWith("```")) {
+          if (inCodeBlock) {
+            out.push("<pre><code>" + codeLines.map(escapeText).join("\n") + "</code></pre>");
+            codeLines = [];
+            inCodeBlock = false;
+          } else {
+            closeList();
+            inCodeBlock = true;
+          }
+          continue;
+        }
+        if (inCodeBlock) { codeLines.push(line); continue; }
+
+        if (!trimmed) { closeList(); out.push("<br>"); continue; }
+
+        const headingMatch = trimmed.match(/^(#{1,4})\s+(.+)/);
+        if (headingMatch) {
+          closeList();
+          const level = Math.min(headingMatch[1].length, 4);
+          out.push(`<h${level} style="margin:6px 0 3px;font-size:${14 - level}px">${renderInlineMarkdown(headingMatch[2])}</h${level}>`);
+          continue;
+        }
+
+        const ulMatch = trimmed.match(/^[-*]\s+(.+)/);
+        if (ulMatch) {
+          if (!inList || listType !== "ul") { closeList(); out.push("<ul>"); inList = true; listType = "ul"; }
+          out.push("<li>" + renderInlineMarkdown(ulMatch[1]) + "</li>");
+          continue;
+        }
+
+        const olMatch = trimmed.match(/^\d+\.\s+(.+)/);
+        if (olMatch) {
+          if (!inList || listType !== "ol") { closeList(); out.push("<ol>"); inList = true; listType = "ol"; }
+          out.push("<li>" + renderInlineMarkdown(olMatch[1]) + "</li>");
+          continue;
+        }
+
+        closeList();
+        out.push("<p style=\"margin:2px 0\">" + renderInlineMarkdown(trimmed) + "</p>");
+      }
+      closeList();
+      if (inCodeBlock && codeLines.length) {
+        out.push("<pre><code>" + codeLines.map(escapeText).join("\n") + "</code></pre>");
+      }
+      return out.join("\n");
     }
 
     function listItems(items, formatter = escapeText) {
@@ -4086,6 +4395,21 @@
       return `<div class="ticket-lifecycle">${entries.map((e) => `<span class="lifecycle-entry">${escapeText(e)}</span>`).join("")}</div>`;
     }
 
+    function doneMetricsPanel(task, columnKey) {
+      if (columnKey !== "done") return "";
+      const workerTime = String(task.workerTime || "").trim();
+      const workerTokens = task.workerTokens != null ? String(task.workerTokens) : "";
+      const reviewerTime = String(task.reviewerTime || "").trim();
+      const reviewerTokens = task.reviewerTokens != null ? String(task.reviewerTokens) : "";
+      if (!workerTime && !workerTokens && !reviewerTime && !reviewerTokens) return "";
+      const dash = "–";
+      const groups = [
+        `<div class="ticket-metrics-group"><span class="ticket-metrics-label">Worker:</span> <span class="ticket-metrics-value">${escapeText(workerTime || dash)} · ${escapeText(workerTokens ? `${workerTokens} tokens` : dash)}</span></div>`,
+        `<div class="ticket-metrics-group"><span class="ticket-metrics-label">Reviewer:</span> <span class="ticket-metrics-value">${escapeText(reviewerTime || dash)} · ${escapeText(reviewerTokens ? `${reviewerTokens} tokens` : dash)}</span></div>`
+      ];
+      return `<div class="ticket-metrics" aria-label="Agent metrics">${groups.join("")}</div>`;
+    }
+
     function ticketCard(task, columnKey) {
       const sourceColumnKey = task.__sourceColumn || columnKey;
       const title = String(task.title || "").trim();
@@ -4140,6 +4464,7 @@
               <div class="priority ${priority.toLowerCase()}">${priority}</div>
             </div>
             ${taskLifecycleMarkup(task)}
+            ${doneMetricsPanel(task, sourceColumnKey)}
             ${ownerFeedbackPanel(task, sourceColumnKey)}
             ${field("Inspect Change", renderInspectionTargets(task.inspectionTargets))}
             ${task.summary ? `<p class="summary">${escapeText(task.summary)}</p>` : ""}
@@ -5530,7 +5855,8 @@
         const phrase = result?.startPhrase || "";
         const processText = result?.processId ? ` PID: ${result.processId}.` : "";
         const logText = result?.logPath ? ` Log: ${result.logPath}.` : "";
-        statusEl.textContent = `Spawned ${roleLabel} in ${toolLabel} non-interactively.${processText}${logText} Start phrase: "${phrase}"`;
+        const modeText = result?.mode === "interactive" ? "interactively" : "non-interactively";
+        statusEl.textContent = `Spawned ${roleLabel} in ${toolLabel} ${modeText}.${processText}${logText} Start phrase: "${phrase}"`;
         await Promise.allSettled([
           refreshAgentLogs(),
           refreshSystemStatus({ silent: true })
@@ -5776,6 +6102,87 @@
       }
       applyPinnedAgentRunState();
       syncViewportClientWidth();
+      renderActivityLog(normalized);
+    }
+
+    const ACTION_LABELS = {
+      "add-task": "created task",
+      "update-task": "updated task",
+      "delete-task": "deleted task",
+      "claim-task": "claimed task",
+      "unclaim-task": "unclaimed task",
+      "claim-next-worker": "claimed next task",
+      "move-to-review": "moved to review",
+      "claim-review": "claimed review",
+      "claim-next-review": "claimed next review",
+      "approve-review": "approved review",
+      "request-changes": "requested changes",
+      "return-to-review": "returned to review",
+      "archive": "archived task",
+      "register-agent": "registered",
+      "heartbeat-agent": "heartbeat",
+      "unregister-agent": "unregistered",
+      "spawn-agent": "spawned agent",
+      "terminate-agent": "terminated agent",
+      "pause-plus-one-hour": "paused +1h",
+      "resume-now": "resumed board",
+      "hard-stop-spawned-agents": "hard-stopped agents",
+      "planner-chat-send": "sent planner chat",
+      "planner-chat-clear": "cleared planner chat",
+    };
+
+    function formatActionLabel(action) {
+      return ACTION_LABELS[action] || action.replace(/-/g, " ");
+    }
+
+    function formatLogTime(isoString) {
+      try {
+        const date = new Date(isoString);
+        return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+      } catch {
+        return isoString || "";
+      }
+    }
+
+    function renderActivityLog(board) {
+      const toggleEl = document.getElementById("activityLogToggle");
+      const panelEl = document.getElementById("activityLogPanel");
+      const listEl = document.getElementById("activityLogList");
+      const badgeEl = document.getElementById("activityLogBadge");
+      if (!toggleEl || !panelEl || !listEl || !badgeEl) return;
+
+      const auditLog = Array.isArray(board?.apiAuditLog) ? board.apiAuditLog : [];
+      const entries = auditLog.slice(-50).reverse();
+
+      badgeEl.textContent = String(auditLog.length);
+      panelEl.hidden = !activityLogOpen;
+      toggleEl.setAttribute("aria-expanded", activityLogOpen ? "true" : "false");
+
+      if (!entries.length) {
+        listEl.innerHTML = `<div class="activity-log-empty">No activity yet.</div>`;
+        return;
+      }
+
+      listEl.innerHTML = entries.map((entry) => {
+        const time = formatLogTime(entry.at);
+        const agent = escapeText(entry.agentName || "unknown");
+        const action = escapeText(formatActionLabel(entry.action || ""));
+        const taskId = entry.taskId || "";
+        return `<div class="activity-log-entry">
+          <span class="activity-log-time">${escapeText(time)}</span>
+          <span class="activity-log-action"><strong>${agent}</strong> ${action}</span>
+          ${taskId ? `<span class="activity-log-task">${escapeText(taskId)}</span>` : ""}
+        </div>`;
+      }).join("");
+    }
+
+    function toggleActivityLog(forceOpen) {
+      if (typeof forceOpen === "boolean") {
+        activityLogOpen = forceOpen;
+      } else {
+        activityLogOpen = !activityLogOpen;
+      }
+      renderActivityLog(currentBoard);
     }
 
     function toggleArchiveTray(forceOpen) {
@@ -6131,7 +6538,8 @@
       detailKey: "",
       pollTimer: null,
       sending: false,
-      lastSignature: ""
+      lastSignature: "",
+      queue: []
     };
 
     function buildPlannerChatDock() {
@@ -6263,7 +6671,15 @@
         }
         const running = msg.status === "running";
         const statusText = running ? "Planner is thinking" : (msg.isError ? "Planner — error" : "Planner");
-        const metaHtml = `<span class="planner-msg-meta"><span class="planner-msg-status ${running ? "running" : ""}">${escapeText(statusText)}${msg.tool ? " &middot; " + escapeText(msg.tool) : ""}</span></span>`;
+        let latencyHtml = "";
+        if (!running && msg.spawnedAt && msg.finishedAt) {
+          const elapsed = (Date.parse(msg.finishedAt) - Date.parse(msg.spawnedAt)) / 1000;
+          if (elapsed >= 0) {
+            const label = elapsed < 10 ? elapsed.toFixed(1) + "s" : Math.round(elapsed) + "s";
+            latencyHtml = `<span class="planner-msg-latency">${label}</span>`;
+          }
+        }
+        const metaHtml = `<span class="planner-msg-meta"><span class="planner-msg-status ${running ? "running" : ""}">${escapeText(statusText)}${msg.tool ? " &middot; " + escapeText(msg.tool) : ""}</span>${latencyHtml}</span>`;
         if (running) {
           return `<div class="planner-msg planner">${metaHtml}<span class="planner-result">Thinking&hellip;</span></div>`;
         }
@@ -6274,7 +6690,8 @@
         if (rawOutput && rawOutput !== resultText) {
           diagHtml = `<button class="planner-diagnostics-toggle" type="button" data-planner-diagnostics-toggle>Show diagnostics</button><div class="planner-diagnostics"><pre>${escapeText(rawOutput)}</pre></div>`;
         }
-        return `<div class="planner-msg planner">${metaHtml}<span class="planner-result">${escapeText(displayText)}</span>${diagHtml}</div>`;
+        const renderedContent = resultText ? renderMarkdown(displayText) : escapeText(displayText);
+        return `<div class="planner-msg planner">${metaHtml}<span class="planner-result">${renderedContent}</span>${diagHtml}</div>`;
       }).join("");
 
       if (nearBottom) body.scrollTop = body.scrollHeight;
@@ -6292,6 +6709,7 @@
       }
       plannerChat.lastSignature = "";
       plannerChat.hasMessages = false;
+      plannerChat.queue = [];
       renderPlannerMessages([]);
       if (plannerChat.inputEl) plannerChat.inputEl.focus();
       statusEl.textContent = "Started a new planner conversation.";
@@ -6302,24 +6720,30 @@
       try {
         const data = await loadJson("/viewer/planner-chat?agentName=Task%20board%20viewer");
         renderPlannerMessages(data.messages);
+        drainPlannerQueue(data.messages);
       } catch (error) {
         /* transient; next poll retries */
       }
     }
 
-    async function sendPlannerMessage() {
+    function plannerIsRunning(messages) {
+      return Array.isArray(messages) && messages.some((m) => m.role === "planner" && m.status === "running");
+    }
+
+    async function drainPlannerQueue(messages) {
+      if (plannerChat.sending || !plannerChat.queue.length) return;
+      if (plannerIsRunning(messages)) return;
+      const next = plannerChat.queue.shift();
+      plannerChat.inputEl.value = "";
+      await _doSendPlannerMessage(next.message, next.tool);
+    }
+
+    async function _doSendPlannerMessage(message, tool) {
       if (plannerChat.sending) return;
-      const message = String(plannerChat.inputEl.value || "").trim();
-      if (!message) {
-        plannerChat.inputEl.focus();
-        return;
-      }
-      const tool = plannerChat.toolEl ? plannerChat.toolEl.value : "claude";
       plannerChat.sending = true;
       plannerChat.sendEl.disabled = true;
       plannerChat.sendEl.textContent = "Sending...";
 
-      // Optimistic bubbles for instant chat feel.
       const empty = plannerChat.bodyEl.querySelector(".planner-chat-empty");
       if (empty) empty.remove();
       const ownerBubble = document.createElement("div");
@@ -6331,8 +6755,6 @@
       pendingBubble.innerHTML = `<span class="planner-msg-meta"><span class="planner-msg-status running">Planner is thinking &middot; ${escapeText(tool)}</span></span><span class="planner-result">Thinking&hellip;</span>`;
       plannerChat.bodyEl.appendChild(pendingBubble);
       plannerChat.bodyEl.scrollTop = plannerChat.bodyEl.scrollHeight;
-      plannerChat.inputEl.value = "";
-      plannerChat.hasMessages = true;
 
       try {
         const data = await postJson("/viewer/planner-chat-send", { message, tool });
@@ -6340,10 +6762,8 @@
         renderPlannerMessages(data.messages);
         pollPlannerChat();
       } catch (error) {
-        // Roll back optimistic bubbles and restore the message for retry.
         ownerBubble.remove();
         pendingBubble.remove();
-        plannerChat.inputEl.value = message;
         statusEl.textContent = `Planner chat failed: ${error.message}`;
       } finally {
         plannerChat.sending = false;
@@ -6351,6 +6771,37 @@
         plannerChat.sendEl.textContent = "Send";
         plannerChat.inputEl.focus();
       }
+    }
+
+    async function sendPlannerMessage() {
+      if (plannerChat.sending) return;
+      const message = String(plannerChat.inputEl.value || "").trim();
+      if (!message) {
+        plannerChat.inputEl.focus();
+        return;
+      }
+      const tool = plannerChat.toolEl ? plannerChat.toolEl.value : "claude";
+      plannerChat.inputEl.value = "";
+
+      // If the planner is currently responding, queue the message.
+      try {
+        const current = await loadJson("/viewer/planner-chat?agentName=Task%20board%20viewer");
+        if (plannerIsRunning(current.messages)) {
+          plannerChat.queue.push({ message, tool });
+          plannerChat.hasMessages = true;
+          const empty = plannerChat.bodyEl.querySelector(".planner-chat-empty");
+          if (empty) empty.remove();
+          const queuedBubble = document.createElement("div");
+          queuedBubble.className = "planner-msg owner";
+          queuedBubble.innerHTML = escapeText(message) + ' <span style="opacity:0.7;font-size:11px">(queued)</span>';
+          plannerChat.bodyEl.appendChild(queuedBubble);
+          plannerChat.bodyEl.scrollTop = plannerChat.bodyEl.scrollHeight;
+          statusEl.textContent = "Message queued — it will be sent after the Planner finishes.";
+          return;
+        }
+      } catch (_) { /* fall through to direct send */ }
+
+      await _doSendPlannerMessage(message, tool);
     }
 
     workflowEl.addEventListener("click", (event) => {
@@ -6583,6 +7034,8 @@
 
     reloadButton.addEventListener("click", () => loadDefaultBoard());
     autoRefreshButton.addEventListener("click", () => setAutoRefresh(!autoRefreshTimer));
+    document.getElementById("activityLogToggle").addEventListener("click", () => toggleActivityLog());
+    document.getElementById("activityLogClose").addEventListener("click", () => toggleActivityLog(false));
     pauseControlEl.addEventListener("click", (event) => {
       const actionButton = event.target.closest("[data-pause-action]");
       if (!actionButton) return;

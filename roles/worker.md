@@ -70,10 +70,11 @@ When the task is complete:
 2. Set `status` to `review`.
 3. Set `reviewRequestedAt` to the current timestamp.
 4. Add a concise completion note to `notes`.
-5. Add touched files to `files` if they were not already listed.
-6. Add `inspectionTargets` so the owner and the Reviewer know exactly where to inspect the change. Include URL/path, viewport or state, and short notes when useful.
-7. Update board `updatedAt`.
-8. Report the result, validation, and inspection target to the owner.
+5. Include `workerTokens` (an integer) in the move-to-review payload if you know your token usage for this task. The backend auto-computes elapsed time from `claimedAt`; tokens must be self-reported. If unknown, omit the field and the viewer shows a dash.
+6. Add touched files to `files` if they were not already listed.
+7. Add `inspectionTargets` so the owner and the Reviewer know exactly where to inspect the change. Include URL/path, viewport or state, and short notes when useful.
+8. Update board `updatedAt`.
+9. Report the result, validation, and inspection target to the owner.
 
 Use this shape for inspection targets:
 

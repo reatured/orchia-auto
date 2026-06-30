@@ -9,6 +9,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import ctypes
@@ -265,6 +266,37 @@ class JsonResponseError(Exception):
 
 def now_iso() -> str:
     return datetime.now(timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def compute_elapsed_seconds(start_iso: str, end_iso: str) -> int | None:
+    start_dt = parse_iso_datetime(start_iso)
+    end_dt = parse_iso_datetime(end_iso)
+    if not start_dt or not end_dt:
+        return None
+    delta = int((end_dt - start_dt).total_seconds())
+    return delta if delta >= 0 else None
+
+
+def format_duration(seconds: int | None) -> str:
+    if seconds is None:
+        return ""
+    if seconds < 60:
+        return f"{seconds}s"
+    minutes, secs = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m {secs}s"
+    hours, mins = divmod(minutes, 60)
+    return f"{hours}h {mins}m"
+
+
+def parse_optional_int(value: object) -> int | None:
+    if value is None or value == "":
+        return None
+    try:
+        parsed = int(str(value).strip())
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed >= 0 else None
 
 
 def default_dispatch_settings() -> dict:
@@ -3715,6 +3747,13 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         task["status"] = "review"
         task["reviewRequestedAt"] = timestamp
         task["completedBy"] = payload.get("completedBy") or agent_name or task.get("claimedBy", "")
+        worker_elapsed = compute_elapsed_seconds(task.get("claimedAt", ""), timestamp)
+        if worker_elapsed is not None:
+            task["workerTimeSeconds"] = worker_elapsed
+            task["workerTime"] = format_duration(worker_elapsed)
+        worker_tokens = parse_optional_int(payload.get("workerTokens"))
+        if worker_tokens is not None:
+            task["workerTokens"] = worker_tokens
         self.append_unique_files(task, payload.get("files"))
         if "inspectionTargets" in payload:
             task["inspectionTargets"] = self.normalize_list(payload.get("inspectionTargets"), "inspectionTargets")
@@ -3966,6 +4005,13 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         task["reviewedBy"] = payload.get("reviewedBy") or agent_name or task.get("reviewClaimedBy", "")
         task["reviewedAt"] = timestamp
         task["reviewDecision"] = "approved"
+        reviewer_elapsed = compute_elapsed_seconds(task.get("reviewClaimedAt", ""), timestamp)
+        if reviewer_elapsed is not None:
+            task["reviewerTimeSeconds"] = reviewer_elapsed
+            task["reviewerTime"] = format_duration(reviewer_elapsed)
+        reviewer_tokens = parse_optional_int(payload.get("reviewerTokens"))
+        if reviewer_tokens is not None:
+            task["reviewerTokens"] = reviewer_tokens
         review_notes = str(payload.get("reviewNotes", "") or payload.get("notes", "") or "").strip()
         if review_notes:
             task["reviewNotes"] = review_notes
@@ -4003,6 +4049,13 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         done = self.ensure_column(columns, "done")
         timestamp = now_iso()
         agent_name = self.agent_name(payload, "Review Agent")
+        reviewer_elapsed = compute_elapsed_seconds(task.get("reviewClaimedAt", ""), timestamp)
+        if reviewer_elapsed is not None:
+            task["reviewerTimeSeconds"] = reviewer_elapsed
+            task["reviewerTime"] = format_duration(reviewer_elapsed)
+        reviewer_tokens = parse_optional_int(payload.get("reviewerTokens"))
+        if reviewer_tokens is not None:
+            task["reviewerTokens"] = reviewer_tokens
         task["status"] = "done"
         task["reviewedBy"] = payload.get("reviewedBy") or agent_name or task.get("reviewClaimedBy", "")
         task["reviewedAt"] = timestamp
@@ -4065,6 +4118,80 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         )
 
         working_dir = str(PROJECT_ROOT)
+        cli_command_text = self.spawn_command_for_tool(tool)
+
+        SPAWN_LOG_DIR.mkdir(parents=True, exist_ok=True)
+        safe_name = re.sub(r"[^a-zA-Z0-9_-]+", "-", personal_name).strip("-") or "agent"
+        run_stamp = datetime.now(timezone.utc).astimezone().strftime("%Y%m%d-%H%M%S")
+        log_path = SPAWN_LOG_DIR / f"{run_stamp}-{role}-{tool}-{safe_name}.log"
+        env = agent_subprocess_env(tool)
+
+        log_file = log_path.open("a", encoding="utf-8")
+        log_file.write(f"Spawned {role} agent ({tool}) at {now_iso()}\n")
+        log_file.write(f"Working directory: {working_dir}\n")
+        log_file.write(f"Backend: {backend_base_url}\n")
+        if resume_run:
+            log_file.write(f"Resume of process: {resume_run.get('processId', '')}\n")
+            log_file.write(f"Prior log: {resume_run.get('logPath', '')}\n")
+        if tool == "codex":
+            log_file.write(f"Codex SQLite state: {env.get('CODEX_SQLITE_HOME', '')}\n")
+        log_file.write(f"Prompt: {start_phrase}\n\n")
+        log_file.flush()
+
+        # Try interactive Terminal.app spawn on macOS
+        if sys.platform == "darwin" and shutil.which("osascript"):
+            try:
+                base_command = self.spawn_command_for_tool(tool)
+                if tool == "codex":
+                    shell_cmd = f"cd {shlex.quote(working_dir)} && exec {base_command}"
+                else:
+                    shell_cmd = f"cd {shlex.quote(working_dir)} && exec {base_command} {shlex.quote(start_phrase)}"
+
+                script_fd, script_path = tempfile.mkstemp(suffix=".sh", prefix=f"spawn-{role}-{tool}-")
+                with os.fdopen(script_fd, "w") as sf:
+                    sf.write("#!/bin/bash\n")
+                    sf.write(shell_cmd + "\n")
+                os.chmod(script_path, 0o755)
+
+                applescript_path = script_path.replace("\\", "\\\\").replace('"', '\\"')
+                osascript_cmd = [
+                    "osascript", "-e",
+                    f'tell application "Terminal" to do script "{applescript_path}"',
+                ]
+                osa_proc = subprocess.run(
+                    osascript_cmd, capture_output=True, timeout=15,
+                )
+                if osa_proc.returncode != 0:
+                    raise RuntimeError(
+                        f"osascript failed (exit {osa_proc.returncode}): "
+                        f"{osa_proc.stderr.decode(errors='replace').strip()}"
+                    )
+
+                log_file.write(f"Interactive spawn via Terminal.app\n")
+                log_file.write(f"Script: {script_path}\n")
+                log_file.write(f"Command: {shell_cmd}\n")
+                log_file.close()
+
+                return {
+                    "spawned": True,
+                    "mode": "interactive",
+                    "role": role,
+                    "tool": tool,
+                    "personalName": personal_name,
+                    "cliCommand": cli_command_text,
+                    "startPhrase": start_phrase,
+                    "backendBaseUrl": backend_base_url,
+                    "processId": os.getpid(),
+                    "logPath": str(log_path),
+                    "workingDirectory": working_dir,
+                    "resumeOfProcessId": resume_run.get("processId", "") if resume_run else "",
+                    "scriptPath": script_path,
+                }
+            except Exception as exc:
+                log_file.write(f"Interactive spawn failed: {exc}; falling back to non-interactive\n")
+                log_file.flush()
+
+        # Fallback: non-interactive subprocess (also the path on non-macOS)
         if tool == "codex":
             args = self.spawn_command_args(tool)
             args.extend(["exec", "--skip-git-repo-check", start_phrase])
@@ -4073,30 +4200,12 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             args.extend(["-p", start_phrase])
             if tool == "qwen":
                 args.extend(["-y", "-o", "stream-json"])
-        cli_command = args[0]
-        cli_command_text = self.spawn_command_for_tool(tool)
+
+        popen_flags = 0
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            popen_flags |= subprocess.CREATE_NO_WINDOW
 
         try:
-            SPAWN_LOG_DIR.mkdir(parents=True, exist_ok=True)
-            safe_name = re.sub(r"[^a-zA-Z0-9_-]+", "-", personal_name).strip("-") or "agent"
-            run_stamp = datetime.now(timezone.utc).astimezone().strftime("%Y%m%d-%H%M%S")
-            log_path = SPAWN_LOG_DIR / f"{run_stamp}-{role}-{tool}-{safe_name}.log"
-            popen_flags = 0
-            if hasattr(subprocess, "CREATE_NO_WINDOW"):
-                popen_flags |= subprocess.CREATE_NO_WINDOW
-            env = agent_subprocess_env(tool)
-            log_file = log_path.open("a", encoding="utf-8")
-            log_file.write(f"Spawned {role} agent ({tool}) at {now_iso()}\n")
-            log_file.write(f"Working directory: {working_dir}\n")
-            log_file.write(f"Backend: {backend_base_url}\n")
-            if resume_run:
-                log_file.write(f"Resume of process: {resume_run.get('processId', '')}\n")
-                log_file.write(f"Prior log: {resume_run.get('logPath', '')}\n")
-            if tool == "codex":
-                log_file.write(f"Codex SQLite state: {env.get('CODEX_SQLITE_HOME', '')}\n")
-            log_file.write(f"Prompt: {start_phrase}\n\n")
-            log_file.flush()
-
             if tool == "qwen":
                 formatter_script = str(Path(__file__).parent / "format_qwen_log.py")
                 process = subprocess.Popen(
@@ -4453,6 +4562,37 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             self.save_planner_chat({"messages": []})
             return {"messages": []}
 
+    def build_planner_chat_history(self, messages: list, max_chars: int = 3000) -> str:
+        """Build a concise history string from prior planner chat messages.
+
+        Returns a compact multi-line summary of completed owner/planner turns,
+        truncated to *max_chars* so the prompt stays within a reasonable budget.
+        Returns an empty string when there is no usable history.
+        """
+        lines: list[str] = []
+        total = 0
+        for msg in messages:
+            if not isinstance(msg, dict):
+                continue
+            role = msg.get("role")
+            if role == "owner":
+                text = str(msg.get("text") or "").strip()
+                if text:
+                    line = f"Owner: {text}"
+                    if total + len(line) > max_chars:
+                        break
+                    lines.append(line)
+                    total += len(line)
+            elif role == "planner" and msg.get("status") not in ("running",):
+                reply = str(msg.get("result") or "").strip()
+                if reply:
+                    line = f"Planner: {reply}"
+                    if total + len(line) > max_chars:
+                        break
+                    lines.append(line)
+                    total += len(line)
+        return "\n".join(lines)
+
     def build_planner_chat_phrase(self, message: str, backend_base_url: str) -> str:
         """First turn of a conversation: load the planner role and answer the owner."""
         return (
@@ -4494,6 +4634,12 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             phrase = message  # resumed session already holds the planner context
         else:
             phrase = self.build_planner_chat_phrase(message, backend_base_url)
+            history = self.build_planner_chat_history(data.get("messages", []))
+            if history:
+                phrase = phrase.replace(
+                    "Owner says:\n" + message,
+                    "Prior conversation history:\n" + history + "\n\nOwner now says:\n" + message,
+                )
 
         command_override = payload.get("command") if "command" in payload else None
         args = self.spawn_command_args(tool, command_override=command_override)
