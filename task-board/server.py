@@ -2388,10 +2388,17 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         text = compact_workflow_text(query, limit=100)
         if not text:
             return None
+        text = re.sub(r"^(?:(?:the|a|an|current|existing)\s+)+", "", text, flags=re.IGNORECASE).strip()
+        text = re.sub(r"\s+(?:agent|step|node)$", "", text, flags=re.IGNORECASE).strip()
         normalized_query = workflow_slug(text)
         aliases = {
+            "planner-agent": "planner",
             "planning": "planner",
             "planning-agent": "planner",
+            "researcher": "research",
+            "researcher-agent": "research",
+            "resort": "research",
+            "resort-agent": "research",
             "review": "reviewer",
             "review-agent": "reviewer",
             "reviewer-agent": "reviewer",
@@ -2480,6 +2487,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
     def clean_workflow_label(self, value: str, kind: str) -> str:
         label = compact_workflow_text(value.strip(" \"'`"), limit=80)
         label = re.sub(r"^(?:new|custom)\s+", "", label, flags=re.IGNORECASE).strip()
+        label = re.sub(r"\s+row$", "", label, flags=re.IGNORECASE).strip()
         label = re.sub(r"\s+(?:agent|step)$", "", label, flags=re.IGNORECASE).strip()
         if not label:
             label = kind
@@ -2487,15 +2495,58 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
 
     def workflow_extract_handoff_label(self, message: str) -> str:
         patterns = [
-            r"\bwith\s+(?:handoff\s+)?label\s+(.+)$",
-            r"\blabeled\s+(.+)$",
-            r"\bcalled\s+(.+)$",
+            r"\bwith\s+(?:handoff\s+)?label\s+(.+?)(?=[.;]|$)",
+            r"\blabeled\s+(?:for\s+)?(.+?)(?=[.;]|$)",
+            r"\bcalled\s+(.+?)(?=[.;]|$)",
         ]
         for pattern in patterns:
             match = re.search(pattern, message, re.IGNORECASE)
             if match:
                 return compact_workflow_text(match.group(1).strip(" .,:;\"'`"), limit=90)
         return "handoff"
+
+    def workflow_infer_handoff_label(self, message: str) -> str:
+        explicit_label = self.workflow_extract_handoff_label(message)
+        if explicit_label != "handoff":
+            return explicit_label
+        if re.search(r"\bresearch\s+brief\b", message, re.IGNORECASE):
+            return "research brief"
+        if re.search(r"\bhandoff\s+markdown\s+files?\b", message, re.IGNORECASE):
+            return "handoff markdown file"
+        if re.search(r"\bhandoff\s+files?\b", message, re.IGNORECASE):
+            return "handoff files"
+        if re.search(r"\bresearch\s+handoff\b", message, re.IGNORECASE):
+            return "research handoff"
+        return "handoff"
+
+    def workflow_add_edge_rule(self, workflow_map: dict, from_id: str, to_id: str, rule_text: str, title: str = "Handoff rule") -> bool:
+        text = compact_workflow_text(rule_text, limit=420)
+        if not text:
+            return False
+        edge = self.workflow_find_edge(workflow_map, from_id, to_id)
+        if not edge:
+            return False
+        rules = edge.setdefault("rules", [])
+        if any(isinstance(item, dict) and item.get("text") == text for item in rules):
+            return False
+        rules.append({
+            "id": workflow_slug(text[:48], "handoff-rule"),
+            "title": title,
+            "text": text,
+        })
+        return True
+
+    def workflow_maybe_add_handoff_file_rule(self, workflow_map: dict, from_id: str, to_id: str, message: str) -> bool:
+        if not re.search(r"\b(?:handoff\s+(?:markdown\s+)?files?|handoff\s+brief|research\s+brief)\b", message, re.IGNORECASE):
+            return False
+        if to_id == "planner":
+            if re.search(r"\bmarkdown\b", message, re.IGNORECASE):
+                rule_text = "Planner reads the handoff Markdown file before creating small claimable todo tasks."
+            else:
+                rule_text = "Planner reads the handoff file and turns useful findings into small claimable todo tasks."
+        else:
+            rule_text = "The receiving agent reads the handoff file before acting on downstream work."
+        return self.workflow_add_edge_rule(workflow_map, from_id, to_id, rule_text)
 
     def workflow_extract_rule_text(self, message: str) -> str:
         if ":" in message:
@@ -2521,7 +2572,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         target = self.workflow_find_node(workflow_map, match.group(2))
         if not source or not target:
             return False, "I could not find both ends of that handoff. Use existing node names like Planner, Worker, Reviewer, or a custom node name."
-        label = self.workflow_extract_handoff_label(message)
+        label = self.workflow_infer_handoff_label(message)
         changed = self.workflow_add_edge(workflow_map, source["id"], target["id"], label)
         verb = "Added" if changed else "Updated"
         return changed, f"{verb} handoff from {source['label']} to {target['label']} labeled \"{label}\"."
@@ -2602,7 +2653,9 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
     def workflow_apply_add_node(self, workflow_map: dict, message: str) -> tuple[bool, str] | None:
         if not re.search(r"\badd\b", message, re.IGNORECASE):
             return None
-        if re.search(r"\b(?:handoff|rules?)\b", message, re.IGNORECASE):
+        if re.search(r"\brules?\b", message, re.IGNORECASE):
+            return None
+        if re.search(r"\badd\s+(?:a|an|the\s+)?handoff\b", message, re.IGNORECASE):
             return None
 
         add_match = re.search(r"\badd\s+(?:(?:a|an|the)\s+)?(.+)$", message, re.IGNORECASE)
@@ -2616,20 +2669,33 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         elif re.match(r"agent\b", body, re.IGNORECASE):
             body = re.sub(r"^agent\b", "", body, flags=re.IGNORECASE).strip()
 
-        placement_split = re.split(r"\s+\b(?:after|before|between|with|that|to|for)\b", body, maxsplit=1, flags=re.IGNORECASE)
+        placement_split = re.split(r"\s+(?:after|before|above|below|between|in\s+front\s+of|ahead\s+of|upstream\s+of|with|that|to|for)\b", body, maxsplit=1, flags=re.IGNORECASE)
         label_seed = placement_split[0].strip()
         if re.search(r"\bstep$", label_seed, re.IGNORECASE):
             kind = "Step"
         elif re.search(r"\bagent$", label_seed, re.IGNORECASE):
             kind = "Agent"
         label = self.clean_workflow_label(label_seed, kind)
+        if workflow_slug(label) in {"researcher", "researcher-agent"}:
+            label = "Research"
         if not label:
             return False, "Tell me the name of the agent or step to add."
+        existing_node = self.workflow_find_node(workflow_map, label)
+        if existing_node:
+            return False, f"{existing_node['label']} already exists in the workflow map."
 
         node_id = self.unique_workflow_node_id(workflow_map, label)
         node_count = len(workflow_map.get("nodes", []))
         meta_match = re.search(r"\b(?:that|to|for)\s+(.+?)(?=\s+\bafter\b|\s+\bbefore\b|\s+\bwith\b|[.;]|$)", message, re.IGNORECASE)
-        meta = compact_workflow_text(meta_match.group(1), limit=220) if meta_match else f"Custom {kind.lower()} in the workflow."
+        if re.search(r"\bhandoff\s+(?:markdown\s+)?files?\b", message, re.IGNORECASE):
+            recipient = "Planner" if re.search(r"\bplanner\b", message, re.IGNORECASE) else "downstream agents"
+            if workflow_slug(label) == "research":
+                file_kind = "Markdown files" if re.search(r"\bmarkdown\b", message, re.IGNORECASE) else "files"
+                meta = f"Researches context and writes handoff {file_kind} for {recipient}."
+            else:
+                meta = f"Prepares handoff files for {recipient}."
+        else:
+            meta = compact_workflow_text(meta_match.group(1), limit=220) if meta_match else f"Custom {kind.lower()} in the workflow."
         node = {
             "id": node_id,
             "detailKey": node_id,
@@ -2643,10 +2709,10 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         }
         workflow_map.setdefault("nodes", []).append(node)
 
-        label_for_edge = self.workflow_extract_handoff_label(message)
-        between_match = re.search(r"\bbetween\s+(.+?)\s+\band\s+(.+?)(?=\s+\bwith\b|[.;]|$)", message, re.IGNORECASE)
-        after_match = re.search(r"\bafter\s+(.+?)(?=\s+\bwith\b|\s+\bthat\b|\s+\bto\b|\s+\bfor\b|[.;]|$)", message, re.IGNORECASE)
-        before_match = re.search(r"\bbefore\s+(.+?)(?=\s+\bwith\b|\s+\bthat\b|\s+\bto\b|\s+\bfor\b|[.;]|$)", message, re.IGNORECASE)
+        label_for_edge = self.workflow_infer_handoff_label(message)
+        between_match = re.search(r"\bbetween\s+(?:the\s+)?(.+?)\s+\band\s+(?:the\s+)?(.+?)(?=\s+\bwith\b|[.;,]|$)", message, re.IGNORECASE)
+        after_match = re.search(r"\b(?:after|below)\s+(?:the\s+)?(?:current\s+|existing\s+)?(.+?)(?=\s+\bwith\b|\s+\bthat\b|\s+\bto\b|\s+\bfor\b|\s+\band\b|[.;,]|$)", message, re.IGNORECASE)
+        before_match = re.search(r"\b(?:before|above|in\s+front\s+of|ahead\s+of|upstream\s+of)\s+(?:the\s+)?(?:current\s+|existing\s+)?(.+?)(?=\s+\bwith\b|\s+\bthat\b|\s+\bto\b|\s+\bfor\b|\s+\band\b|[.;,]|$)", message, re.IGNORECASE)
 
         if between_match:
             source = self.workflow_find_node(workflow_map, between_match.group(1))
@@ -2659,7 +2725,18 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             removed = self.workflow_remove_edges(workflow_map, lambda edge: edge.get("from") == source["id"] and edge.get("to") == target["id"])
             self.workflow_add_edge(workflow_map, source["id"], node_id, label_for_edge)
             self.workflow_add_edge(workflow_map, node_id, target["id"], str(removed[0].get("label") if removed else "handoff"))
+            self.workflow_maybe_add_handoff_file_rule(workflow_map, node_id, target["id"], message)
             return True, f"Added {label} between {source['label']} and {target['label']}."
+
+        prefer_before = before_match and (not after_match or before_match.start() > after_match.start())
+        if prefer_before:
+            target = self.workflow_find_node(workflow_map, before_match.group(1))
+            if not target:
+                workflow_map["nodes"].pop()
+                return False, "I could not find the node that should come after this new node."
+            self.workflow_add_node_before(workflow_map, node, target["id"], label_for_edge)
+            self.workflow_maybe_add_handoff_file_rule(workflow_map, node_id, target["id"], message)
+            return True, f"Added {label} before {target['label']}."
 
         if after_match:
             target = self.workflow_find_node(workflow_map, after_match.group(1))
@@ -2667,6 +2744,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 workflow_map["nodes"].pop()
                 return False, "I could not find the node that should come before this new node."
             self.workflow_add_node_after(workflow_map, node, target["id"], label_for_edge)
+            self.workflow_maybe_add_handoff_file_rule(workflow_map, target["id"], node_id, message)
             return True, f"Added {label} after {target['label']}."
 
         if before_match:
@@ -2675,6 +2753,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 workflow_map["nodes"].pop()
                 return False, "I could not find the node that should come after this new node."
             self.workflow_add_node_before(workflow_map, node, target["id"], label_for_edge)
+            self.workflow_maybe_add_handoff_file_rule(workflow_map, node_id, target["id"], message)
             return True, f"Added {label} before {target['label']}."
 
         workflow_map.setdefault("rows", []).append([node_id])
@@ -2690,6 +2769,8 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         if not text:
             return False, "Send a workflow map change first."
         lowered = text.lower()
+        if lowered in {"hi", "hello", "hey"} or re.search(r"\b(?:no|nothing|none)\b.*\b(?:workflow|map|change|update)\b", lowered) or "no map change" in lowered or "remain unchanged" in lowered:
+            return False, "No workflow-map update is needed."
         if "help" in lowered or lowered in {"examples", "example"}:
             return False, self.workflow_agent_help()
         if "reset" in lowered and "workflow" in lowered:
@@ -2699,15 +2780,40 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
 
         for handler in (
             self.workflow_apply_handoff_rule,
+            self.workflow_apply_add_node,
             self.workflow_apply_add_handoff,
             self.workflow_apply_rule,
             self.workflow_apply_remove_node,
-            self.workflow_apply_add_node,
         ):
             result = handler(workflow_map, text)
             if result is not None:
                 return result
         return False, self.workflow_agent_help()
+
+    def workflow_result_allows_interpretation_retry(self, reply: str) -> bool:
+        lowered = str(reply or "").lower()
+        if not lowered:
+            return True
+        if reply == self.workflow_agent_help():
+            return True
+        return any(fragment in lowered for fragment in (
+            "could not find",
+            "already exists",
+            "tell me",
+            "name the",
+            "send a workflow",
+            "left it in place",
+        ))
+
+    def workflow_apply_interpreted_message(self, workflow_map: dict, owner_message: str, model_reply: str = "") -> tuple[bool, str]:
+        changed, reply = self.workflow_apply_message(workflow_map, owner_message)
+        clean_reply = compact_workflow_text(model_reply, limit=1000)
+        if changed or not clean_reply or not self.workflow_result_allows_interpretation_retry(reply):
+            return changed, reply
+        interpreted_changed, interpreted_reply = self.workflow_apply_message(workflow_map, clean_reply)
+        if interpreted_changed or not self.workflow_result_allows_interpretation_retry(interpreted_reply):
+            return interpreted_changed, interpreted_reply
+        return changed, reply
 
     WORKFLOW_AGENT_OUTPUT_MARKER = "===WORKFLOW-AGENT-OUTPUT==="
 
@@ -2755,6 +2861,13 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 reply = str(parsed.get("result") or "").strip()
                 if reply:
                     return self._extract_clean_reply(reply) or reply[:3000]
+        if tool == "codex" and raw:
+            codex_matches = list(re.finditer(r"(?:^|\n)codex\s*\n", raw, re.IGNORECASE))
+            if codex_matches:
+                tail = raw[codex_matches[-1].end():].strip()
+                tail = re.split(r"\ntokens used\b", tail, maxsplit=1, flags=re.IGNORECASE)[0].strip()
+                if tail:
+                    return tail[:3000]
         clean = self._extract_clean_reply(raw)
         if clean:
             return clean[:3000]
@@ -2777,6 +2890,10 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 continue
             if role != "workflow-agent":
                 continue
+            diagnostics = self.read_workflow_agent_output(str(message.get("logPath") or ""))
+            err_diagnostics = self.read_text_tail(str(message.get("errPath") or ""), limit=3000)
+            if err_diagnostics:
+                diagnostics = f"{diagnostics}\n\n[stderr]\n{err_diagnostics}".strip()
             public = {
                 "id": message.get("id", ""),
                 "role": "workflow-agent",
@@ -2785,6 +2902,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 "changed": bool(message.get("changed")),
                 "result": message.get("result", ""),
                 "modelReply": message.get("modelReply", ""),
+                "diagnostics": diagnostics,
                 "createdAt": message.get("createdAt", ""),
                 "spawnedAt": message.get("spawnedAt", ""),
                 "finishedAt": message.get("finishedAt", ""),
@@ -2932,7 +3050,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             try:
                 with WORKFLOW_MAP_LOCK:
                     workflow_map = self.load_workflow_map()
-                    changed, reply = self.workflow_apply_message(workflow_map, owner_message)
+                    changed, reply = self.workflow_apply_interpreted_message(workflow_map, owner_message, model_reply)
                     if changed:
                         self.persist_workflow_map(workflow_map)
                 target["status"] = "done"
@@ -2979,7 +3097,11 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 if model_reply:
                     with WORKFLOW_MAP_LOCK:
                         workflow_map = self.load_workflow_map()
-                        applied, reply = self.workflow_apply_message(workflow_map, str(message.get("ownerMessage") or ""))
+                        applied, reply = self.workflow_apply_interpreted_message(
+                            workflow_map,
+                            str(message.get("ownerMessage") or ""),
+                            model_reply,
+                        )
                         if applied:
                             self.persist_workflow_map(workflow_map)
                     message["status"] = "done"
@@ -5439,9 +5561,13 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "permission_mode:", "session_id:",
             "cost:", "duration:", "input_tokens:", "output_tokens:",
             "--- Process exit status ---", "qwen:", "formatter:",
-            "warning:", "warnings:",
+            "warning:", "warnings:", "OpenAI Codex", "Reading additional input",
+            "workdir:", "provider:", "approval:", "sandbox:", "reasoning",
+            "session id", "tokens used",
         )
         if any(stripped.startswith(p) for p in noise_prefixes):
+            return True
+        if stripped in {"user", "assistant", "codex"}:
             return True
         lower = stripped.lower()
         if any(kw in lower for kw in (

@@ -1240,14 +1240,43 @@
       color: #a0473f;
     }
 
-    .workflow-agent-model-reply {
+    .workflow-agent-result {
       display: block;
+    }
+
+    .workflow-agent-diagnostics-toggle {
+      display: inline-block;
       margin-top: 8px;
-      padding-top: 8px;
-      border-top: 1px solid var(--line);
+      padding: 2px 8px;
+      font-size: 11px;
       color: var(--muted);
-      font-size: 12px;
+      background: none;
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      cursor: pointer;
+      font-family: var(--app-font, inherit);
+    }
+    .workflow-agent-diagnostics-toggle:hover {
+      background: var(--line);
+      color: var(--text);
+    }
+
+    .workflow-agent-diagnostics {
+      display: none;
+      margin-top: 8px;
+      max-height: 300px;
+      overflow: auto;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
+    .workflow-agent-diagnostics.is-open { display: block; }
+    .workflow-agent-diagnostics pre {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 11px;
       white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      margin: 0;
+      opacity: 0.8;
     }
 
     .workflow-agent-form {
@@ -5532,6 +5561,26 @@
       return workflowEl.querySelector("[data-workflow-agent-tool]");
     }
 
+    function workflowAgentDiagnosticsText(message, statusLabel, mapLabel, toolLabel) {
+      const parts = [
+        `Status: ${statusLabel}`,
+        `Model: ${toolLabel}`,
+        `Map: ${mapLabel}`
+      ];
+      if (message.processId) parts.push(`PID: ${message.processId}`);
+      if (message.processState) parts.push(`Process state: ${message.processState}`);
+      if (message.exitCode !== undefined && message.exitCode !== null && String(message.exitCode) !== "") {
+        parts.push(`Exit code: ${message.exitCode}`);
+      }
+      if (message.modelReply) {
+        parts.push(`Model reply:\n${message.modelReply}`);
+      }
+      if (message.diagnostics) {
+        parts.push(`Raw output:\n${message.diagnostics}`);
+      }
+      return parts.filter(Boolean).join("\n\n");
+    }
+
     function syncWorkflowAgentModelControl(options = {}) {
       const control = workflowAgentToolEl();
       if (!control) return;
@@ -5586,19 +5635,18 @@
       const result = running
         ? "Working on the workflow map update..."
         : String(message.result || message.text || "").trim() || "Done.";
-      const modelReply = !running && message.modelReply
-        ? `<span class="workflow-agent-model-reply">${escapeText(message.modelReply)}</span>`
+      const metaHtml = running || terminated
+        ? `<span class="workflow-agent-meta"><span class="workflow-agent-status ${running ? "is-running" : terminated ? "is-terminated" : ""}">${escapeText(statusLabel)}</span>${running && toolLabel ? `<span>${escapeText(toolLabel)}</span>` : ""}</span>`
+        : "";
+      const diagnosticsText = !running ? workflowAgentDiagnosticsText(message, statusLabel, mapLabel, toolLabel) : "";
+      const diagnosticsHtml = diagnosticsText
+        ? `<button class="workflow-agent-diagnostics-toggle" type="button" data-workflow-agent-diagnostics-toggle>Show diagnostics</button><div class="workflow-agent-diagnostics"><pre>${escapeText(diagnosticsText)}</pre></div>`
         : "";
       return `
         <div class="workflow-agent-msg agent">
-          <span class="workflow-agent-meta">
-            <span class="workflow-agent-status ${running ? "is-running" : terminated ? "is-terminated" : ""}">${escapeText(statusLabel)}</span>
-            <span>${escapeText(toolLabel)}</span>
-            <span>${escapeText(mapLabel)}</span>
-            ${message.processId ? `<span>PID ${escapeText(message.processId)}</span>` : ""}
-          </span>
-          ${escapeText(result)}
-          ${modelReply}
+          ${metaHtml}
+          <span class="workflow-agent-result">${escapeText(result)}</span>
+          ${diagnosticsHtml}
         </div>
       `;
     }
@@ -7698,6 +7746,16 @@
     }
 
     workflowEl.addEventListener("click", (event) => {
+      const workflowDiagnosticsToggle = event.target.closest("[data-workflow-agent-diagnostics-toggle]");
+      if (workflowDiagnosticsToggle) {
+        const diagEl = workflowDiagnosticsToggle.parentElement.querySelector(".workflow-agent-diagnostics");
+        if (diagEl) {
+          const isOpen = diagEl.classList.toggle("is-open");
+          workflowDiagnosticsToggle.textContent = isOpen ? "Hide diagnostics" : "Show diagnostics";
+        }
+        return;
+      }
+
       const workflowChatClearButton = event.target.closest("[data-workflow-chat-clear]");
       if (workflowChatClearButton) {
         clearWorkflowAgentChat();
