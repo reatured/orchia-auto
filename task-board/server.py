@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import copy
 import os
 import re
 import secrets
@@ -81,6 +82,9 @@ VIEWER_LOG_PATH = ROOT / "task-board-viewer.log"
 SPAWN_LOG_DIR = ROOT / "spawned-agent-logs"
 CODEX_SQLITE_STATE_DIR = ROOT / "codex-sqlite-state"
 DISPATCH_SETTINGS_PATH = ROOT / "agent-dispatch-settings.json"
+WORKFLOW_MAP_PATH = ROOT / "workflow-map.json"
+WORKFLOW_AGENT_CHAT_DIR = ROOT / "workflow-agent-chat"
+WORKFLOW_AGENT_CHAT_SESSION_PATH = WORKFLOW_AGENT_CHAT_DIR / "session.json"
 PLANNER_CHAT_DIR = ROOT / "planner-chat"
 PLANNER_CHAT_SESSION_PATH = PLANNER_CHAT_DIR / "session.json"
 PLANNER_CHAT_LOG_DIR = PLANNER_CHAT_DIR / "logs"
@@ -92,6 +96,8 @@ API_LOG_LOCK = threading.Lock()
 VIEWER_LOG_LOCK = threading.Lock()
 ACTIVE_AGENTS_LOCK = threading.Lock()
 DISPATCH_SETTINGS_LOCK = threading.Lock()
+WORKFLOW_MAP_LOCK = threading.RLock()
+WORKFLOW_AGENT_CHAT_LOCK = threading.Lock()
 PLANNER_CHAT_LOCK = threading.Lock()
 AGENT_LOG_STATE_CACHE_LOCK = threading.Lock()
 AGENT_LOG_STATE_BUILD_LOCK = threading.Lock()
@@ -124,6 +130,7 @@ GET_ACTIONS = {
     "/api/pause": "get_pause_status",
     "/api/pause-status": "get_pause_status",
     "/api/planner-chat": "planner_chat_poll",
+    "/api/workflow-map": "get_workflow_map",
     "/api/next-worker-task": "next_worker_task",
     "/api/next-review-task": "next_review_task",
     "/api/system-status": "get_system_status",
@@ -143,6 +150,8 @@ VIEWER_GET_ACTIONS = {
     "/viewer/pause": "get_pause_status",
     "/viewer/pause-status": "get_pause_status",
     "/viewer/planner-chat": "planner_chat_poll",
+    "/viewer/workflow-map": "get_workflow_map",
+    "/viewer/workflow-chat": "workflow_chat_poll",
     "/viewer/system-status": "get_system_status",
 }
 POST_ACTIONS = {
@@ -204,6 +213,9 @@ VIEWER_POST_ACTIONS = {
     "/viewer/resume-now": "resume_now",
     "/viewer/planner-chat-send": "planner_chat_send",
     "/viewer/planner-chat-clear": "planner_chat_clear",
+    "/viewer/workflow-chat-send": "workflow_chat_send",
+    "/viewer/workflow-chat-clear": "workflow_chat_clear",
+    "/viewer/workflow-map-reset": "workflow_map_reset",
 }
 SPAWNABLE_AGENT_ROLES = {"worker", "review"}
 SPAWNABLE_TOOLS = {"claude", "codex", "qwen"}
@@ -332,6 +344,82 @@ def default_dispatch_settings() -> dict:
         "pausedRuns": [],
         "pendingSpawns": [],
     }
+
+
+def default_workflow_map() -> dict:
+    return {
+        "version": 1,
+        "updatedAt": "",
+        "nodes": [
+            {
+                "id": "planner",
+                "detailKey": "planning-agent",
+                "kind": "Agent",
+                "label": "Planner",
+                "color": "#476f8f",
+                "meta": "Turns requirements into todo cards.",
+                "acceptsHumanInput": True,
+                "locked": True,
+                "rules": [],
+            },
+            {
+                "id": "worker",
+                "detailKey": "worker-agent",
+                "kind": "Agent",
+                "label": "Worker",
+                "color": "var(--claimed)",
+                "meta": "Claims todo work, implements it, and requests review.",
+                "locked": True,
+                "rules": [],
+            },
+            {
+                "id": "reviewer",
+                "detailKey": "review-agent",
+                "kind": "Agent",
+                "label": "Reviewer",
+                "color": "#7f6cae",
+                "meta": "Claims review work, validates it, and decides outcome.",
+                "locked": True,
+                "rules": [],
+            },
+        ],
+        "rows": [
+            ["planner"],
+            ["worker"],
+            ["reviewer"],
+        ],
+        "edges": [
+            {"from": "planner", "to": "worker", "label": "todo tickets"},
+            {"from": "worker", "to": "reviewer", "label": "inspection targets + review request"},
+        ],
+        "globalRules": [
+            {
+                "id": "core-source-of-truth",
+                "title": "Source of truth",
+                "text": "Workflow map edits describe the coordination model. Task movement still happens through board.json and the task-board API.",
+            }
+        ],
+    }
+
+
+def workflow_slug(value: object, fallback: str = "workflow-node") -> str:
+    text = str(value or "").strip().lower()
+    text = re.sub(r"[^a-z0-9]+", "-", text).strip("-")
+    return text or fallback
+
+
+def compact_workflow_text(value: object, limit: int = 220) -> str:
+    text = re.sub(r"\s+", " ", str(value or "").strip())
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 1)].rstrip() + "..."
+
+
+def workflow_color_for_kind(kind: str, index: int = 0) -> str:
+    if kind.lower() == "step":
+        return "#8c6f40"
+    palette = ["#476f8f", "#0f766e", "#8a6f22", "#7f6cae", "#b35c1e", "#2f855a"]
+    return palette[index % len(palette)]
 
 
 def normalize_dispatch_model(value: object, fallback: str = DEFAULT_DISPATCH_MODEL) -> str:
@@ -2102,6 +2190,587 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
 
     def get_dispatch_settings(self, board: dict, payload: dict) -> dict:
         return load_dispatch_settings()
+
+    def clone_default_workflow_map(self) -> dict:
+        return copy.deepcopy(default_workflow_map())
+
+    def normalize_workflow_rule(self, rule: object, index: int = 0) -> dict | None:
+        if isinstance(rule, str):
+            text = compact_workflow_text(rule, limit=420)
+            if not text:
+                return None
+            return {
+                "id": workflow_slug(text[:40], f"rule-{index + 1}"),
+                "title": "Rule",
+                "text": text,
+            }
+        if not isinstance(rule, dict):
+            return None
+        text = compact_workflow_text(rule.get("text") or rule.get("summary") or rule.get("rule"), limit=420)
+        if not text:
+            return None
+        title = compact_workflow_text(rule.get("title") or "Rule", limit=80)
+        return {
+            "id": workflow_slug(rule.get("id") or title or text[:40], f"rule-{index + 1}"),
+            "title": title or "Rule",
+            "text": text,
+        }
+
+    def normalize_workflow_node(self, node: object, index: int = 0) -> dict | None:
+        if not isinstance(node, dict):
+            return None
+        label = compact_workflow_text(node.get("label") or node.get("title") or node.get("id"), limit=80)
+        if not label:
+            return None
+        node_id = workflow_slug(node.get("id") or label)
+        kind = compact_workflow_text(node.get("kind") or "Agent", limit=40) or "Agent"
+        color = compact_workflow_text(node.get("color") or workflow_color_for_kind(kind, index), limit=40)
+        rules = []
+        raw_rules = node.get("rules")
+        if isinstance(raw_rules, list):
+            for rule_index, raw_rule in enumerate(raw_rules):
+                rule = self.normalize_workflow_rule(raw_rule, rule_index)
+                if rule:
+                    rules.append(rule)
+        return {
+            "id": node_id,
+            "detailKey": compact_workflow_text(node.get("detailKey") or node_id, limit=80),
+            "kind": kind,
+            "label": label,
+            "color": color or workflow_color_for_kind(kind, index),
+            "meta": compact_workflow_text(node.get("meta") or node.get("summary") or f"Custom {kind.lower()} in the workflow.", limit=220),
+            "acceptsHumanInput": bool(node.get("acceptsHumanInput")),
+            "locked": bool(node.get("locked")),
+            "rules": rules,
+        }
+
+    def unique_workflow_node_id(self, workflow_map: dict, desired: str) -> str:
+        existing = {
+            str(node.get("id") or "").strip()
+            for node in workflow_map.get("nodes", [])
+            if isinstance(node, dict)
+        }
+        base = workflow_slug(desired)
+        if base not in existing:
+            return base
+        index = 2
+        while f"{base}-{index}" in existing:
+            index += 1
+        return f"{base}-{index}"
+
+    def normalize_workflow_map(self, data: object) -> dict:
+        defaults = self.clone_default_workflow_map()
+        source = data if isinstance(data, dict) else {}
+        normalized = {
+            "version": int(source.get("version") or defaults["version"]) if isinstance(source, dict) else 1,
+            "updatedAt": compact_workflow_text(source.get("updatedAt") if isinstance(source, dict) else "", limit=80),
+            "nodes": [],
+            "rows": [],
+            "edges": [],
+            "globalRules": [],
+        }
+
+        node_by_id: dict[str, dict] = {}
+        raw_nodes = source.get("nodes") if isinstance(source.get("nodes"), list) else defaults["nodes"]
+        for index, raw_node in enumerate(raw_nodes):
+            node = self.normalize_workflow_node(raw_node, index)
+            if not node:
+                continue
+            if node["id"] in node_by_id:
+                node["id"] = self.unique_workflow_node_id({"nodes": normalized["nodes"]}, node["id"])
+                node["detailKey"] = node["id"]
+            node_by_id[node["id"]] = node
+            normalized["nodes"].append(node)
+
+        default_node_by_id = {
+            node["id"]: self.normalize_workflow_node(node, index)
+            for index, node in enumerate(defaults["nodes"])
+        }
+        for default_id in ("planner", "worker", "reviewer"):
+            if default_id not in node_by_id and default_node_by_id.get(default_id):
+                normalized["nodes"].insert(len([n for n in normalized["nodes"] if n.get("locked")]), default_node_by_id[default_id])
+                node_by_id[default_id] = default_node_by_id[default_id]
+
+        raw_rows = source.get("rows") if isinstance(source.get("rows"), list) else defaults["rows"]
+        seen_in_rows: set[str] = set()
+        for raw_row in raw_rows:
+            raw_ids = raw_row if isinstance(raw_row, list) else [raw_row]
+            row = []
+            for raw_id in raw_ids:
+                node_id = workflow_slug(raw_id)
+                if node_id in node_by_id and node_id not in seen_in_rows:
+                    row.append(node_id)
+                    seen_in_rows.add(node_id)
+            if row:
+                normalized["rows"].append(row)
+        for node in normalized["nodes"]:
+            node_id = node["id"]
+            if node_id not in seen_in_rows:
+                normalized["rows"].append([node_id])
+
+        raw_edges = source.get("edges") if isinstance(source.get("edges"), list) else defaults["edges"]
+        seen_edges: set[tuple[str, str]] = set()
+        for raw_edge in raw_edges:
+            if not isinstance(raw_edge, dict):
+                continue
+            from_id = workflow_slug(raw_edge.get("from"))
+            to_id = workflow_slug(raw_edge.get("to"))
+            if from_id not in node_by_id or to_id not in node_by_id or from_id == to_id:
+                continue
+            edge_key = (from_id, to_id)
+            if edge_key in seen_edges:
+                continue
+            seen_edges.add(edge_key)
+            normalized["edges"].append({
+                "from": from_id,
+                "to": to_id,
+                "label": compact_workflow_text(raw_edge.get("label") or "handoff", limit=90),
+                "rules": [
+                    rule for idx, rule in enumerate(
+                        self.normalize_workflow_rule(raw_rule, idx)
+                        for idx, raw_rule in enumerate(raw_edge.get("rules") if isinstance(raw_edge.get("rules"), list) else [])
+                    ) if rule
+                ],
+            })
+        if not normalized["edges"]:
+            normalized["edges"] = copy.deepcopy(defaults["edges"])
+
+        raw_global_rules = source.get("globalRules") if isinstance(source.get("globalRules"), list) else defaults["globalRules"]
+        for index, raw_rule in enumerate(raw_global_rules):
+            rule = self.normalize_workflow_rule(raw_rule, index)
+            if rule:
+                normalized["globalRules"].append(rule)
+
+        return normalized
+
+    def load_workflow_map(self) -> dict:
+        try:
+            data = json.loads(WORKFLOW_MAP_PATH.read_text(encoding="utf-8-sig"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            data = self.clone_default_workflow_map()
+        return self.normalize_workflow_map(data)
+
+    def persist_workflow_map(self, workflow_map: dict) -> None:
+        normalized = self.normalize_workflow_map(workflow_map)
+        normalized["updatedAt"] = now_iso()
+        try:
+            with WORKFLOW_MAP_LOCK:
+                temp_path = WORKFLOW_MAP_PATH.with_suffix(".json.tmp")
+                temp_path.write_text(json.dumps(normalized, indent=2) + "\n", encoding="utf-8")
+                os.replace(temp_path, WORKFLOW_MAP_PATH)
+        except Exception as error:
+            raise RuntimeError(f"Unable to persist workflow map: {error}") from error
+
+    def get_workflow_map(self, board: dict, payload: dict) -> dict:
+        del board, payload
+        with WORKFLOW_MAP_LOCK:
+            return self.load_workflow_map()
+
+    def workflow_node_by_id(self, workflow_map: dict) -> dict[str, dict]:
+        return {
+            str(node.get("id") or "").strip(): node
+            for node in workflow_map.get("nodes", [])
+            if isinstance(node, dict) and str(node.get("id") or "").strip()
+        }
+
+    def workflow_find_node(self, workflow_map: dict, query: object) -> dict | None:
+        text = compact_workflow_text(query, limit=100)
+        if not text:
+            return None
+        normalized_query = workflow_slug(text)
+        aliases = {
+            "planning": "planner",
+            "planning-agent": "planner",
+            "review": "reviewer",
+            "review-agent": "reviewer",
+            "reviewer-agent": "reviewer",
+            "worker-agent": "worker",
+        }
+        normalized_query = aliases.get(normalized_query, normalized_query)
+        for node in workflow_map.get("nodes", []):
+            if not isinstance(node, dict):
+                continue
+            candidates = {
+                workflow_slug(node.get("id")),
+                workflow_slug(node.get("detailKey")),
+                workflow_slug(node.get("label")),
+            }
+            if normalized_query in candidates:
+                return node
+        for node in workflow_map.get("nodes", []):
+            if not isinstance(node, dict):
+                continue
+            label = workflow_slug(node.get("label"))
+            if normalized_query and (normalized_query in label or label in normalized_query):
+                return node
+        return None
+
+    def workflow_row_index(self, workflow_map: dict, node_id: str) -> int:
+        for index, row in enumerate(workflow_map.get("rows", [])):
+            if isinstance(row, list) and node_id in row:
+                return index
+        return -1
+
+    def workflow_add_edge(self, workflow_map: dict, from_id: str, to_id: str, label: str = "handoff") -> bool:
+        if not from_id or not to_id or from_id == to_id:
+            return False
+        next_label = compact_workflow_text(label or "handoff", limit=90) or "handoff"
+        for edge in workflow_map.get("edges", []):
+            if isinstance(edge, dict) and edge.get("from") == from_id and edge.get("to") == to_id:
+                previous_label = str(edge.get("label") or "").strip()
+                edge["label"] = next_label
+                return previous_label != next_label
+        workflow_map.setdefault("edges", []).append({
+            "from": from_id,
+            "to": to_id,
+            "label": next_label,
+            "rules": [],
+        })
+        return True
+
+    def workflow_find_edge(self, workflow_map: dict, from_id: str, to_id: str) -> dict | None:
+        for edge in workflow_map.get("edges", []):
+            if isinstance(edge, dict) and edge.get("from") == from_id and edge.get("to") == to_id:
+                return edge
+        return None
+
+    def workflow_remove_edges(self, workflow_map: dict, predicate) -> list[dict]:
+        removed = []
+        remaining = []
+        for edge in workflow_map.get("edges", []):
+            if isinstance(edge, dict) and predicate(edge):
+                removed.append(edge)
+            else:
+                remaining.append(edge)
+        workflow_map["edges"] = remaining
+        return removed
+
+    def workflow_insert_row(self, workflow_map: dict, node_id: str, index: int) -> None:
+        rows = workflow_map.setdefault("rows", [])
+        clamped = max(0, min(index, len(rows)))
+        rows.insert(clamped, [node_id])
+
+    def workflow_add_node_after(self, workflow_map: dict, node: dict, target_id: str, label: str) -> None:
+        target_row = self.workflow_row_index(workflow_map, target_id)
+        self.workflow_insert_row(workflow_map, node["id"], target_row + 1 if target_row >= 0 else len(workflow_map.get("rows", [])))
+        outgoing = self.workflow_remove_edges(workflow_map, lambda edge: edge.get("from") == target_id)
+        self.workflow_add_edge(workflow_map, target_id, node["id"], label or "handoff")
+        for edge in outgoing:
+            self.workflow_add_edge(workflow_map, node["id"], str(edge.get("to") or ""), str(edge.get("label") or "handoff"))
+
+    def workflow_add_node_before(self, workflow_map: dict, node: dict, target_id: str, label: str) -> None:
+        target_row = self.workflow_row_index(workflow_map, target_id)
+        self.workflow_insert_row(workflow_map, node["id"], target_row if target_row >= 0 else 0)
+        incoming = self.workflow_remove_edges(workflow_map, lambda edge: edge.get("to") == target_id)
+        for edge in incoming:
+            self.workflow_add_edge(workflow_map, str(edge.get("from") or ""), node["id"], str(edge.get("label") or "handoff"))
+        self.workflow_add_edge(workflow_map, node["id"], target_id, label or "handoff")
+
+    def clean_workflow_label(self, value: str, kind: str) -> str:
+        label = compact_workflow_text(value.strip(" \"'`"), limit=80)
+        label = re.sub(r"^(?:new|custom)\s+", "", label, flags=re.IGNORECASE).strip()
+        label = re.sub(r"\s+(?:agent|step)$", "", label, flags=re.IGNORECASE).strip()
+        if not label:
+            label = kind
+        return label[:1].upper() + label[1:]
+
+    def workflow_extract_handoff_label(self, message: str) -> str:
+        patterns = [
+            r"\bwith\s+(?:handoff\s+)?label\s+(.+)$",
+            r"\blabeled\s+(.+)$",
+            r"\bcalled\s+(.+)$",
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, message, re.IGNORECASE)
+            if match:
+                return compact_workflow_text(match.group(1).strip(" .,:;\"'`"), limit=90)
+        return "handoff"
+
+    def workflow_extract_rule_text(self, message: str) -> str:
+        if ":" in message:
+            return compact_workflow_text(message.split(":", 1)[1], limit=420)
+        match = re.search(r"\b(?:that|to|must|should)\s+(.+)$", message, re.IGNORECASE)
+        if match:
+            return compact_workflow_text(match.group(1), limit=420)
+        return ""
+
+    def workflow_agent_help(self) -> str:
+        return (
+            "Try: add research agent after Planner; add audit step before Reviewer; "
+            "add handoff from Research to Worker with label research brief; "
+            "update rules for Reviewer: require BrowserOS visual testing; "
+            "add global rule: Workers include inspection targets; reset workflow map."
+        )
+
+    def workflow_apply_add_handoff(self, workflow_map: dict, message: str) -> tuple[bool, str] | None:
+        match = re.search(r"\bhandoff\b.*?\bfrom\s+(.+?)\s+\bto\s+(.+?)(?=\s+\bwith\b|\s+\blabeled\b|\s+\bcalled\b|[.;]|$)", message, re.IGNORECASE)
+        if not match:
+            return None
+        source = self.workflow_find_node(workflow_map, match.group(1))
+        target = self.workflow_find_node(workflow_map, match.group(2))
+        if not source or not target:
+            return False, "I could not find both ends of that handoff. Use existing node names like Planner, Worker, Reviewer, or a custom node name."
+        label = self.workflow_extract_handoff_label(message)
+        changed = self.workflow_add_edge(workflow_map, source["id"], target["id"], label)
+        verb = "Added" if changed else "Updated"
+        return changed, f"{verb} handoff from {source['label']} to {target['label']} labeled \"{label}\"."
+
+    def workflow_apply_handoff_rule(self, workflow_map: dict, message: str) -> tuple[bool, str] | None:
+        if not re.search(r"\bhandoff\b.*\brules?\b", message, re.IGNORECASE):
+            return None
+        match = re.search(r"\bfrom\s+(.+?)\s+\bto\s+(.+?)(?=[:,;]|\s+\bwith\b|\s+\bthat\b|\s+\bmust\b|\s+\bshould\b|$)", message, re.IGNORECASE)
+        if not match:
+            return False, "Name the handoff endpoints, for example: add handoff rule from Worker to Reviewer: include inspection targets."
+        source = self.workflow_find_node(workflow_map, match.group(1))
+        target = self.workflow_find_node(workflow_map, match.group(2))
+        if not source or not target:
+            return False, "I could not find both ends of that handoff rule."
+        rule_text = self.workflow_extract_rule_text(message)
+        if not rule_text:
+            return False, "Tell me the handoff rule after a colon."
+        edge = self.workflow_find_edge(workflow_map, source["id"], target["id"])
+        if not edge:
+            self.workflow_add_edge(workflow_map, source["id"], target["id"], "handoff")
+            edge = self.workflow_find_edge(workflow_map, source["id"], target["id"])
+        if not edge:
+            return False, "I could not update that handoff rule."
+        rules = edge.setdefault("rules", [])
+        if not any(isinstance(item, dict) and item.get("text") == rule_text for item in rules):
+            rules.append({
+                "id": workflow_slug(rule_text[:48], "handoff-rule"),
+                "title": "Handoff rule",
+                "text": rule_text,
+            })
+        return True, f"Updated handoff rules from {source['label']} to {target['label']}."
+
+    def workflow_apply_rule(self, workflow_map: dict, message: str) -> tuple[bool, str] | None:
+        if not re.search(r"\brules?\b", message, re.IGNORECASE):
+            return None
+        rule_text = self.workflow_extract_rule_text(message)
+        if not rule_text:
+            return False, "Tell me the rule after a colon, for example: update rules for Reviewer: require BrowserOS visual testing."
+
+        target_match = re.search(r"\brules?\s+(?:for|to|on)\s+(.+?)(?=[:,;]|\s+\bthat\b|\s+\bto\b|\s+\bmust\b|\s+\bshould\b|$)", message, re.IGNORECASE)
+        node = self.workflow_find_node(workflow_map, target_match.group(1)) if target_match else None
+        rule = {
+            "id": workflow_slug(rule_text[:48], "workflow-rule"),
+            "title": "Workflow rule",
+            "text": rule_text,
+        }
+        if node:
+            existing = node.setdefault("rules", [])
+            if not any(isinstance(item, dict) and item.get("text") == rule_text for item in existing):
+                existing.append(rule)
+            return True, f"Updated rules for {node['label']}."
+
+        existing_global = workflow_map.setdefault("globalRules", [])
+        if not any(isinstance(item, dict) and item.get("text") == rule_text for item in existing_global):
+            existing_global.append(rule)
+        return True, "Added a global workflow rule."
+
+    def workflow_apply_remove_node(self, workflow_map: dict, message: str) -> tuple[bool, str] | None:
+        match = re.search(r"\b(?:remove|delete)\s+(?:the\s+)?(?:agent|step|node)?\s*(.+)$", message, re.IGNORECASE)
+        if not match:
+            return None
+        node = self.workflow_find_node(workflow_map, match.group(1).strip(" .,:;"))
+        if not node:
+            return False, "I could not find that workflow node."
+        if node.get("locked"):
+            return False, f"{node['label']} is a locked core node, so I left it in place."
+        node_id = node["id"]
+        workflow_map["nodes"] = [item for item in workflow_map.get("nodes", []) if not (isinstance(item, dict) and item.get("id") == node_id)]
+        workflow_map["rows"] = [
+            [item for item in row if item != node_id]
+            for row in workflow_map.get("rows", [])
+            if isinstance(row, list)
+        ]
+        workflow_map["rows"] = [row for row in workflow_map["rows"] if row]
+        self.workflow_remove_edges(workflow_map, lambda edge: edge.get("from") == node_id or edge.get("to") == node_id)
+        return True, f"Removed {node['label']} and its handoffs."
+
+    def workflow_apply_add_node(self, workflow_map: dict, message: str) -> tuple[bool, str] | None:
+        if not re.search(r"\badd\b", message, re.IGNORECASE):
+            return None
+        if re.search(r"\b(?:handoff|rules?)\b", message, re.IGNORECASE):
+            return None
+
+        add_match = re.search(r"\badd\s+(?:(?:a|an|the)\s+)?(.+)$", message, re.IGNORECASE)
+        if not add_match:
+            return None
+        body = add_match.group(1).strip()
+        kind = "Agent"
+        if re.match(r"step\b", body, re.IGNORECASE):
+            kind = "Step"
+            body = re.sub(r"^step\b", "", body, flags=re.IGNORECASE).strip()
+        elif re.match(r"agent\b", body, re.IGNORECASE):
+            body = re.sub(r"^agent\b", "", body, flags=re.IGNORECASE).strip()
+
+        placement_split = re.split(r"\s+\b(?:after|before|between|with|that|to|for)\b", body, maxsplit=1, flags=re.IGNORECASE)
+        label_seed = placement_split[0].strip()
+        if re.search(r"\bstep$", label_seed, re.IGNORECASE):
+            kind = "Step"
+        elif re.search(r"\bagent$", label_seed, re.IGNORECASE):
+            kind = "Agent"
+        label = self.clean_workflow_label(label_seed, kind)
+        if not label:
+            return False, "Tell me the name of the agent or step to add."
+
+        node_id = self.unique_workflow_node_id(workflow_map, label)
+        node_count = len(workflow_map.get("nodes", []))
+        meta_match = re.search(r"\b(?:that|to|for)\s+(.+?)(?=\s+\bafter\b|\s+\bbefore\b|\s+\bwith\b|[.;]|$)", message, re.IGNORECASE)
+        meta = compact_workflow_text(meta_match.group(1), limit=220) if meta_match else f"Custom {kind.lower()} in the workflow."
+        node = {
+            "id": node_id,
+            "detailKey": node_id,
+            "kind": kind,
+            "label": label,
+            "color": workflow_color_for_kind(kind, node_count),
+            "meta": meta,
+            "acceptsHumanInput": False,
+            "locked": False,
+            "rules": [],
+        }
+        workflow_map.setdefault("nodes", []).append(node)
+
+        label_for_edge = self.workflow_extract_handoff_label(message)
+        between_match = re.search(r"\bbetween\s+(.+?)\s+\band\s+(.+?)(?=\s+\bwith\b|[.;]|$)", message, re.IGNORECASE)
+        after_match = re.search(r"\bafter\s+(.+?)(?=\s+\bwith\b|\s+\bthat\b|\s+\bto\b|\s+\bfor\b|[.;]|$)", message, re.IGNORECASE)
+        before_match = re.search(r"\bbefore\s+(.+?)(?=\s+\bwith\b|\s+\bthat\b|\s+\bto\b|\s+\bfor\b|[.;]|$)", message, re.IGNORECASE)
+
+        if between_match:
+            source = self.workflow_find_node(workflow_map, between_match.group(1))
+            target = self.workflow_find_node(workflow_map, between_match.group(2))
+            if not source or not target:
+                workflow_map["nodes"].pop()
+                return False, "I could not find both nodes for that between placement."
+            source_row = self.workflow_row_index(workflow_map, source["id"])
+            self.workflow_insert_row(workflow_map, node_id, source_row + 1 if source_row >= 0 else len(workflow_map.get("rows", [])))
+            removed = self.workflow_remove_edges(workflow_map, lambda edge: edge.get("from") == source["id"] and edge.get("to") == target["id"])
+            self.workflow_add_edge(workflow_map, source["id"], node_id, label_for_edge)
+            self.workflow_add_edge(workflow_map, node_id, target["id"], str(removed[0].get("label") if removed else "handoff"))
+            return True, f"Added {label} between {source['label']} and {target['label']}."
+
+        if after_match:
+            target = self.workflow_find_node(workflow_map, after_match.group(1))
+            if not target:
+                workflow_map["nodes"].pop()
+                return False, "I could not find the node that should come before this new node."
+            self.workflow_add_node_after(workflow_map, node, target["id"], label_for_edge)
+            return True, f"Added {label} after {target['label']}."
+
+        if before_match:
+            target = self.workflow_find_node(workflow_map, before_match.group(1))
+            if not target:
+                workflow_map["nodes"].pop()
+                return False, "I could not find the node that should come after this new node."
+            self.workflow_add_node_before(workflow_map, node, target["id"], label_for_edge)
+            return True, f"Added {label} before {target['label']}."
+
+        workflow_map.setdefault("rows", []).append([node_id])
+        if len(workflow_map["rows"]) >= 2:
+            previous_row = workflow_map["rows"][-2]
+            previous_id = previous_row[-1] if previous_row else ""
+            if previous_id:
+                self.workflow_add_edge(workflow_map, previous_id, node_id, label_for_edge)
+        return True, f"Added {label} to the end of the workflow map."
+
+    def workflow_apply_message(self, workflow_map: dict, message: str) -> tuple[bool, str]:
+        text = compact_workflow_text(message, limit=1000)
+        if not text:
+            return False, "Send a workflow map change first."
+        lowered = text.lower()
+        if "help" in lowered or lowered in {"examples", "example"}:
+            return False, self.workflow_agent_help()
+        if "reset" in lowered and "workflow" in lowered:
+            workflow_map.clear()
+            workflow_map.update(self.clone_default_workflow_map())
+            return True, "Reset the workflow map to the core Planner, Worker, and Reviewer flow."
+
+        for handler in (
+            self.workflow_apply_handoff_rule,
+            self.workflow_apply_add_handoff,
+            self.workflow_apply_rule,
+            self.workflow_apply_remove_node,
+            self.workflow_apply_add_node,
+        ):
+            result = handler(workflow_map, text)
+            if result is not None:
+                return result
+        return False, self.workflow_agent_help()
+
+    def load_workflow_agent_chat(self) -> dict:
+        try:
+            data = json.loads(WORKFLOW_AGENT_CHAT_SESSION_PATH.read_text(encoding="utf-8-sig"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            data = {}
+        if not isinstance(data, dict):
+            data = {}
+        if not isinstance(data.get("messages"), list):
+            data["messages"] = []
+        return data
+
+    def save_workflow_agent_chat(self, data: dict) -> None:
+        WORKFLOW_AGENT_CHAT_DIR.mkdir(parents=True, exist_ok=True)
+        temp_path = WORKFLOW_AGENT_CHAT_SESSION_PATH.with_suffix(".json.tmp")
+        temp_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+        os.replace(temp_path, WORKFLOW_AGENT_CHAT_SESSION_PATH)
+
+    def workflow_chat_poll(self, board: dict, payload: dict) -> dict:
+        del board, payload
+        with WORKFLOW_AGENT_CHAT_LOCK:
+            return {"messages": self.load_workflow_agent_chat().get("messages", [])}
+
+    def workflow_chat_clear(self, board: dict, columns: dict, payload: dict) -> dict:
+        del board, columns, payload
+        with WORKFLOW_AGENT_CHAT_LOCK:
+            self.save_workflow_agent_chat({"messages": []})
+        return {"messages": []}
+
+    def workflow_chat_send(self, board: dict, columns: dict, payload: dict) -> dict:
+        del board, columns
+        message = str(payload.get("message") or "").strip()
+        if not message:
+            raise ValueError("Workflow chat message must not be blank")
+        timestamp = now_iso()
+        with WORKFLOW_MAP_LOCK:
+            workflow_map = self.load_workflow_map()
+            changed, reply = self.workflow_apply_message(workflow_map, message)
+            if changed:
+                self.persist_workflow_map(workflow_map)
+                workflow_map = self.load_workflow_map()
+        with WORKFLOW_AGENT_CHAT_LOCK:
+            data = self.load_workflow_agent_chat()
+            data["messages"].append({
+                "id": f"wc_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}",
+                "role": "owner",
+                "text": message,
+                "createdAt": timestamp,
+            })
+            data["messages"].append({
+                "id": f"wa_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}",
+                "role": "workflow-agent",
+                "status": "done",
+                "result": reply,
+                "changed": changed,
+                "createdAt": now_iso(),
+            })
+            self.save_workflow_agent_chat(data)
+            messages = data.get("messages", [])
+        return {
+            "sent": True,
+            "changed": changed,
+            "reply": reply,
+            "messages": messages,
+            "workflowMap": workflow_map,
+        }
+
+    def workflow_map_reset(self, board: dict, columns: dict, payload: dict) -> dict:
+        del board, columns, payload
+        with WORKFLOW_MAP_LOCK:
+            workflow_map = self.clone_default_workflow_map()
+            self.persist_workflow_map(workflow_map)
+            workflow_map = self.load_workflow_map()
+        return {"workflowMap": workflow_map}
 
     def get_pause_status(self, board: dict, payload: dict) -> dict:
         del board, payload

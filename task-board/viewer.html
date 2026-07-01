@@ -491,7 +491,7 @@
       left: 0;
       top: 0;
       height: 100vh;
-      width: min(1040px, calc(100vw - var(--workflow-tab-width)));
+      width: min(1320px, calc(100vw - var(--workflow-tab-width)));
       background: rgba(246, 244, 239, 0.98);
       transform: translateX(calc(-100% - 8px));
       transition: transform 220ms ease;
@@ -1079,6 +1079,188 @@
       display: grid;
       gap: 14px;
       margin-top: 12px;
+    }
+
+    .workflow-workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+      gap: 14px;
+      align-items: stretch;
+    }
+
+    .workflow-map-area {
+      min-width: 0;
+    }
+
+    .workflow-agent-chat {
+      min-width: 0;
+      min-height: calc(100vh - 164px);
+      border-left: 1px solid var(--line);
+      padding-left: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .workflow-agent-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .workflow-agent-header h3 {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.2;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .workflow-agent-subtitle {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+      font-weight: 600;
+    }
+
+    .workflow-agent-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      flex: 0 0 auto;
+    }
+
+    .workflow-agent-action {
+      min-height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 5px 9px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 760;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .workflow-agent-action:hover,
+    .workflow-agent-action:focus-visible {
+      border-color: #aaa197;
+      outline: none;
+    }
+
+    .workflow-agent-body {
+      flex: 1 1 auto;
+      min-height: 260px;
+      max-height: calc(100vh - 290px);
+      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-right: 3px;
+    }
+
+    .workflow-agent-empty {
+      margin: auto 0;
+      color: var(--muted);
+      font-size: 13px;
+      text-align: center;
+      padding: 18px 8px;
+    }
+
+    .workflow-agent-msg {
+      max-width: 94%;
+      padding: 9px 11px;
+      border-radius: 12px;
+      font-size: 13px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+    }
+
+    .workflow-agent-msg.owner {
+      align-self: flex-end;
+      background: var(--workflow);
+      color: #ffffff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .workflow-agent-msg.agent {
+      align-self: flex-start;
+      border: 1px solid var(--line);
+      background: #fbfaf7;
+      color: var(--ink);
+      border-bottom-left-radius: 4px;
+    }
+
+    .workflow-agent-meta {
+      display: block;
+      margin-bottom: 4px;
+      color: var(--muted);
+      font-size: 10.5px;
+      font-weight: 760;
+      text-transform: uppercase;
+    }
+
+    .workflow-agent-form {
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .workflow-agent-input {
+      width: 100%;
+      min-height: 82px;
+      max-height: 200px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--page);
+      color: var(--ink);
+      padding: 9px 10px;
+      font: inherit;
+      font-size: 13px;
+    }
+
+    .workflow-agent-input:focus {
+      border-color: color-mix(in srgb, var(--workflow) 56%, var(--line));
+      outline: none;
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--workflow) 14%, transparent);
+    }
+
+    .workflow-agent-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+    }
+
+    .workflow-agent-hint {
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.25;
+    }
+
+    .workflow-agent-send {
+      min-height: 34px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--workflow);
+      color: #ffffff;
+      padding: 7px 14px;
+      font: inherit;
+      font-weight: 760;
+      cursor: pointer;
+    }
+
+    .workflow-agent-send:disabled {
+      cursor: default;
+      opacity: 0.58;
     }
 
     .workflow-state-line {
@@ -2981,6 +3163,23 @@
         padding-right: 10px;
       }
 
+      .workflow-workspace {
+        grid-template-columns: 1fr;
+      }
+
+      .workflow-agent-chat {
+        min-height: 360px;
+        max-height: none;
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        padding-left: 0;
+        padding-top: 14px;
+      }
+
+      .workflow-agent-body {
+        max-height: 320px;
+      }
+
       .agent-logs-tray {
         width: calc(100vw - 10px);
         padding-left: 10px;
@@ -3367,6 +3566,23 @@
       },
       personalNamePool: []
     };
+    const fallbackWorkflowMap = {
+      version: 1,
+      updatedAt: "",
+      nodes: [
+        { id: "planner", detailKey: "planning-agent", kind: "Agent", label: "Planner", color: "#476f8f", meta: "Turns requirements into todo cards.", acceptsHumanInput: true, locked: true, rules: [] },
+        { id: "worker", detailKey: "worker-agent", kind: "Agent", label: "Worker", color: "var(--claimed)", meta: "Claims todo work, implements it, and requests review.", locked: true, rules: [] },
+        { id: "reviewer", detailKey: "review-agent", kind: "Agent", label: "Reviewer", color: "#7f6cae", meta: "Claims review work, validates it, and decides outcome.", locked: true, rules: [] }
+      ],
+      rows: [["planner"], ["worker"], ["reviewer"]],
+      edges: [
+        { from: "planner", to: "worker", label: "todo tickets" },
+        { from: "worker", to: "reviewer", label: "inspection targets + review request" }
+      ],
+      globalRules: [
+        { id: "core-source-of-truth", title: "Source of truth", text: "Workflow map edits describe the coordination model. Task movement still happens through board.json and the task-board API." }
+      ]
+    };
     let currentAgentSchema = fallbackAgentSchema;
 
     const boardEl = document.getElementById("board");
@@ -3396,6 +3612,10 @@
     let currentAgents = fallbackAgents;
     let currentAgentLogs = fallbackAgentLogs;
     let currentDispatchSettings = fallbackDispatchSettings;
+    let currentWorkflowMap = fallbackWorkflowMap;
+    let workflowMapLoaded = false;
+    let workflowAgentMessages = [];
+    let workflowAgentSending = false;
     let currentPauseStatus = fallbackPauseStatus;
     let currentSystemStatus = fallbackSystemStatus;
     let systemStatusError = "";
@@ -4977,6 +5197,67 @@
       `;
     }
 
+    function workflowMapDetailDefinitions() {
+      const map = normalizeWorkflowMapPayload(currentWorkflowMap);
+      const lookup = workflowNodeLookup(map);
+      const details = {};
+      const edgeRuleText = (edge) => {
+        const rules = Array.isArray(edge.rules) ? edge.rules.filter((rule) => rule && rule.text) : [];
+        return rules.length ? ` Rules: ${rules.map((rule) => rule.text).join(" | ")}` : "";
+      };
+      map.nodes.forEach((node) => {
+        if (["planner", "worker", "reviewer"].includes(node.id)) return;
+        const inbound = map.edges
+          .filter((edge) => edge.to === node.id && lookup[edge.from])
+          .map((edge) => `${lookup[edge.from].label} -> ${node.label}: ${edge.label || "handoff"}.${edgeRuleText(edge)}`);
+        const outbound = map.edges
+          .filter((edge) => edge.from === node.id && lookup[edge.to])
+          .map((edge) => `${node.label} -> ${lookup[edge.to].label}: ${edge.label || "handoff"}.${edgeRuleText(edge)}`);
+        const nodeRules = Array.isArray(node.rules) && node.rules.length
+          ? node.rules.map((rule) => `${rule.title || "Rule"}: ${rule.text}`)
+          : ["No node-specific rules yet."];
+        details[node.detailKey || node.id] = {
+          kind: node.kind || "Workflow node",
+          title: node.label || "Workflow node",
+          color: node.color || "var(--workflow)",
+          summary: node.meta || "Custom workflow map node.",
+          sections: {
+            Context: [
+              node.locked ? "Locked core node." : "Custom workflow map node.",
+              `Map id: ${node.id}.`
+            ],
+            Handoffs: [
+              ...(inbound.length ? inbound : ["No inbound handoffs."]),
+              ...(outbound.length ? outbound : ["No outbound handoffs."])
+            ],
+            Rules: nodeRules
+          }
+        };
+        details[node.id] = details[node.detailKey || node.id];
+      });
+
+      const globalRules = Array.isArray(map.globalRules) && map.globalRules.length
+        ? map.globalRules.map((rule) => `${rule.title || "Rule"}: ${rule.text}`)
+        : ["No global workflow rules yet."];
+      details["workflow-global-rules"] = {
+        kind: "Workflow rules",
+        title: "Global Workflow Rules",
+        color: "var(--workflow)",
+        summary: "Rules that apply across the editable workflow map.",
+        sections: {
+          Rules: globalRules
+        }
+      };
+      return details;
+    }
+
+    function workflowNodeRuleItems(detailKey) {
+      const map = normalizeWorkflowMapPayload(currentWorkflowMap);
+      const node = map.nodes.find((item) => item.detailKey === detailKey || item.id === detailKey);
+      if (!node || !Array.isArray(node.rules) || !node.rules.length) return [];
+      return node.rules.map((rule) => `${rule.title || "Rule"}: ${rule.text}`);
+    }
+
     function workflowBranch(detailKey, title, text) {
       return `
         <button class="workflow-branch" type="button" data-workflow-detail="${escapeText(detailKey)}" aria-label="Open workflow details for ${escapeText(title)}">
@@ -4986,46 +5267,73 @@
       `;
     }
 
-    function buildWorkflowGraph(normalized) {
-      var todoCount = workflowCount(normalized, "todo");
-      var claimedCount = workflowCount(normalized, "claimed");
-      var reviewCount = workflowCount(normalized, "review");
-      var reviewingCount = workflowCount(normalized, "reviewing");
-      var activeWorkerCount = activeAgentsForRole("worker").length;
-      var activeReviewCount = activeAgentsForRole("review").length;
+    function workflowBadgeForNode(nodeId, normalized) {
+      if (nodeId === "planner") return workflowCount(normalized, "todo");
+      if (nodeId === "worker") {
+        const activeWorkerCount = activeAgentsForRole("worker").length;
+        return activeWorkerCount ? `${activeWorkerCount} active` : workflowCount(normalized, "claimed");
+      }
+      if (nodeId === "reviewer") {
+        const activeReviewCount = activeAgentsForRole("review").length;
+        const reviewCount = workflowCount(normalized, "review") + workflowCount(normalized, "reviewing");
+        return activeReviewCount ? `${activeReviewCount} active` : reviewCount;
+      }
+      return null;
+    }
 
-      var nodeDefs = {
-        planner:  { key: "planning-agent",    kind: "Agent",          label: "Planner",                color: "#476f8f", meta: "Turns requirements into todo cards.", acceptsHumanInput: true },
-        worker:   { key: "worker-agent",      kind: "Agent",          label: "Worker",                 color: "var(--claimed)", meta: "Claims todo work, implements it, and requests review." },
-        reviewer: { key: "review-agent",      kind: "Agent",          label: "Reviewer",               color: "#7f6cae", meta: "Claims review work, validates it, and decides outcome." }
-      };
-
-      var badges = {
-        planner:  todoCount,
-        worker:   activeWorkerCount ? (activeWorkerCount + " active") : claimedCount,
-        reviewer: activeReviewCount ? (activeReviewCount + " active") : reviewCount + reviewingCount
-      };
-
-      var layout = [
-        { ids: ["planner"] },
-        { ids: ["worker"] },
-        { ids: ["reviewer"] }
-      ];
-
-      var edges = [
-        { from: "planner",  to: "worker",   label: "todo tickets" },
-        { from: "worker",   to: "reviewer", label: "inspection targets + review request" }
-      ];
-
-      var rows = layout.map(function(row) {
-        return {
-          nodes: row.ids.map(function(id) {
-            return { id: id, step: nodeDefs[id], badge: badges[id] || null };
-          })
-        };
+    function workflowNodeLookup(map = currentWorkflowMap) {
+      const normalizedMap = normalizeWorkflowMapPayload(map);
+      const lookup = {};
+      normalizedMap.nodes.forEach((node) => {
+        lookup[node.id] = node;
       });
+      return lookup;
+    }
 
-      return { rows: rows, edges: edges };
+    function workflowNodeStep(node) {
+      const detailKey = node.detailKey || node.id;
+      return {
+        key: detailKey,
+        kind: node.kind || "Agent",
+        label: node.label || "Workflow node",
+        color: node.color || "var(--workflow)",
+        meta: node.meta || "",
+        acceptsHumanInput: Boolean(node.acceptsHumanInput)
+      };
+    }
+
+    function buildWorkflowGraph(normalized) {
+      const map = normalizeWorkflowMapPayload(currentWorkflowMap);
+      const lookup = workflowNodeLookup(map);
+      const rows = map.rows.map((row) => ({
+        nodes: row
+          .map((id) => lookup[id])
+          .filter(Boolean)
+          .map((node) => ({
+            id: node.id,
+            step: workflowNodeStep(node),
+            badge: workflowBadgeForNode(node.id, normalized)
+          }))
+      })).filter((row) => row.nodes.length);
+
+      if (rows.length) {
+        return {
+          rows,
+          edges: map.edges.filter((edge) => lookup[edge.from] && lookup[edge.to])
+        };
+      }
+
+      const fallbackLookup = workflowNodeLookup(fallbackWorkflowMap);
+      return {
+        rows: fallbackWorkflowMap.rows.map((row) => ({
+          nodes: row.map((id) => fallbackLookup[id]).filter(Boolean).map((node) => ({
+            id: node.id,
+            step: workflowNodeStep(node),
+            badge: workflowBadgeForNode(node.id, normalized)
+          }))
+        })).filter((row) => row.nodes.length),
+        edges: fallbackWorkflowMap.edges
+      };
     }
 
     function workflowGraphEdgeBlock(sourceRow, targetRow, edges) {
@@ -5168,6 +5476,112 @@
       return '<div class="wf-graph-edge-block" aria-hidden="true"><svg viewBox="0 0 ' + VB_W + ' ' + VB_H + '" preserveAspectRatio="xMidYMid meet">' + paths + labels + '</svg></div>';
     }
 
+    function workflowAgentMessageMarkup(message) {
+      if (!message || typeof message !== "object") return "";
+      if (message.role === "owner") {
+        return `<div class="workflow-agent-msg owner">${escapeText(message.text || "")}</div>`;
+      }
+      const changed = message.changed ? "Map updated" : "Workflow agent";
+      const result = String(message.result || message.text || "").trim() || "Done.";
+      return `
+        <div class="workflow-agent-msg agent">
+          <span class="workflow-agent-meta">${escapeText(changed)}</span>
+          ${escapeText(result)}
+        </div>
+      `;
+    }
+
+    function workflowAgentChatMarkup() {
+      const messages = Array.isArray(workflowAgentMessages) ? workflowAgentMessages : [];
+      const body = messages.length
+        ? messages.map(workflowAgentMessageMarkup).join("")
+        : `<div class="workflow-agent-empty">Ask for a workflow map change.</div>`;
+      const disabled = workflowAgentSending ? "disabled" : "";
+      return `
+        <aside class="workflow-agent-chat" aria-label="Workflow Agent chat">
+          <div class="workflow-agent-header">
+            <div>
+              <h3>Workflow Agent</h3>
+              <span class="workflow-agent-subtitle">${workflowMapLoaded ? "Map-specific updates" : "Using default map"}</span>
+            </div>
+            <div class="workflow-agent-actions">
+              <button class="workflow-agent-action" type="button" data-workflow-chat-clear>Clear</button>
+              <button class="workflow-agent-action" type="button" data-workflow-map-reset>Reset</button>
+            </div>
+          </div>
+          <div class="workflow-agent-body" data-workflow-agent-body>${body}</div>
+          <form class="workflow-agent-form" data-workflow-agent-form>
+            <textarea class="workflow-agent-input" data-workflow-agent-input placeholder="Add a research agent after Planner..."></textarea>
+            <div class="workflow-agent-footer">
+              <span class="workflow-agent-hint">Enter sends</span>
+              <button class="workflow-agent-send" type="submit" ${disabled}>${workflowAgentSending ? "Sending..." : "Send"}</button>
+            </div>
+          </form>
+        </aside>
+      `;
+    }
+
+    async function sendWorkflowAgentMessage(message) {
+      const text = String(message || "").trim();
+      if (!text || workflowAgentSending) return;
+      workflowAgentSending = true;
+      workflowAgentMessages = [
+        ...workflowAgentMessages,
+        { role: "owner", text },
+        { role: "workflow-agent", result: "Applying workflow update...", changed: false }
+      ];
+      renderBoard(currentBoard, currentSourceLabel);
+      try {
+        const data = await postJson("/viewer/workflow-chat-send", { message: text });
+        currentWorkflowMap = normalizeWorkflowMapPayload(data.workflowMap || currentWorkflowMap);
+        workflowMapLoaded = true;
+        workflowAgentMessages = Array.isArray(data.messages) ? data.messages : workflowAgentMessages;
+        statusEl.textContent = data.changed ? "Workflow map updated." : "Workflow agent replied.";
+      } catch (error) {
+        workflowAgentMessages = workflowAgentMessages.slice(0, -1);
+        workflowAgentMessages.push({
+          role: "workflow-agent",
+          result: `Workflow agent failed: ${error.message}`,
+          changed: false
+        });
+        statusEl.textContent = `Workflow agent failed: ${error.message}`;
+      } finally {
+        workflowAgentSending = false;
+        renderBoard(currentBoard, currentSourceLabel);
+        window.setTimeout(() => {
+          const input = workflowEl.querySelector("[data-workflow-agent-input]");
+          if (input) input.focus();
+        }, 0);
+      }
+    }
+
+    async function clearWorkflowAgentChat() {
+      try {
+        const data = await postJson("/viewer/workflow-chat-clear", {});
+        workflowAgentMessages = Array.isArray(data.messages) ? data.messages : [];
+        statusEl.textContent = "Workflow Agent chat cleared.";
+      } catch (error) {
+        workflowAgentMessages = [];
+        statusEl.textContent = `Workflow Agent chat clear failed: ${error.message}`;
+      }
+      renderBoard(currentBoard, currentSourceLabel);
+    }
+
+    async function resetWorkflowMap() {
+      const confirmed = window.confirm("Reset the workflow map to Planner, Worker, and Reviewer?");
+      if (!confirmed) return;
+      statusEl.textContent = "Resetting workflow map...";
+      try {
+        const data = await postJson("/viewer/workflow-map-reset", {});
+        currentWorkflowMap = normalizeWorkflowMapPayload(data.workflowMap || fallbackWorkflowMap);
+        workflowMapLoaded = true;
+        statusEl.textContent = "Workflow map reset.";
+      } catch (error) {
+        statusEl.textContent = `Workflow map reset failed: ${error.message}`;
+      }
+      renderBoard(currentBoard, currentSourceLabel);
+    }
+
     function workflowGraphMarkup(normalized) {
       var graph = buildWorkflowGraph(normalized);
       var activeCount = ["todo", "claimed", "review", "reviewing"].reduce(function(total, key) { return total + workflowCount(normalized, key); }, 0);
@@ -5178,7 +5592,8 @@
 
       graph.rows.forEach(function(row, rowIdx) {
         var colCount = row.nodes.length;
-        canvasHtml += '<div class="wf-graph-row" data-cols="' + colCount + '">';
+        var minTrack = colCount > 2 ? 180 : 220;
+        canvasHtml += '<div class="wf-graph-row" data-cols="' + colCount + '" style="grid-template-columns: repeat(' + colCount + ', minmax(' + minTrack + 'px, 1fr));">';
         row.nodes.forEach(function(node) {
           canvasHtml += workflowNode(node.step, node.badge);
         });
@@ -5198,7 +5613,7 @@
 
       canvasHtml += '</div>';
 
-      return '\n        <section class="workflow-panel" id="workflow-panel" aria-hidden="' + (workflowPanelOpen ? "false" : "true") + '">\n          <div class="workflow-panel-header">\n            <div>\n              <h2>Agent Workflow Map</h2>\n              <p>Each clickable block is an agent. Open one to see its context, goal, behavior, permissions, and hard rules.</p>\n            </div>\n            ' + workflowCloseButton() + '\n          </div>\n          <div class="workflow-graph">\n            ' + canvasHtml + '\n          </div>\n          <div class="workflow-stats">\n            <div class="workflow-stat"><strong>' + activeCount + '</strong><span>todo / claimed / review</span></div>\n            <div class="workflow-stat"><strong>' + doneCount + '</strong><span>done visible</span></div>\n            <div class="workflow-stat"><strong>' + archivedCount + '</strong><span>archived</span></div>\n          </div>\n        </section>\n      ';
+      return '\n        <section class="workflow-panel" id="workflow-panel" aria-hidden="' + (workflowPanelOpen ? "false" : "true") + '">\n          <div class="workflow-panel-header">\n            <div>\n              <h2>Agent Workflow Map</h2>\n              <p>Each clickable block is an agent. Open one to see its context, goal, behavior, permissions, and hard rules.</p>\n            </div>\n            ' + workflowCloseButton() + '\n          </div>\n          <div class="workflow-workspace">\n            <div class="workflow-map-area">\n              <div class="workflow-graph">\n                ' + canvasHtml + '\n              </div>\n              <div class="workflow-stats">\n                <div class="workflow-stat"><strong>' + activeCount + '</strong><span>todo / claimed / review</span></div>\n                <div class="workflow-stat"><strong>' + doneCount + '</strong><span>done visible</span></div>\n                <div class="workflow-stat"><strong>' + archivedCount + '</strong><span>archived</span></div>\n              </div>\n            </div>\n            ' + workflowAgentChatMarkup() + '\n          </div>\n        </section>\n      ';
     }
 
     function workflowDetailSection(title, items) {
@@ -5245,8 +5660,19 @@
 
     function workflowDetailModalMarkup(normalized) {
       if (!workflowDetailKey) return "";
-      const detail = workflowDetailDefinitions(normalized)[workflowDetailKey];
-      if (!detail) return "";
+      const detailSource = {
+        ...workflowDetailDefinitions(normalized),
+        ...workflowMapDetailDefinitions()
+      }[workflowDetailKey];
+      if (!detailSource) return "";
+      const detail = {
+        ...detailSource,
+        sections: { ...(detailSource.sections || {}) }
+      };
+      const nodeRuleItems = workflowNodeRuleItems(workflowDetailKey);
+      if (nodeRuleItems.length) {
+        detail.sections["Workflow Agent Rules"] = nodeRuleItems;
+      }
       const sections = Object.entries(detail.sections || {})
         .map(([title, items]) => workflowDetailSection(title, items))
         .join("");
@@ -5444,6 +5870,141 @@
         currentAgentSchema = fallbackAgentSchema;
         return currentAgentSchema;
       }
+    }
+
+    function slugWorkflowId(value, fallback = "workflow-node") {
+      const slug = String(value || "")
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "");
+      return slug || fallback;
+    }
+
+    function normalizeWorkflowRule(rule, index = 0) {
+      if (typeof rule === "string") {
+        const text = rule.trim();
+        if (!text) return null;
+        return { id: slugWorkflowId(text.slice(0, 42), `rule-${index + 1}`), title: "Rule", text };
+      }
+      if (!rule || typeof rule !== "object") return null;
+      const text = String(rule.text || rule.summary || rule.rule || "").trim();
+      if (!text) return null;
+      return {
+        id: slugWorkflowId(rule.id || rule.title || text.slice(0, 42), `rule-${index + 1}`),
+        title: String(rule.title || "Rule").trim() || "Rule",
+        text
+      };
+    }
+
+    function normalizeWorkflowMapPayload(payload) {
+      const source = payload && typeof payload === "object" ? payload : fallbackWorkflowMap;
+      const fallbackNodeIds = new Set(fallbackWorkflowMap.nodes.map((node) => node.id));
+      const nodes = [];
+      const nodeIds = new Set();
+      const rawNodes = Array.isArray(source.nodes) ? source.nodes : fallbackWorkflowMap.nodes;
+      rawNodes.forEach((rawNode, index) => {
+        if (!rawNode || typeof rawNode !== "object") return;
+        const label = String(rawNode.label || rawNode.title || rawNode.id || "").trim();
+        if (!label) return;
+        let id = slugWorkflowId(rawNode.id || label);
+        if (nodeIds.has(id)) {
+          let suffix = 2;
+          while (nodeIds.has(`${id}-${suffix}`)) suffix += 1;
+          id = `${id}-${suffix}`;
+        }
+        nodeIds.add(id);
+        const kind = String(rawNode.kind || "Agent").trim() || "Agent";
+        const rules = Array.isArray(rawNode.rules)
+          ? rawNode.rules.map(normalizeWorkflowRule).filter(Boolean)
+          : [];
+        nodes.push({
+          id,
+          detailKey: String(rawNode.detailKey || id).trim() || id,
+          kind,
+          label,
+          color: String(rawNode.color || (kind.toLowerCase() === "step" ? "#8c6f40" : "#0f766e")).trim(),
+          meta: String(rawNode.meta || rawNode.summary || `Custom ${kind.toLowerCase()} in the workflow.`).trim(),
+          acceptsHumanInput: Boolean(rawNode.acceptsHumanInput),
+          locked: Boolean(rawNode.locked || fallbackNodeIds.has(id)),
+          rules
+        });
+      });
+
+      fallbackWorkflowMap.nodes.forEach((fallbackNode) => {
+        if (!nodeIds.has(fallbackNode.id)) {
+          nodes.push({ ...fallbackNode, rules: [] });
+          nodeIds.add(fallbackNode.id);
+        }
+      });
+
+      const rows = [];
+      const seenInRows = new Set();
+      const rawRows = Array.isArray(source.rows) ? source.rows : fallbackWorkflowMap.rows;
+      rawRows.forEach((rawRow) => {
+        const rowIds = Array.isArray(rawRow) ? rawRow : [rawRow];
+        const row = rowIds
+          .map((id) => slugWorkflowId(id))
+          .filter((id) => nodeIds.has(id) && !seenInRows.has(id));
+        row.forEach((id) => seenInRows.add(id));
+        if (row.length) rows.push(row);
+      });
+      nodes.forEach((node) => {
+        if (!seenInRows.has(node.id)) rows.push([node.id]);
+      });
+
+      const edges = [];
+      const edgeKeys = new Set();
+      const rawEdges = Array.isArray(source.edges) ? source.edges : fallbackWorkflowMap.edges;
+      rawEdges.forEach((edge) => {
+        if (!edge || typeof edge !== "object") return;
+        const from = slugWorkflowId(edge.from);
+        const to = slugWorkflowId(edge.to);
+        const key = `${from}->${to}`;
+        if (!nodeIds.has(from) || !nodeIds.has(to) || from === to || edgeKeys.has(key)) return;
+        edgeKeys.add(key);
+        edges.push({
+          from,
+          to,
+          label: String(edge.label || "handoff").trim() || "handoff",
+          rules: Array.isArray(edge.rules) ? edge.rules.map(normalizeWorkflowRule).filter(Boolean) : []
+        });
+      });
+
+      const globalRules = Array.isArray(source.globalRules)
+        ? source.globalRules.map(normalizeWorkflowRule).filter(Boolean)
+        : fallbackWorkflowMap.globalRules;
+
+      return {
+        version: Number(source.version || 1),
+        updatedAt: String(source.updatedAt || ""),
+        nodes,
+        rows,
+        edges: edges.length ? edges : fallbackWorkflowMap.edges,
+        globalRules
+      };
+    }
+
+    async function loadWorkflowMap() {
+      try {
+        currentWorkflowMap = normalizeWorkflowMapPayload(await loadJson("/viewer/workflow-map", { timeoutMs: 1500 }));
+        workflowMapLoaded = true;
+        return currentWorkflowMap;
+      } catch (error) {
+        logOptionalLoadFailure("workflow map", error);
+        currentWorkflowMap = normalizeWorkflowMapPayload(currentWorkflowMap || fallbackWorkflowMap);
+        return currentWorkflowMap;
+      }
+    }
+
+    async function loadWorkflowChat() {
+      try {
+        const data = await loadJson("/viewer/workflow-chat?agentName=Task%20board%20viewer", { timeoutMs: 1500 });
+        workflowAgentMessages = Array.isArray(data?.messages) ? data.messages : [];
+      } catch (error) {
+        logOptionalLoadFailure("workflow agent chat", error);
+      }
+      return workflowAgentMessages;
     }
 
     async function loadDispatchSettings() {
@@ -6983,6 +7544,18 @@
     }
 
     workflowEl.addEventListener("click", (event) => {
+      const workflowChatClearButton = event.target.closest("[data-workflow-chat-clear]");
+      if (workflowChatClearButton) {
+        clearWorkflowAgentChat();
+        return;
+      }
+
+      const workflowMapResetButton = event.target.closest("[data-workflow-map-reset]");
+      if (workflowMapResetButton) {
+        resetWorkflowMap();
+        return;
+      }
+
       const workflowToggleButton = event.target.closest("[data-workflow-toggle]");
       if (workflowToggleButton) {
         toggleWorkflowPanel();
@@ -7043,6 +7616,35 @@
         workflowPanelOpen = true;
         renderBoard(currentBoard, currentSourceLabel);
         return;
+      }
+    });
+
+    workflowEl.addEventListener("submit", (event) => {
+      const form = event.target.closest("[data-workflow-agent-form]");
+      if (!form) return;
+      event.preventDefault();
+      const input = form.querySelector("[data-workflow-agent-input]");
+      const message = String(input?.value || "").trim();
+      if (!message) {
+        if (input) input.focus();
+        return;
+      }
+      if (input) input.value = "";
+      sendWorkflowAgentMessage(message);
+    });
+
+    workflowEl.addEventListener("keydown", (event) => {
+      const input = event.target.closest("[data-workflow-agent-input]");
+      if (!input) return;
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        const form = input.closest("[data-workflow-agent-form]");
+        if (form && typeof form.requestSubmit === "function") {
+          form.requestSubmit();
+        } else {
+          sendWorkflowAgentMessage(input.value);
+          input.value = "";
+        }
       }
     });
 
@@ -7118,10 +7720,12 @@
           statusEl.textContent = "Loaded board.json. Loading viewer metadata...";
         }
 
-        const [agentsResult, , , pauseResult, systemResult] = await Promise.allSettled([
+        const [agentsResult, , , , , pauseResult, systemResult] = await Promise.allSettled([
           loadAgents(),
           loadAgentSchema(),
           loadDispatchSettings(),
+          loadWorkflowMap(),
+          loadWorkflowChat(),
           loadPauseStatus(),
           loadSystemStatus()
         ]);

@@ -70,6 +70,16 @@ The model is locked once a conversation starts (use "New chat" to switch). The P
 
 Backend endpoints (viewer and API): `POST /viewer/planner-chat-send` (launch/continue a turn with the owner message), `GET /viewer/planner-chat` (poll the session, refresh process status, parse the reply), and `POST /viewer/planner-chat-clear` (start a new conversation). Session state — including the resumable `cliSessionId` — and per-message logs live under `task-board/planner-chat/` (runtime-only, gitignored).
 
+### Workflow map updates
+
+The viewer's Agent Workflow Map is backed by:
+
+- `task-board/workflow-map.json`
+
+The map starts with locked Planner, Worker, and Reviewer nodes, then can be extended with custom agents, steps, handoffs, node rules, global rules, and handoff-specific rules. The Workflow tray includes a separate **Workflow Agent** chat beside the graph. This chat is not the Planner chat: it changes only the workflow map model and does not create task-board todo cards, claim work, implement code, or review work.
+
+Backend endpoints: `GET /viewer/workflow-map` loads the editable map, `POST /viewer/workflow-chat-send` applies a Workflow Agent message to the map, `GET /viewer/workflow-chat` loads the Workflow Agent chat history, `POST /viewer/workflow-chat-clear` clears that chat history, and `POST /viewer/workflow-map-reset` restores the core Planner -> Worker -> Reviewer map. Workflow Agent chat history lives under `task-board/workflow-agent-chat/` (runtime-only, gitignored).
+
 ## Roles
 
 Use one of these role files when starting a new agent:

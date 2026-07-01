@@ -1,0 +1,71 @@
+{
+  "version": 1,
+  "updatedAt": "",
+  "nodes": [
+    {
+      "id": "planner",
+      "detailKey": "planning-agent",
+      "kind": "Agent",
+      "label": "Planner",
+      "color": "#476f8f",
+      "meta": "Turns requirements into todo cards.",
+      "acceptsHumanInput": true,
+      "locked": true,
+      "rules": []
+    },
+    {
+      "id": "worker",
+      "detailKey": "worker-agent",
+      "kind": "Agent",
+      "label": "Worker",
+      "color": "var(--claimed)",
+      "meta": "Claims todo work, implements it, and requests review.",
+      "acceptsHumanInput": false,
+      "locked": true,
+      "rules": []
+    },
+    {
+      "id": "reviewer",
+      "detailKey": "review-agent",
+      "kind": "Agent",
+      "label": "Reviewer",
+      "color": "#7f6cae",
+      "meta": "Claims review work, validates it, and decides outcome.",
+      "acceptsHumanInput": false,
+      "locked": true,
+      "rules": []
+    }
+  ],
+  "rows": [
+    [
+      "planner"
+    ],
+    [
+      "worker"
+    ],
+    [
+      "reviewer"
+    ]
+  ],
+  "edges": [
+    {
+      "from": "planner",
+      "to": "worker",
+      "label": "todo tickets",
+      "rules": []
+    },
+    {
+      "from": "worker",
+      "to": "reviewer",
+      "label": "inspection targets + review request",
+      "rules": []
+    }
+  ],
+  "globalRules": [
+    {
+      "id": "core-source-of-truth",
+      "title": "Source of truth",
+      "text": "Workflow map edits describe the coordination model. Task movement still happens through board.json and the task-board API."
+    }
+  ]
+}
