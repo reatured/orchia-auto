@@ -325,6 +325,9 @@ def default_dispatch_settings() -> dict:
         "planner": {
             "model": DEFAULT_PLANNER_MODEL,
         },
+        "workflow": {
+            "model": DEFAULT_DISPATCH_MODEL,
+        },
         "worker": {
             "enabled": False,
             "model": DEFAULT_DISPATCH_MODEL,
@@ -433,6 +436,8 @@ def normalize_dispatch_role(value: object) -> str:
     role = str(value or "").strip().lower().replace("_", "-").replace(" ", "-")
     if role in {"planner", "planning", "planner-chat", "planning-agent"}:
         return "planner"
+    if role in {"workflow", "workflow-agent", "workflow-chat", "workflow-map"}:
+        return "workflow"
     if role in {"worker", "worker-agent"}:
         return "worker"
     if role in {"review", "reviewer", "review-agent", "reviewer-agent"}:
@@ -700,6 +705,12 @@ def normalize_dispatch_settings(settings: dict | None) -> dict:
         planner_source = {}
     normalized["planner"] = {
         "model": normalize_dispatch_model(planner_source.get("model"), normalized["planner"]["model"]),
+    }
+    workflow_source = settings.get("workflow")
+    if not isinstance(workflow_source, dict):
+        workflow_source = {}
+    normalized["workflow"] = {
+        "model": normalize_dispatch_model(workflow_source.get("model"), normalized["workflow"]["model"]),
     }
     for role in ("worker", "review"):
         source = settings.get(role)
@@ -2698,6 +2709,8 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 return result
         return False, self.workflow_agent_help()
 
+    WORKFLOW_AGENT_OUTPUT_MARKER = "===WORKFLOW-AGENT-OUTPUT==="
+
     def load_workflow_agent_chat(self) -> dict:
         try:
             data = json.loads(WORKFLOW_AGENT_CHAT_SESSION_PATH.read_text(encoding="utf-8-sig"))
@@ -2715,10 +2728,278 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         temp_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
         os.replace(temp_path, WORKFLOW_AGENT_CHAT_SESSION_PATH)
 
+    def read_workflow_agent_output(self, log_path: str, truncate: bool = True) -> str:
+        if not log_path:
+            return ""
+        try:
+            text = Path(log_path).read_text(encoding="utf-8", errors="replace")
+        except (FileNotFoundError, OSError):
+            return ""
+        marker = self.WORKFLOW_AGENT_OUTPUT_MARKER
+        if marker in text:
+            text = text.split(marker, 1)[1]
+        text = text.strip()
+        if truncate and len(text) > PLANNER_CHAT_OUTPUT_LIMIT:
+            text = "...(truncated)...\n" + text[-PLANNER_CHAT_OUTPUT_LIMIT:]
+        return text
+
+    def workflow_agent_clean_model_reply(self, message: dict) -> str:
+        raw = self.read_workflow_agent_output(str(message.get("logPath") or ""), truncate=False)
+        tool = str(message.get("tool") or "").strip().lower()
+        if tool == "claude" and raw:
+            try:
+                parsed = json.loads(raw)
+            except json.JSONDecodeError:
+                parsed = None
+            if isinstance(parsed, dict):
+                reply = str(parsed.get("result") or "").strip()
+                if reply:
+                    return self._extract_clean_reply(reply) or reply[:3000]
+        clean = self._extract_clean_reply(raw)
+        if clean:
+            return clean[:3000]
+        return raw[:3000]
+
+    def public_workflow_agent_messages(self, messages: list) -> list[dict]:
+        public_messages = []
+        for message in messages:
+            if not isinstance(message, dict):
+                continue
+            role = str(message.get("role") or "")
+            if role == "owner":
+                public_messages.append({
+                    "id": message.get("id", ""),
+                    "role": "owner",
+                    "text": message.get("text", ""),
+                    "createdAt": message.get("createdAt", ""),
+                    "tool": message.get("tool", ""),
+                })
+                continue
+            if role != "workflow-agent":
+                continue
+            public = {
+                "id": message.get("id", ""),
+                "role": "workflow-agent",
+                "tool": message.get("tool", ""),
+                "status": message.get("status", ""),
+                "changed": bool(message.get("changed")),
+                "result": message.get("result", ""),
+                "modelReply": message.get("modelReply", ""),
+                "createdAt": message.get("createdAt", ""),
+                "spawnedAt": message.get("spawnedAt", ""),
+                "finishedAt": message.get("finishedAt", ""),
+                "processId": message.get("processId", ""),
+                "processState": message.get("processState", ""),
+                "exitCode": message.get("exitCode", ""),
+                "isError": bool(message.get("isError")),
+            }
+            public_messages.append(public)
+        return public_messages
+
+    def workflow_agent_phrase(self, message: str, workflow_map: dict) -> str:
+        compact_map = json.dumps({
+            "nodes": workflow_map.get("nodes", []),
+            "rows": workflow_map.get("rows", []),
+            "edges": workflow_map.get("edges", []),
+            "globalRules": workflow_map.get("globalRules", []),
+        }, indent=2)
+        if len(compact_map) > 6000:
+            compact_map = compact_map[:6000] + "\n...(truncated)..."
+        return (
+            "You are the Workflow Agent for this local task-board viewer. "
+            "Your job is to interpret the owner's requested workflow-map change and give a concise confirmation. "
+            "Do not edit files, run tools, create task-board cards, claim work, implement code, or review work. "
+            "The backend will apply the workflow-map update after your turn exits, using its workflow-map mutation API. "
+            "Current workflow map:\n"
+            f"{compact_map}\n\n"
+            "Owner request:\n"
+            f"{message}\n\n"
+            "Reply with the intended update in one or two short sentences."
+        )
+
+    def launch_workflow_agent_process(self, tool: str, phrase: str, message_id: str, spawned_at: str) -> tuple[subprocess.Popen, str, str]:
+        args = self.spawn_command_args(tool)
+        if tool == "codex":
+            args.extend(["exec", "--skip-git-repo-check", phrase])
+        elif tool == "qwen":
+            args.extend(["-p", phrase, "-y", "-o", "stream-json"])
+        else:
+            args.extend(["-p", phrase, "--output-format", "json"])
+
+        WORKFLOW_AGENT_CHAT_DIR.mkdir(parents=True, exist_ok=True)
+        log_path = WORKFLOW_AGENT_CHAT_DIR / f"{message_id}-{tool}.log"
+        err_path = ""
+        popen_flags = 0
+        if hasattr(subprocess, "CREATE_NO_WINDOW"):
+            popen_flags |= subprocess.CREATE_NO_WINDOW
+        env = agent_subprocess_env(tool)
+        working_dir = str(PROJECT_ROOT)
+        log_file = log_path.open("a", encoding="utf-8")
+        log_file.write(f"Workflow Agent ({tool}) at {spawned_at}\n")
+        log_file.write(f"Working directory: {working_dir}\n")
+        log_file.write(f"{self.WORKFLOW_AGENT_OUTPUT_MARKER}\n")
+        log_file.flush()
+
+        if tool == "qwen":
+            formatter_script = str(Path(__file__).parent / "format_qwen_log.py")
+            process = subprocess.Popen(
+                args,
+                cwd=working_dir,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=log_file,
+                creationflags=popen_flags,
+                close_fds=True,
+                **_qwen_process_isolation_kwargs(),
+            )
+            threading.Thread(
+                target=_run_qwen_formatter_pipe,
+                args=(process, log_file, formatter_script),
+                daemon=True,
+            ).start()
+            return process, str(log_path), err_path
+
+        if tool == "claude":
+            err_file_path = WORKFLOW_AGENT_CHAT_DIR / f"{message_id}-{tool}.err.log"
+            err_path = str(err_file_path)
+            err_file = err_file_path.open("a", encoding="utf-8")
+            process = subprocess.Popen(
+                args,
+                cwd=working_dir,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=log_file,
+                stderr=err_file,
+                creationflags=popen_flags,
+                close_fds=True,
+            )
+            log_file.close()
+            err_file.close()
+            return process, str(log_path), err_path
+
+        process = subprocess.Popen(
+            args,
+            cwd=working_dir,
+            env=env,
+            stdin=subprocess.DEVNULL,
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            creationflags=popen_flags,
+            close_fds=True,
+        )
+        log_file.close()
+        return process, str(log_path), err_path
+
+    def finalize_workflow_agent_message(
+        self,
+        message_id: str,
+        return_code: int | None = None,
+        process_state: str = "",
+    ) -> bool:
+        with WORKFLOW_AGENT_CHAT_LOCK:
+            data = self.load_workflow_agent_chat()
+            target = None
+            for message in data.get("messages", []):
+                if isinstance(message, dict) and message.get("id") == message_id:
+                    target = message
+                    break
+            if not target or target.get("role") != "workflow-agent" or target.get("status") != "running":
+                return False
+
+            if str(target.get("tool") or "").strip().lower() == "qwen":
+                time.sleep(0.5)
+            model_reply = self.workflow_agent_clean_model_reply(target)
+            err_tail = ""
+            if target.get("errPath"):
+                err_tail = self.read_text_tail(str(target.get("errPath") or ""), limit=3000)
+            owner_message = str(target.get("ownerMessage") or "").strip()
+            target["finishedAt"] = now_iso()
+            target["processState"] = process_state or target.get("processState", "")
+            if return_code is not None:
+                target["exitCode"] = return_code
+
+            if return_code not in (None, 0):
+                target["status"] = "terminated"
+                target["isError"] = True
+                target["modelReply"] = model_reply
+                detail = f" Exit code {return_code}." if return_code is not None else ""
+                stderr_detail = f" {err_tail}" if err_tail else ""
+                target["result"] = f"Workflow Agent terminated before applying the map update.{detail}{stderr_detail}".strip()
+                self.save_workflow_agent_chat(data)
+                return True
+
+            try:
+                with WORKFLOW_MAP_LOCK:
+                    workflow_map = self.load_workflow_map()
+                    changed, reply = self.workflow_apply_message(workflow_map, owner_message)
+                    if changed:
+                        self.persist_workflow_map(workflow_map)
+                target["status"] = "done"
+                target["changed"] = changed
+                target["result"] = reply
+                target["modelReply"] = model_reply
+                target["isError"] = False
+            except Exception as error:
+                target["status"] = "terminated"
+                target["changed"] = False
+                target["isError"] = True
+                target["modelReply"] = model_reply
+                target["result"] = f"Workflow Agent terminated while applying the map update: {error}"
+            self.save_workflow_agent_chat(data)
+            return True
+
+    def wait_for_workflow_agent_process(self, message_id: str, process: subprocess.Popen) -> None:
+        try:
+            return_code = process.wait()
+            process_state = "exited"
+        except Exception as error:
+            return_code = 1
+            process_state = f"wait-error: {error}"
+        self.finalize_workflow_agent_message(message_id, return_code=return_code, process_state=process_state)
+
+    def refresh_workflow_agent_chat(self, data: dict) -> bool:
+        changed = False
+        for message in data.get("messages", []):
+            if not isinstance(message, dict):
+                continue
+            if message.get("role") != "workflow-agent" or message.get("status") != "running":
+                continue
+            status = spawned_process_status({
+                "processId": message.get("processId"),
+                "spawnedAt": message.get("spawnedAt"),
+            })
+            message["processState"] = status.get("state", "")
+            changed = True
+            if not status.get("isRunning"):
+                # Recovery path for backend restarts where the waiter thread is gone.
+                model_reply = self.workflow_agent_clean_model_reply(message)
+                message["finishedAt"] = now_iso()
+                message["modelReply"] = model_reply
+                if model_reply:
+                    with WORKFLOW_MAP_LOCK:
+                        workflow_map = self.load_workflow_map()
+                        applied, reply = self.workflow_apply_message(workflow_map, str(message.get("ownerMessage") or ""))
+                        if applied:
+                            self.persist_workflow_map(workflow_map)
+                    message["status"] = "done"
+                    message["changed"] = applied
+                    message["result"] = reply
+                    message["isError"] = False
+                else:
+                    message["status"] = "terminated"
+                    message["changed"] = False
+                    message["result"] = "Workflow Agent process is no longer running and produced no reply."
+                    message["isError"] = True
+        return changed
+
     def workflow_chat_poll(self, board: dict, payload: dict) -> dict:
         del board, payload
         with WORKFLOW_AGENT_CHAT_LOCK:
-            return {"messages": self.load_workflow_agent_chat().get("messages", [])}
+            data = self.load_workflow_agent_chat()
+            if self.refresh_workflow_agent_chat(data):
+                self.save_workflow_agent_chat(data)
+            return {"messages": self.public_workflow_agent_messages(data.get("messages", []))}
 
     def workflow_chat_clear(self, board: dict, columns: dict, payload: dict) -> dict:
         del board, columns, payload
@@ -2731,36 +3012,76 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         message = str(payload.get("message") or "").strip()
         if not message:
             raise ValueError("Workflow chat message must not be blank")
+        settings = load_dispatch_settings()
+        workflow_settings = settings.get("workflow") if isinstance(settings.get("workflow"), dict) else {}
+        saved_tool = normalize_dispatch_model(workflow_settings.get("model"), DEFAULT_DISPATCH_MODEL)
+        requested_tool = str(payload.get("tool") or payload.get("model") or saved_tool).strip().lower()
+        tool = requested_tool if requested_tool in SPAWNABLE_TOOLS else saved_tool
+        if tool != saved_tool:
+            settings["workflow"] = {"model": tool}
+            settings["updatedAt"] = now_iso()
+            persist_dispatch_settings(settings)
+
         timestamp = now_iso()
+        with WORKFLOW_AGENT_CHAT_LOCK:
+            data = self.load_workflow_agent_chat()
+            if self.refresh_workflow_agent_chat(data):
+                self.save_workflow_agent_chat(data)
+            for existing in data.get("messages", []):
+                if isinstance(existing, dict) and existing.get("role") == "workflow-agent" and existing.get("status") == "running":
+                    raise ValueError("The Workflow Agent is still working. Wait for it to finish before sending another map change.")
+
         with WORKFLOW_MAP_LOCK:
             workflow_map = self.load_workflow_map()
-            changed, reply = self.workflow_apply_message(workflow_map, message)
-            if changed:
-                self.persist_workflow_map(workflow_map)
-                workflow_map = self.load_workflow_map()
+            phrase = self.workflow_agent_phrase(message, workflow_map)
+
+        message_id = f"wa_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}"
+        try:
+            process, log_path, err_path = self.launch_workflow_agent_process(tool, phrase, message_id, timestamp)
+        except FileNotFoundError as error:
+            raise RuntimeError(f"Could not launch Workflow Agent ({tool}): {error}") from error
+        except Exception as error:
+            raise RuntimeError(f"Workflow Agent send failed: {error}") from error
+
         with WORKFLOW_AGENT_CHAT_LOCK:
             data = self.load_workflow_agent_chat()
             data["messages"].append({
                 "id": f"wc_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}",
                 "role": "owner",
                 "text": message,
+                "tool": tool,
                 "createdAt": timestamp,
             })
             data["messages"].append({
-                "id": f"wa_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}",
+                "id": message_id,
                 "role": "workflow-agent",
-                "status": "done",
-                "result": reply,
-                "changed": changed,
-                "createdAt": now_iso(),
+                "tool": tool,
+                "status": "running",
+                "processId": process.pid,
+                "processState": "running",
+                "spawnedAt": timestamp,
+                "createdAt": timestamp,
+                "finishedAt": "",
+                "ownerMessage": message,
+                "logPath": log_path,
+                "errPath": err_path,
+                "result": "",
+                "modelReply": "",
+                "changed": False,
             })
             self.save_workflow_agent_chat(data)
             messages = data.get("messages", [])
+        threading.Thread(
+            target=self.wait_for_workflow_agent_process,
+            args=(message_id, process),
+            daemon=True,
+        ).start()
         return {
             "sent": True,
-            "changed": changed,
-            "reply": reply,
-            "messages": messages,
+            "status": "running",
+            "tool": tool,
+            "processId": process.pid,
+            "messages": self.public_workflow_agent_messages(messages),
             "workflowMap": workflow_map,
         }
 
@@ -3527,16 +3848,17 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 for role_name, role_value in roles_payload.items()
                 if isinstance(role_value, dict)
             }
-        elif role in {"planner", "worker", "review"}:
+        elif role in {"planner", "workflow", "worker", "review"}:
             role_updates = {role: payload}
         else:
             role_updates = {}
 
         for role_name, updates in role_updates.items():
-            if role_name == "planner":
-                current = settings.get("planner", {})
-                settings["planner"] = {
-                    "model": normalize_dispatch_model(updates.get("model"), current.get("model", DEFAULT_PLANNER_MODEL)),
+            if role_name in {"planner", "workflow"}:
+                current = settings.get(role_name, {})
+                fallback_model = DEFAULT_PLANNER_MODEL if role_name == "planner" else DEFAULT_DISPATCH_MODEL
+                settings[role_name] = {
+                    "model": normalize_dispatch_model(updates.get("model"), current.get("model", fallback_model)),
                 }
                 continue
             if role_name not in {"worker", "review"}:

@@ -1133,6 +1133,18 @@
       flex: 0 0 auto;
     }
 
+    .workflow-agent-tool {
+      min-height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      padding: 4px 7px;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
     .workflow-agent-action {
       min-height: 28px;
       border: 1px solid var(--line);
@@ -1198,12 +1210,44 @@
     }
 
     .workflow-agent-meta {
-      display: block;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 5px;
       margin-bottom: 4px;
       color: var(--muted);
       font-size: 10.5px;
       font-weight: 760;
       text-transform: uppercase;
+    }
+
+    .workflow-agent-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .workflow-agent-status.is-running::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #c98a3d;
+      animation: planner-pulse 1s ease-in-out infinite;
+    }
+
+    .workflow-agent-status.is-terminated {
+      color: #a0473f;
+    }
+
+    .workflow-agent-model-reply {
+      display: block;
+      margin-top: 8px;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      white-space: pre-wrap;
     }
 
     .workflow-agent-form {
@@ -3498,6 +3542,9 @@
       planner: {
         model: "claude"
       },
+      workflow: {
+        model: "codex"
+      },
       worker: {
         enabled: false,
         model: "codex",
@@ -3616,6 +3663,7 @@
     let workflowMapLoaded = false;
     let workflowAgentMessages = [];
     let workflowAgentSending = false;
+    let workflowAgentPollTimer = null;
     let currentPauseStatus = fallbackPauseStatus;
     let currentSystemStatus = fallbackSystemStatus;
     let systemStatusError = "";
@@ -5476,17 +5524,81 @@
       return '<div class="wf-graph-edge-block" aria-hidden="true"><svg viewBox="0 0 ' + VB_W + ' ' + VB_H + '" preserveAspectRatio="xMidYMid meet">' + paths + labels + '</svg></div>';
     }
 
+    function workflowAgentHasRunning(messages = workflowAgentMessages) {
+      return Array.isArray(messages) && messages.some((message) => message?.role === "workflow-agent" && message?.status === "running");
+    }
+
+    function workflowAgentToolEl() {
+      return workflowEl.querySelector("[data-workflow-agent-tool]");
+    }
+
+    function syncWorkflowAgentModelControl(options = {}) {
+      const control = workflowAgentToolEl();
+      if (!control) return;
+      const model = dispatchSettingsForRole("workflow").model;
+      if (options.force || !control.disabled) {
+        control.value = model;
+      }
+    }
+
+    async function saveWorkflowAgentModelSelection() {
+      const control = workflowAgentToolEl();
+      if (!control) return;
+      const model = control.value;
+      control.disabled = true;
+      statusEl.textContent = "Saving Workflow Agent model...";
+      try {
+        await saveDispatchSettings("workflow", { model });
+        syncWorkflowAgentModelControl({ force: true });
+        statusEl.textContent = `Workflow Agent model set to ${agentToolLabel(model)}.`;
+      } catch (error) {
+        control.value = dispatchSettingsForRole("workflow").model;
+        statusEl.textContent = `Workflow Agent model update failed: ${error.message}`;
+      } finally {
+        renderBoard(currentBoard, currentSourceLabel);
+      }
+    }
+
+    function startWorkflowAgentPolling() {
+      if (workflowAgentPollTimer) return;
+      workflowAgentPollTimer = window.setInterval(() => {
+        pollWorkflowAgentChat().catch(() => {});
+      }, 1500);
+    }
+
+    function stopWorkflowAgentPollingIfIdle() {
+      if (!workflowAgentPollTimer || workflowAgentHasRunning()) return;
+      window.clearInterval(workflowAgentPollTimer);
+      workflowAgentPollTimer = null;
+    }
+
     function workflowAgentMessageMarkup(message) {
       if (!message || typeof message !== "object") return "";
       if (message.role === "owner") {
         return `<div class="workflow-agent-msg owner">${escapeText(message.text || "")}</div>`;
       }
-      const changed = message.changed ? "Map updated" : "Workflow agent";
-      const result = String(message.result || message.text || "").trim() || "Done.";
+      const status = String(message.status || "done").toLowerCase();
+      const running = status === "running";
+      const terminated = status === "terminated" || message.isError;
+      const statusLabel = running ? "Working" : terminated ? "Terminated" : "Done";
+      const mapLabel = message.changed ? "Map updated" : "No map change";
+      const toolLabel = message.tool ? agentToolLabel(message.tool) : "Workflow Agent";
+      const result = running
+        ? "Working on the workflow map update..."
+        : String(message.result || message.text || "").trim() || "Done.";
+      const modelReply = !running && message.modelReply
+        ? `<span class="workflow-agent-model-reply">${escapeText(message.modelReply)}</span>`
+        : "";
       return `
         <div class="workflow-agent-msg agent">
-          <span class="workflow-agent-meta">${escapeText(changed)}</span>
+          <span class="workflow-agent-meta">
+            <span class="workflow-agent-status ${running ? "is-running" : terminated ? "is-terminated" : ""}">${escapeText(statusLabel)}</span>
+            <span>${escapeText(toolLabel)}</span>
+            <span>${escapeText(mapLabel)}</span>
+            ${message.processId ? `<span>PID ${escapeText(message.processId)}</span>` : ""}
+          </span>
           ${escapeText(result)}
+          ${modelReply}
         </div>
       `;
     }
@@ -5496,17 +5608,22 @@
       const body = messages.length
         ? messages.map(workflowAgentMessageMarkup).join("")
         : `<div class="workflow-agent-empty">Ask for a workflow map change.</div>`;
-      const disabled = workflowAgentSending ? "disabled" : "";
+      const running = workflowAgentSending || workflowAgentHasRunning(messages);
+      const disabled = running ? "disabled" : "";
+      const selectedModel = dispatchSettingsForRole("workflow").model;
       return `
         <aside class="workflow-agent-chat" aria-label="Workflow Agent chat">
           <div class="workflow-agent-header">
             <div>
               <h3>Workflow Agent</h3>
-              <span class="workflow-agent-subtitle">${workflowMapLoaded ? "Map-specific updates" : "Using default map"}</span>
+              <span class="workflow-agent-subtitle">${running ? "Working" : workflowMapLoaded ? "Map-specific updates" : "Using default map"}</span>
             </div>
             <div class="workflow-agent-actions">
-              <button class="workflow-agent-action" type="button" data-workflow-chat-clear>Clear</button>
-              <button class="workflow-agent-action" type="button" data-workflow-map-reset>Reset</button>
+              <select class="workflow-agent-tool" data-workflow-agent-tool aria-label="Workflow Agent model" title="Model for workflow-map updates" ${running ? "disabled" : ""}>
+                ${dispatchModelOptionsMarkup(selectedModel)}
+              </select>
+              <button class="workflow-agent-action" type="button" data-workflow-chat-clear ${running ? "disabled" : ""}>Clear</button>
+              <button class="workflow-agent-action" type="button" data-workflow-map-reset ${running ? "disabled" : ""}>Reset</button>
             </div>
           </div>
           <div class="workflow-agent-body" data-workflow-agent-body>${body}</div>
@@ -5514,7 +5631,7 @@
             <textarea class="workflow-agent-input" data-workflow-agent-input placeholder="Add a research agent after Planner..."></textarea>
             <div class="workflow-agent-footer">
               <span class="workflow-agent-hint">Enter sends</span>
-              <button class="workflow-agent-send" type="submit" ${disabled}>${workflowAgentSending ? "Sending..." : "Send"}</button>
+              <button class="workflow-agent-send" type="submit" ${disabled}>${running ? "Working..." : "Send"}</button>
             </div>
           </form>
         </aside>
@@ -5524,24 +5641,30 @@
     async function sendWorkflowAgentMessage(message) {
       const text = String(message || "").trim();
       if (!text || workflowAgentSending) return;
+      const tool = workflowAgentToolEl()?.value || dispatchSettingsForRole("workflow").model;
       workflowAgentSending = true;
       workflowAgentMessages = [
         ...workflowAgentMessages,
-        { role: "owner", text },
-        { role: "workflow-agent", result: "Applying workflow update...", changed: false }
+        { role: "owner", text, tool },
+        { role: "workflow-agent", status: "running", tool, result: "Working on the workflow map update...", changed: false }
       ];
       renderBoard(currentBoard, currentSourceLabel);
       try {
-        const data = await postJson("/viewer/workflow-chat-send", { message: text });
+        const data = await postJson("/viewer/workflow-chat-send", { message: text, tool });
         currentWorkflowMap = normalizeWorkflowMapPayload(data.workflowMap || currentWorkflowMap);
         workflowMapLoaded = true;
         workflowAgentMessages = Array.isArray(data.messages) ? data.messages : workflowAgentMessages;
-        statusEl.textContent = data.changed ? "Workflow map updated." : "Workflow agent replied.";
+        statusEl.textContent = `Workflow Agent started in ${agentToolLabel(data.tool || tool)}${data.processId ? ` (PID ${data.processId})` : ""}.`;
+        startWorkflowAgentPolling();
+        pollWorkflowAgentChat({ silent: true }).catch(() => {});
       } catch (error) {
         workflowAgentMessages = workflowAgentMessages.slice(0, -1);
         workflowAgentMessages.push({
           role: "workflow-agent",
+          status: "terminated",
+          tool,
           result: `Workflow agent failed: ${error.message}`,
+          isError: true,
           changed: false
         });
         statusEl.textContent = `Workflow agent failed: ${error.message}`;
@@ -5553,6 +5676,27 @@
           if (input) input.focus();
         }, 0);
       }
+    }
+
+    async function pollWorkflowAgentChat(options = {}) {
+      const previousRunning = workflowAgentHasRunning();
+      const data = await loadJson("/viewer/workflow-chat?agentName=Task%20board%20viewer", { timeoutMs: 2500 });
+      workflowAgentMessages = Array.isArray(data?.messages) ? data.messages : [];
+      await loadWorkflowMap().catch(() => {});
+      const stillRunning = workflowAgentHasRunning();
+      renderBoard(currentBoard, currentSourceLabel);
+      if (!stillRunning) {
+        stopWorkflowAgentPollingIfIdle();
+        if (previousRunning && !options.silent) {
+          const lastAgent = [...workflowAgentMessages].reverse().find((message) => message.role === "workflow-agent");
+          statusEl.textContent = lastAgent?.status === "terminated" || lastAgent?.isError
+            ? "Workflow Agent terminated."
+            : lastAgent?.changed
+              ? "Workflow Agent finished and updated the map."
+              : "Workflow Agent finished.";
+        }
+      }
+      return workflowAgentMessages;
     }
 
     async function clearWorkflowAgentChat() {
@@ -6001,6 +6145,11 @@
       try {
         const data = await loadJson("/viewer/workflow-chat?agentName=Task%20board%20viewer", { timeoutMs: 1500 });
         workflowAgentMessages = Array.isArray(data?.messages) ? data.messages : [];
+        if (workflowAgentHasRunning()) {
+          startWorkflowAgentPolling();
+        } else {
+          stopWorkflowAgentPollingIfIdle();
+        }
       } catch (error) {
         logOptionalLoadFailure("workflow agent chat", error);
       }
@@ -6013,12 +6162,14 @@
         currentDispatchSettings = settings && typeof settings === "object" ? settings : fallbackDispatchSettings;
         syncSettingsRoleModelControls();
         syncPlannerChatModelControl();
+        syncWorkflowAgentModelControl();
         return currentDispatchSettings;
       } catch (error) {
         logOptionalLoadFailure("dispatch settings", error);
         currentDispatchSettings = fallbackDispatchSettings;
         syncSettingsRoleModelControls();
         syncPlannerChatModelControl();
+        syncWorkflowAgentModelControl();
         return currentDispatchSettings;
       }
     }
@@ -6126,6 +6277,7 @@
 
     function dispatchRoleLabel(role) {
       if (role === "planner" || role === "planning") return "Planner chat";
+      if (role === "workflow") return "Workflow Agent";
       if (role === "worker") return "Worker";
       if (role === "review") return "Review";
       return role || "Agent";
@@ -6178,6 +6330,7 @@
       currentDispatchSettings = settings && typeof settings === "object" ? settings : currentDispatchSettings;
       syncSettingsRoleModelControls();
       syncPlannerChatModelControl();
+      syncWorkflowAgentModelControl();
       await refreshSystemStatus({ silent: true }).catch(() => {});
       renderBoard(currentBoard, currentSourceLabel);
       return currentDispatchSettings;
@@ -6280,6 +6433,7 @@
                 <div class="settings-section-title">Agent models</div>
                 <div class="settings-role-grid">
                   ${settingsRoleModelMarkup("planner")}
+                  ${settingsRoleModelMarkup("workflow")}
                   ${settingsRoleModelMarkup("worker")}
                   ${settingsRoleModelMarkup("review")}
                 </div>
@@ -7631,6 +7785,13 @@
       }
       if (input) input.value = "";
       sendWorkflowAgentMessage(message);
+    });
+
+    workflowEl.addEventListener("change", (event) => {
+      const modelControl = event.target.closest("[data-workflow-agent-tool]");
+      if (modelControl) {
+        saveWorkflowAgentModelSelection();
+      }
     });
 
     workflowEl.addEventListener("keydown", (event) => {

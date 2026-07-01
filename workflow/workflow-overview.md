@@ -78,7 +78,9 @@ The viewer's Agent Workflow Map is backed by:
 
 The map starts with locked Planner, Worker, and Reviewer nodes, then can be extended with custom agents, steps, handoffs, node rules, global rules, and handoff-specific rules. The Workflow tray includes a separate **Workflow Agent** chat beside the graph. This chat is not the Planner chat: it changes only the workflow map model and does not create task-board todo cards, claim work, implement code, or review work.
 
-Backend endpoints: `GET /viewer/workflow-map` loads the editable map, `POST /viewer/workflow-chat-send` applies a Workflow Agent message to the map, `GET /viewer/workflow-chat` loads the Workflow Agent chat history, `POST /viewer/workflow-chat-clear` clears that chat history, and `POST /viewer/workflow-map-reset` restores the core Planner -> Worker -> Reviewer map. Workflow Agent chat history lives under `task-board/workflow-agent-chat/` (runtime-only, gitignored).
+The Workflow Agent has its own model selector (`workflow.model` in dispatch settings) with Codex, Claude, and Qwen options. A turn starts the selected CLI model as a tracked process and shows status in the chat (`Working`, `Done`, or `Terminated`) with model and PID metadata. When the model turn exits successfully, the backend applies the workflow-map update through its deterministic workflow-map mutation API, keeping map edits predictable while still making model choice and progress visible.
+
+Backend endpoints: `GET /viewer/workflow-map` loads the editable map, `POST /viewer/workflow-chat-send` starts a Workflow Agent turn for a map update, `GET /viewer/workflow-chat` polls Workflow Agent chat/progress, `POST /viewer/workflow-chat-clear` clears that chat history, and `POST /viewer/workflow-map-reset` restores the core Planner -> Worker -> Reviewer map. Workflow Agent chat history and per-turn logs live under `task-board/workflow-agent-chat/` (runtime-only, gitignored).
 
 ## Roles
 
