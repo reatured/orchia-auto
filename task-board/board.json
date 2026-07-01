@@ -1,7 +1,7 @@
 {
   "schemaVersion": "1.0",
   "boardName": "Project Task Board",
-  "updatedAt": "",
+  "updatedAt": "2026-06-30T11:14:29-07:00",
   "workflowDocs": {
     "overview": "../workflow/workflow-overview.md",
     "planner": "../roles/planner.md",
@@ -30,11 +30,87 @@
   },
   "columns": {
     "todo": [],
-    "claimed": [],
+    "claimed": [
+      {
+        "id": "TASK-20260630-001",
+        "title": "Show version and branch in frontend corner",
+        "project": "Task board frontend",
+        "priority": "normal",
+        "type": "implementation",
+        "status": "claimed",
+        "requestedBy": "owner",
+        "createdBy": "Planner",
+        "createdAt": "2026-06-30T10:59:41-07:00",
+        "claimedBy": "ada",
+        "claimedAt": "2026-06-30T11:14:29-07:00",
+        "reviewClaimedBy": "",
+        "reviewClaimedAt": "",
+        "reviewRequestedAt": "",
+        "doneAt": "",
+        "reviewedBy": "",
+        "reviewedAt": "",
+        "redoCount": 0,
+        "summary": "Add a small, unobtrusive frontend indicator that shows the current app version and git branch in a corner of the interface.",
+        "requirements": [
+          "Display both the repository version and current git branch in a fixed corner location of the frontend interface.",
+          "Use the existing VERSION file as the source for the version value.",
+          "Use the current git branch as the branch value when available, with a graceful fallback such as unknown when it cannot be determined.",
+          "Keep the indicator visually subtle and ensure it does not block or overlap primary controls, task content, or small-screen navigation.",
+          "If both viewer frontends are actively used, keep the visible version/branch treatment consistent across them."
+        ],
+        "acceptanceCriteria": [
+          "The frontend shows a corner label containing version and branch values, including branch feature/orchia-organic-v3 when run from the current branch.",
+          "The version value matches the contents of VERSION without hardcoding a stale copy into the UI.",
+          "The indicator remains readable on desktop and mobile viewports and does not interfere with existing interactions.",
+          "The implementation handles missing git metadata without breaking page rendering.",
+          "Worker notes identify the URL or file path used to inspect the completed UI."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [],
+        "sourceHandoffs": [],
+        "files": [
+          "VERSION",
+          "task-board/viewer.html",
+          "task-board/viewer-v3.html",
+          "task-board/server.py"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Task board viewer",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop and mobile",
+            "state": "Start the task-board backend and open the viewer normally.",
+            "notes": "Confirm the version/branch indicator appears in a corner and does not cover task board controls."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "The repository was on branch feature/orchia-organic-v3 when this task was created.",
+        "lastApiAction": "claim-next-worker",
+        "lastApiActor": "ada",
+        "lastApiAt": "2026-06-30T11:14:29-07:00",
+        "apiHistory": [
+          {
+            "action": "claim-next-worker",
+            "agentName": "ada",
+            "at": "2026-06-30T11:14:29-07:00"
+          }
+        ]
+      }
+    ],
     "review": [],
     "reviewing": [],
     "done": [],
     "archived": []
   },
-  "apiAuditLog": []
+  "apiAuditLog": [
+    {
+      "action": "claim-next-worker",
+      "agentName": "ada",
+      "taskId": "TASK-20260630-001",
+      "at": "2026-06-30T11:14:29-07:00"
+    }
+  ]
 }
