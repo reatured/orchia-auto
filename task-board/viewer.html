@@ -298,17 +298,27 @@
       white-space: nowrap;
     }
 
-    .system-warnings {
+    .system-warnings,
+    .system-notices {
       grid-column: 1 / -1;
       min-width: 0;
-      border: 1px solid #ddb6a9;
       border-radius: 8px;
-      background: #fff4f1;
-      color: #7a352c;
       padding: 9px 12px;
       font-size: 12px;
       line-height: 1.35;
       overflow-wrap: anywhere;
+    }
+
+    .system-warnings {
+      border: 1px solid #ddb6a9;
+      background: #fff4f1;
+      color: #7a352c;
+    }
+
+    .system-notices {
+      border: 1px solid #c8d7c5;
+      background: #f4faf3;
+      color: #365b39;
     }
 
     .board {
@@ -316,6 +326,130 @@
       grid-template-columns: repeat(3, minmax(260px, 1fr));
       gap: 14px;
       align-items: start;
+    }
+
+    .handoff-board {
+      display: grid;
+      gap: 10px;
+      margin: 14px 0 0;
+    }
+
+    .handoff-board:empty,
+    .handoff-board[hidden] {
+      display: none;
+    }
+
+    .handoff-panel {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-top: 4px solid var(--workflow);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.78);
+      box-shadow: 0 8px 22px rgba(23, 32, 42, 0.06);
+      padding: 12px;
+    }
+
+    .handoff-panel-header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 10px;
+      margin-bottom: 10px;
+    }
+
+    .handoff-panel-title {
+      display: grid;
+      gap: 3px;
+      min-width: 0;
+    }
+
+    .handoff-panel-title h2 {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .handoff-panel-title span {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+
+    .handoff-output-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 10px;
+      align-items: start;
+    }
+
+    .handoff-output {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fbfaf7;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .handoff-output-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .handoff-output-title strong {
+      min-width: 0;
+      overflow-wrap: anywhere;
+      line-height: 1.2;
+    }
+
+    .handoff-output-type {
+      flex: 0 0 auto;
+      border: 1px solid color-mix(in srgb, var(--workflow) 34%, var(--line));
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--workflow) 10%, #ffffff);
+      color: color-mix(in srgb, var(--workflow) 74%, var(--ink));
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .handoff-output-meta,
+    .handoff-file-meta,
+    .handoff-file-preview,
+    .handoff-patterns {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .handoff-files {
+      display: grid;
+      gap: 8px;
+      min-width: 0;
+    }
+
+    .handoff-file {
+      min-width: 0;
+      border: 1px solid #ded7cd;
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.82);
+      padding: 8px;
+      display: grid;
+      gap: 5px;
+    }
+
+    .handoff-file code {
+      color: var(--ink);
+      font-weight: 700;
     }
 
     .board.is-done-focus {
@@ -1186,12 +1320,14 @@
 
     .workflow-agent-msg {
       max-width: 94%;
-      padding: 9px 11px;
+      min-width: 0;
+      padding: 10px 12px;
       border-radius: 12px;
       font-size: 13px;
       line-height: 1.4;
-      white-space: pre-wrap;
       overflow-wrap: anywhere;
+      display: grid;
+      gap: 8px;
     }
 
     .workflow-agent-msg.owner {
@@ -1207,6 +1343,52 @@
       background: #fbfaf7;
       color: var(--ink);
       border-bottom-left-radius: 4px;
+    }
+
+    .workflow-agent-result {
+      display: block;
+      min-width: 0;
+      white-space: pre-wrap;
+    }
+
+    .workflow-agent-message-footer {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      padding-top: 1px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.2;
+    }
+
+    .workflow-agent-msg.owner .workflow-agent-message-footer {
+      justify-content: flex-end;
+      color: rgba(255, 255, 255, 0.84);
+    }
+
+    .workflow-agent-footer-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      max-width: 100%;
+      min-height: 18px;
+      border: 1px solid rgba(35, 45, 58, 0.08);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.64);
+      padding: 2px 6px;
+      font-weight: 720;
+      white-space: nowrap;
+    }
+
+    .workflow-agent-msg.owner .workflow-agent-footer-item {
+      border-color: rgba(255, 255, 255, 0.22);
+      background: rgba(255, 255, 255, 0.12);
+    }
+
+    .workflow-agent-time {
+      color: inherit;
     }
 
     .workflow-agent-meta {
@@ -1240,19 +1422,18 @@
       color: #a0473f;
     }
 
-    .workflow-agent-result {
-      display: block;
-    }
-
     .workflow-agent-diagnostics-toggle {
-      display: inline-block;
-      margin-top: 8px;
+      justify-self: start;
+      display: inline-flex;
+      align-items: center;
+      min-height: 24px;
+      margin-top: 0;
       padding: 2px 8px;
       font-size: 11px;
       color: var(--muted);
-      background: none;
+      background: rgba(255, 255, 255, 0.72);
       border: 1px solid var(--line);
-      border-radius: 4px;
+      border-radius: 6px;
       cursor: pointer;
       font-family: var(--app-font, inherit);
     }
@@ -1263,11 +1444,12 @@
 
     .workflow-agent-diagnostics {
       display: none;
-      margin-top: 8px;
-      max-height: 300px;
+      max-height: 280px;
       overflow: auto;
-      border-top: 1px solid var(--line);
-      padding-top: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.72);
+      padding: 8px;
     }
     .workflow-agent-diagnostics.is-open { display: block; }
     .workflow-agent-diagnostics pre {
@@ -1430,6 +1612,26 @@
       margin-top: 4px;
       color: var(--muted);
       font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .workflow-output-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      min-width: 0;
+    }
+
+    .workflow-output-chip {
+      max-width: 100%;
+      border: 1px solid color-mix(in srgb, var(--node-color) 34%, var(--line));
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--node-color) 10%, #ffffff);
+      color: color-mix(in srgb, var(--node-color) 76%, var(--ink));
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 760;
+      line-height: 1.25;
       overflow-wrap: anywhere;
     }
 
@@ -3519,6 +3721,7 @@
     </section>
 
     <section class="board" id="board" aria-label="Agent task board"></section>
+    <section class="handoff-board" id="handoffBoard" aria-label="Workflow handoff files"></section>
     <section class="workflow-board" id="workflowBoard" aria-label="Workflow graph"></section>
     <section class="archive-board" id="archiveBoard" aria-label="Archived task board"></section>
     <section class="agent-logs-board" id="agentLogsBoard" aria-label="Agent logs"></section>
@@ -3527,7 +3730,7 @@
 
 
   <script>
-    const visualColumns = [
+    const fallbackVisualColumns = [
       { key: "todo", label: "To Do", sourceKeys: ["claimed", "todo"], agentRole: "worker", agentLabel: "Workers" },
       { key: "review", label: "Review", sourceKeys: ["reviewing", "review"], agentRole: "review", agentLabel: "Reviewers" },
       { key: "done", label: "Done", sourceKeys: ["done"] }
@@ -3559,6 +3762,11 @@
       totalLogCount: 0,
       truncated: false,
       limit: 0
+    };
+    const fallbackWorkflowHandoffs = {
+      updatedAt: "",
+      projectRoot: "",
+      outputs: []
     };
     const AGENT_LOG_LOAD_LIMIT = 250;
     const AGENT_LOG_RENDER_LIMIT = 250;
@@ -3618,14 +3826,25 @@
         warnings: []
       },
       pause: fallbackPauseStatus,
-      agents: { total: 0, active: 0, stale: 0, pendingSpawns: 0, pausedRuns: 0 },
+      agents: {
+        total: 0,
+        active: 0,
+        stale: 0,
+        staleWithLocks: 0,
+        staleHistory: 0,
+        staleRecords: [],
+        stalePolicy: "",
+        pendingSpawns: 0,
+        pausedRuns: 0
+      },
       dispatch: {
         planner: { model: "claude" },
         worker: { enabled: false, model: "codex", maxAgents: 1, activeAgents: 0, pendingSpawns: 0 },
         review: { enabled: false, model: "codex", maxAgents: 1, activeAgents: 0, pendingSpawns: 0 }
       },
       logs: { recentCount: 0, errorCount: 0, latestError: {}, recentErrors: [] },
-      warnings: []
+      warnings: [],
+      notices: []
     };
     const fallbackAgentSchema = {
       modelBackground: {
@@ -3648,20 +3867,81 @@
       nodes: [
         { id: "planner", detailKey: "planning-agent", kind: "Agent", label: "Planner", color: "#476f8f", meta: "Turns requirements into todo cards.", acceptsHumanInput: true, locked: true, rules: [] },
         { id: "worker", detailKey: "worker-agent", kind: "Agent", label: "Worker", color: "var(--claimed)", meta: "Claims todo work, implements it, and requests review.", locked: true, rules: [] },
-        { id: "reviewer", detailKey: "review-agent", kind: "Agent", label: "Reviewer", color: "#7f6cae", meta: "Claims review work, validates it, and decides outcome.", locked: true, rules: [] }
+        {
+          id: "reviewer",
+          detailKey: "review-agent",
+          kind: "Agent",
+          label: "Reviewer",
+          color: "#7f6cae",
+          meta: "Claims review work, validates it, and decides outcome.",
+          locked: true,
+          rules: [],
+          outputs: [
+            {
+              id: "reviewer-done-output",
+              type: "human-readable-output",
+              renderAs: "board-column",
+              label: "Done",
+              description: "Accepted work and failed reviewed attempts that the owner can read and archive.",
+              visualColumnKey: "done",
+              columnKey: "done",
+              sourceKeys: ["done"],
+              color: "var(--done)"
+            }
+          ]
+        }
       ],
       rows: [["planner"], ["worker"], ["reviewer"]],
       edges: [
-        { from: "planner", to: "worker", label: "todo tickets" },
-        { from: "worker", to: "reviewer", label: "inspection targets + review request" }
+        {
+          from: "planner",
+          to: "worker",
+          label: "todo tickets",
+          outputs: [
+            {
+              id: "planner-worker-todo-tickets",
+              type: "task-board-ticket",
+              renderAs: "board-column",
+              label: "To Do",
+              description: "Planner-created tickets ready for Workers to claim.",
+              visualColumnKey: "todo",
+              columnKey: "todo",
+              sourceKeys: ["claimed", "todo"],
+              agentRole: "worker",
+              agentLabel: "Workers",
+              color: "var(--todo)"
+            }
+          ]
+        },
+        {
+          from: "worker",
+          to: "reviewer",
+          label: "inspection targets + review request",
+          outputs: [
+            {
+              id: "worker-reviewer-review-tickets",
+              type: "task-board-ticket",
+              renderAs: "board-column",
+              label: "Review",
+              description: "Worker-completed tickets waiting for reviewer inspection.",
+              visualColumnKey: "review",
+              columnKey: "review",
+              sourceKeys: ["reviewing", "review"],
+              agentRole: "review",
+              agentLabel: "Reviewers",
+              color: "var(--review)"
+            }
+          ]
+        }
       ],
       globalRules: [
-        { id: "core-source-of-truth", title: "Source of truth", text: "Workflow map edits describe the coordination model. Task movement still happens through board.json and the task-board API." }
+        { id: "core-source-of-truth", title: "Source of truth", text: "Workflow map outputs describe agent coordination and drive viewer rendering for task-board lanes and handoff-file sections. Task movement still happens through board.json and the task-board API." }
       ]
     };
     let currentAgentSchema = fallbackAgentSchema;
 
     const boardEl = document.getElementById("board");
+    const handoffBoardEl = document.getElementById("handoffBoard");
     const workflowEl = document.getElementById("workflowBoard");
     const archiveEl = document.getElementById("archiveBoard");
     const agentLogsEl = document.getElementById("agentLogsBoard");
@@ -3689,7 +3969,9 @@
     let currentAgentLogs = fallbackAgentLogs;
     let currentDispatchSettings = fallbackDispatchSettings;
     let currentWorkflowMap = fallbackWorkflowMap;
+    let currentWorkflowHandoffs = fallbackWorkflowHandoffs;
     let workflowMapLoaded = false;
+    let workflowHandoffsLoaded = false;
     let workflowAgentMessages = [];
     let workflowAgentSending = false;
     let workflowAgentPollTimer = null;
@@ -3877,6 +4159,61 @@
       return visualColumn.sourceKeys.flatMap((sourceColumnKey) =>
         decoratedColumnTasks(normalizedColumns[sourceColumnKey], sourceColumnKey)
       );
+    }
+
+    function workflowMapBoardColumnOutputs(map = currentWorkflowMap) {
+      const normalizedMap = normalizeWorkflowMapPayload(map);
+      const outputs = [];
+      normalizedMap.edges.forEach((edge) => {
+        const edgeOutputs = Array.isArray(edge.outputs) ? edge.outputs : [];
+        edgeOutputs.forEach((output) => {
+          if (output?.renderAs === "board-column" && Array.isArray(output.sourceKeys) && output.sourceKeys.length) {
+            outputs.push({ ...output, from: edge.from, to: edge.to, source: "edge" });
+          }
+        });
+      });
+      normalizedMap.nodes.forEach((node) => {
+        const nodeOutputs = Array.isArray(node.outputs) ? node.outputs : [];
+        nodeOutputs.forEach((output) => {
+          if (output?.renderAs === "board-column" && Array.isArray(output.sourceKeys) && output.sourceKeys.length) {
+            outputs.push({ ...output, from: node.id, to: "", source: "node" });
+          }
+        });
+      });
+      return outputs;
+    }
+
+    function taskBoardVisualColumns(map = currentWorkflowMap) {
+      const outputs = workflowMapBoardColumnOutputs(map);
+      if (!outputs.length) return fallbackVisualColumns;
+      const byKey = new Map();
+      outputs.forEach((output) => {
+        const key = output.visualColumnKey || output.columnKey;
+        if (!key) return;
+        if (!byKey.has(key)) {
+          byKey.set(key, {
+            key,
+            label: output.label || key,
+            sourceKeys: [],
+            agentRole: output.agentRole || "",
+            agentLabel: output.agentLabel || "",
+            color: output.color || "",
+            outputType: output.type || "",
+            outputId: output.id || ""
+          });
+        }
+        const column = byKey.get(key);
+        workflowStringList(output.sourceKeys).forEach((sourceKey) => {
+          const normalizedKey = slugWorkflowId(sourceKey, "");
+          if (normalizedKey && !column.sourceKeys.includes(normalizedKey)) column.sourceKeys.push(normalizedKey);
+        });
+        if (!column.agentRole && output.agentRole) column.agentRole = output.agentRole;
+        if (!column.agentLabel && output.agentLabel) column.agentLabel = output.agentLabel;
+        if (!column.color && output.color) column.color = output.color;
+        if (!column.outputType && output.type) column.outputType = output.type;
+      });
+      const columns = Array.from(byKey.values()).filter((column) => column.sourceKeys.length);
+      return columns.length ? columns : fallbackVisualColumns;
     }
 
     function activeAgentsForRole(role) {
@@ -4142,7 +4479,11 @@
           warnings: Array.isArray(board.warnings) ? board.warnings : []
         },
         pause: normalizePauseStatus(source.pause || currentPauseStatus || fallbackPauseStatus),
-        agents: { ...fallbackSystemStatus.agents, ...agents },
+        agents: {
+          ...fallbackSystemStatus.agents,
+          ...agents,
+          staleRecords: Array.isArray(agents.staleRecords) ? agents.staleRecords : []
+        },
         dispatch: {
           planner: { ...fallbackSystemStatus.dispatch.planner, ...(dispatch.planner || {}) },
           worker: { ...fallbackSystemStatus.dispatch.worker, ...(dispatch.worker || {}) },
@@ -4154,7 +4495,8 @@
           latestError: logs.latestError && typeof logs.latestError === "object" ? logs.latestError : {},
           recentErrors: Array.isArray(logs.recentErrors) ? logs.recentErrors : []
         },
-        warnings: Array.isArray(source.warnings) ? source.warnings : []
+        warnings: Array.isArray(source.warnings) ? source.warnings : [],
+        notices: Array.isArray(source.notices) ? source.notices : []
       };
       normalized.status = String(normalized.status || (normalized.ok ? "ok" : "watch")).toLowerCase();
       return normalized;
@@ -4189,7 +4531,23 @@
       const counts = data.board.counts || {};
       const activeWork = Number(counts.todo || 0) + Number(counts.claimed || 0) + Number(counts.review || 0) + Number(counts.reviewing || 0);
       const boardWarnings = Number(data.board.warningCount || 0);
-      const agentIssues = Number(data.agents.stale || 0) + Number(data.agents.pausedRuns || 0);
+      const staleTotal = Number(data.agents.stale || 0);
+      const staleWithLocks = Number(data.agents.staleWithLocks || 0);
+      const staleHistory = Number.isFinite(Number(data.agents.staleHistory))
+        ? Number(data.agents.staleHistory)
+        : Math.max(0, staleTotal - staleWithLocks);
+      const staleRecords = Array.isArray(data.agents.staleRecords) ? data.agents.staleRecords : [];
+      const staleLockNames = staleRecords
+        .filter((record) => record && record.requiresAction)
+        .map((record) => String(record.personalName || record.agentId || "agent").trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      const staleHistoryNames = staleRecords
+        .filter((record) => record && !record.requiresAction)
+        .map((record) => String(record.personalName || record.agentId || "agent").trim())
+        .filter(Boolean)
+        .slice(0, 3);
+      const agentIssues = staleWithLocks + Number(data.agents.pausedRuns || 0);
       const plannerDispatch = data.dispatch.planner || {};
       const workerDispatch = data.dispatch.worker || {};
       const reviewDispatch = data.dispatch.review || {};
@@ -4208,6 +4566,7 @@
       const warnings = systemStatusError
         ? [systemStatusError]
         : (Array.isArray(data.warnings) ? data.warnings : []);
+      const notices = Array.isArray(data.notices) ? data.notices : [];
 
       systemOverviewEl.innerHTML = [
         systemCard(
@@ -4238,7 +4597,10 @@
           `${data.agents.active || 0} live`,
           [
             `Pending ${data.agents.pendingSpawns || 0}`,
-            `Stale ${data.agents.stale || 0}`,
+            `Stale locks ${staleWithLocks}`,
+            `Stale history ${staleHistory}`,
+            staleLockNames.length ? `Needs action: ${staleLockNames.join(", ")}` : "",
+            staleHistoryNames.length ? `History: ${staleHistoryNames.join(", ")}` : "",
             `Paused runs ${data.agents.pausedRuns || 0}`
           ],
           agentIssues ? "watch" : "ok",
@@ -4262,6 +4624,9 @@
         ),
         warnings.length
           ? `<div class="system-warnings">${warnings.slice(0, 6).map(escapeText).join(" | ")}</div>`
+          : "",
+        notices.length
+          ? `<div class="system-notices">${notices.slice(0, 6).map(escapeText).join(" | ")}</div>`
           : ""
       ].join("");
     }
@@ -5252,6 +5617,10 @@
       const badgeHtml = badge
         ? `<span class="count workflow-state-count" style="background: ${step.color}">${escapeText(badge)}</span>`
         : "";
+      const outputList = Array.isArray(step.outputs) ? step.outputs.filter((output) => output?.label) : [];
+      const outputHtml = outputList.length
+        ? `<span class="workflow-output-list">${outputList.map((output) => `<span class="workflow-output-chip">${escapeText(output.label)} - ${escapeText(workflowOutputTypeLabel(output.type, output.renderAs))}</span>`).join("")}</span>`
+        : "";
       const humanInput = !!step.acceptsHumanInput;
       const humanAttrs = humanInput
         ? ` data-human-input="1" data-chat-detail="${escapeText(step.key)}" data-chat-label="${escapeText(step.label)}"`
@@ -5269,6 +5638,7 @@
             ${badgeHtml}
           </span>
           <span class="workflow-state-meta">${escapeText(step.meta)}</span>
+          ${outputHtml}
           ${humanBadge}
         </button>
       `;
@@ -5282,14 +5652,20 @@
         const rules = Array.isArray(edge.rules) ? edge.rules.filter((rule) => rule && rule.text) : [];
         return rules.length ? ` Rules: ${rules.map((rule) => rule.text).join(" | ")}` : "";
       };
+      const edgeOutputText = (edge) => {
+        const outputs = Array.isArray(edge.outputs) ? edge.outputs.filter((output) => output && output.label) : [];
+        return outputs.length
+          ? ` Outputs: ${outputs.map((output) => `${output.label} (${workflowOutputTypeLabel(output.type, output.renderAs)})`).join(", ")}.`
+          : "";
+      };
       map.nodes.forEach((node) => {
         if (["planner", "worker", "reviewer"].includes(node.id)) return;
         const inbound = map.edges
           .filter((edge) => edge.to === node.id && lookup[edge.from])
-          .map((edge) => `${lookup[edge.from].label} -> ${node.label}: ${edge.label || "handoff"}.${edgeRuleText(edge)}`);
+          .map((edge) => `${lookup[edge.from].label} -> ${node.label}: ${edge.label || "handoff"}.${edgeOutputText(edge)}${edgeRuleText(edge)}`);
         const outbound = map.edges
           .filter((edge) => edge.from === node.id && lookup[edge.to])
-          .map((edge) => `${node.label} -> ${lookup[edge.to].label}: ${edge.label || "handoff"}.${edgeRuleText(edge)}`);
+          .map((edge) => `${node.label} -> ${lookup[edge.to].label}: ${edge.label || "handoff"}.${edgeOutputText(edge)}${edgeRuleText(edge)}`);
         const nodeRules = Array.isArray(node.rules) && node.rules.length
           ? node.rules.map((rule) => `${rule.title || "Rule"}: ${rule.text}`)
           : ["No node-specific rules yet."];
@@ -5335,6 +5711,21 @@
       return node.rules.map((rule) => `${rule.title || "Rule"}: ${rule.text}`);
     }
 
+    function workflowNodeOutputItems(detailKey) {
+      const map = normalizeWorkflowMapPayload(currentWorkflowMap);
+      const node = map.nodes.find((item) => item.detailKey === detailKey || item.id === detailKey);
+      if (!node || !Array.isArray(node.outputs) || !node.outputs.length) return [];
+      return node.outputs.map((output) => {
+        const typeLabel = workflowOutputTypeLabel(output.type, output.renderAs);
+        const renderText = output.renderAs === "board-column"
+          ? `rendered as board lane ${output.visualColumnKey || output.columnKey || output.label}`
+          : output.renderAs === "handoff-files"
+            ? `rendered as handoff files from ${(output.filePatterns || []).join(", ")}`
+            : `rendered as ${output.renderAs || "detail"}`;
+        return `${output.label || "Output"} (${typeLabel}): ${renderText}.`;
+      });
+    }
+
     function workflowBranch(detailKey, title, text) {
       return `
         <button class="workflow-branch" type="button" data-workflow-detail="${escapeText(detailKey)}" aria-label="Open workflow details for ${escapeText(title)}">
@@ -5375,8 +5766,25 @@
         label: node.label || "Workflow node",
         color: node.color || "var(--workflow)",
         meta: node.meta || "",
-        acceptsHumanInput: Boolean(node.acceptsHumanInput)
+        acceptsHumanInput: Boolean(node.acceptsHumanInput),
+        outputs: Array.isArray(node.outputs) ? node.outputs : []
       };
+    }
+
+    function workflowOutputTypeLabel(type, renderAs = "") {
+      if (type === "task-board-ticket") return "ticket";
+      if (type === "handoff-markdown" || renderAs === "handoff-files") return "file";
+      if (type === "human-readable-output") return "human";
+      return String(type || renderAs || "output").replace(/-/g, " ");
+    }
+
+    function workflowEdgeLabel(edge) {
+      const outputs = Array.isArray(edge?.outputs) ? edge.outputs : [];
+      const primaryOutput = outputs.find((output) => output?.label) || null;
+      if (!primaryOutput) return edge?.label || "";
+      const label = primaryOutput.label || edge?.label || "Output";
+      const typeLabel = workflowOutputTypeLabel(primaryOutput.type, primaryOutput.renderAs);
+      return typeLabel ? `${label} - ${typeLabel}` : label;
     }
 
     function buildWorkflowGraph(normalized) {
@@ -5489,7 +5897,7 @@
         paths += arrowAt(tx, BOTTOM_Y);
 
         var mergeLx = sourceXs.reduce(function(a, b) { return a + b; }, 0) / sourceXs.length;
-        labels += labelPill(mergeLx, MID_Y, targetEdges[0].label || "");
+        labels += labelPill(mergeLx, MID_Y, workflowEdgeLabel(targetEdges[0]));
         targetEdges.forEach(function(e) { rendered[e.from + "\u2192" + e.to] = true; });
       });
 
@@ -5526,7 +5934,7 @@
           paths += arrowAt(tx, BOTTOM_Y);
         });
 
-        labels += labelPill(sx, MID_Y, sourceEdges[0].label || "");
+        labels += labelPill(sx, MID_Y, workflowEdgeLabel(sourceEdges[0]));
         sourceEdges.forEach(function(e) { rendered[e.from + "\u2192" + e.to] = true; });
       });
 
@@ -5542,10 +5950,10 @@
 
         if (Math.abs(sx - tx) < 4) {
           paths += '<line x1="' + sx + '" y1="0" x2="' + tx + '" y2="' + BOTTOM_Y + '" class="wf-graph-edge-line"/>';
-          labels += labelPill(sx, VB_H * 0.42, e.label || "");
+          labels += labelPill(sx, VB_H * 0.42, workflowEdgeLabel(e));
         } else {
           paths += '<path d="M' + sx + ',0 L' + sx + ',' + MID_Y + ' L' + tx + ',' + MID_Y + ' L' + tx + ',' + BOTTOM_Y + '" class="wf-graph-edge-line"/>';
-          labels += labelPill((sx + tx) / 2, MID_Y, e.label || "");
+          labels += labelPill((sx + tx) / 2, MID_Y, workflowEdgeLabel(e));
         }
         paths += arrowAt(tx, BOTTOM_Y);
       });
@@ -5559,6 +5967,41 @@
 
     function workflowAgentToolEl() {
       return workflowEl.querySelector("[data-workflow-agent-tool]");
+    }
+
+    function workflowAgentBodyEl() {
+      return workflowEl.querySelector("[data-workflow-agent-body]");
+    }
+
+    function workflowAgentScrollState() {
+      const body = workflowAgentBodyEl();
+      if (!body) return { wasNearBottom: false, scrollTop: 0 };
+      return {
+        wasNearBottom: body.scrollHeight - body.scrollTop - body.clientHeight < 80,
+        scrollTop: body.scrollTop
+      };
+    }
+
+    function restoreWorkflowAgentScroll(state = {}) {
+      const body = workflowAgentBodyEl();
+      if (!body) return;
+      if (state.wasNearBottom) {
+        body.scrollTop = body.scrollHeight;
+        return;
+      }
+      if (Number.isFinite(state.scrollTop)) {
+        const maxScrollTop = Math.max(0, body.scrollHeight - body.clientHeight);
+        body.scrollTop = Math.min(state.scrollTop, maxScrollTop);
+      }
+    }
+
+    function scheduleWorkflowAgentScrollRestore(state) {
+      if (!Array.isArray(workflowAgentMessages) || !workflowAgentMessages.length) return;
+      restoreWorkflowAgentScroll(state);
+      window.requestAnimationFrame(() => {
+        restoreWorkflowAgentScroll(state);
+        window.setTimeout(() => restoreWorkflowAgentScroll(state), 0);
+      });
     }
 
     function workflowAgentDiagnosticsText(message, statusLabel, mapLabel, toolLabel) {
@@ -5621,10 +6064,64 @@
       workflowAgentPollTimer = null;
     }
 
+    function workflowAgentMessageTimestamp(message) {
+      if (!message || typeof message !== "object") return "";
+      if (message.role === "workflow-agent") {
+        return message.finishedAt || message.createdAt || message.spawnedAt || "";
+      }
+      return message.createdAt || "";
+    }
+
+    function workflowAgentTimestampMarkup(message) {
+      const value = workflowAgentMessageTimestamp(message);
+      const label = shortTime(value);
+      if (!label) return "";
+      const title = formatDateTime(value) || label;
+      return `<span class="workflow-agent-footer-item workflow-agent-time" title="${escapeText(title)}">${escapeText(label)}</span>`;
+    }
+
+    function workflowAgentIntegerValue(value) {
+      const text = String(value ?? "").trim();
+      if (!text) return 0;
+      const normalized = text.replace(/[\s,._]+/g, "");
+      if (!/^\d+$/.test(normalized)) return 0;
+      const parsed = Number.parseInt(normalized, 10);
+      return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+    }
+
+    function workflowAgentCountLabel(value) {
+      const parsed = workflowAgentIntegerValue(value);
+      return parsed ? parsed.toLocaleString() : "";
+    }
+
+    function workflowAgentTokenMarkup(message) {
+      const usage = message?.tokenUsage && typeof message.tokenUsage === "object" ? message.tokenUsage : {};
+      const total = workflowAgentIntegerValue(usage.total ?? message?.tokensUsed ?? message?.tokenCount);
+      if (!total) return "";
+      const detailParts = [];
+      const input = workflowAgentIntegerValue(usage.input);
+      const output = workflowAgentIntegerValue(usage.output);
+      const turns = workflowAgentIntegerValue(usage.turns);
+      if (input) detailParts.push(`${workflowAgentCountLabel(input)} input`);
+      if (output) detailParts.push(`${workflowAgentCountLabel(output)} output`);
+      if (turns > 1) detailParts.push(`${workflowAgentCountLabel(turns)} model turns`);
+      const title = detailParts.length
+        ? `${workflowAgentCountLabel(total)} tokens used (${detailParts.join(" / ")})`
+        : `${workflowAgentCountLabel(total)} tokens used`;
+      return `<span class="workflow-agent-footer-item" title="${escapeText(title)}">${escapeText(workflowAgentCountLabel(total))} tokens</span>`;
+    }
+
+    function workflowAgentMessageFooterMarkup(items) {
+      const content = items.filter(Boolean).join("");
+      return content ? `<div class="workflow-agent-message-footer">${content}</div>` : "";
+    }
+
     function workflowAgentMessageMarkup(message) {
       if (!message || typeof message !== "object") return "";
+      const timeHtml = workflowAgentTimestampMarkup(message);
       if (message.role === "owner") {
-        return `<div class="workflow-agent-msg owner">${escapeText(message.text || "")}</div>`;
+        const footerHtml = workflowAgentMessageFooterMarkup([timeHtml]);
+        return `<div class="workflow-agent-msg owner"><span class="workflow-agent-result">${escapeText(message.text || "")}</span>${footerHtml}</div>`;
       }
       const status = String(message.status || "done").toLowerCase();
       const running = status === "running";
@@ -5633,19 +6130,23 @@
       const mapLabel = message.changed ? "Map updated" : "No map change";
       const toolLabel = message.tool ? agentToolLabel(message.tool) : "Workflow Agent";
       const result = running
-        ? "Working on the workflow map update..."
+        ? message.terminalInfo?.terminal
+          ? "Interactive CLI is open in Terminal. Watch or take over there, then exit the CLI when it is done."
+          : "Working on the workflow map update..."
         : String(message.result || message.text || "").trim() || "Done.";
-      const metaHtml = running || terminated
-        ? `<span class="workflow-agent-meta"><span class="workflow-agent-status ${running ? "is-running" : terminated ? "is-terminated" : ""}">${escapeText(statusLabel)}</span>${running && toolLabel ? `<span>${escapeText(toolLabel)}</span>` : ""}</span>`
-        : "";
+      const tokenHtml = running ? "" : workflowAgentTokenMarkup(message);
+      const statusHtml = `<span class="workflow-agent-footer-item workflow-agent-status ${running ? "is-running" : terminated ? "is-terminated" : ""}">${escapeText(statusLabel)}</span>`;
+      const toolHtml = toolLabel ? `<span class="workflow-agent-footer-item">${escapeText(toolLabel)}</span>` : "";
+      const mapHtml = !running ? `<span class="workflow-agent-footer-item">${escapeText(mapLabel)}</span>` : "";
+      const footerHtml = workflowAgentMessageFooterMarkup([timeHtml, tokenHtml, statusHtml, toolHtml, mapHtml]);
       const diagnosticsText = !running ? workflowAgentDiagnosticsText(message, statusLabel, mapLabel, toolLabel) : "";
       const diagnosticsHtml = diagnosticsText
         ? `<button class="workflow-agent-diagnostics-toggle" type="button" data-workflow-agent-diagnostics-toggle>Show diagnostics</button><div class="workflow-agent-diagnostics"><pre>${escapeText(diagnosticsText)}</pre></div>`
         : "";
       return `
         <div class="workflow-agent-msg agent">
-          ${metaHtml}
           <span class="workflow-agent-result">${escapeText(result)}</span>
+          ${footerHtml}
           ${diagnosticsHtml}
         </div>
       `;
@@ -5691,18 +6192,26 @@
       if (!text || workflowAgentSending) return;
       const tool = workflowAgentToolEl()?.value || dispatchSettingsForRole("workflow").model;
       workflowAgentSending = true;
+      const createdAt = new Date().toISOString();
       workflowAgentMessages = [
         ...workflowAgentMessages,
-        { role: "owner", text, tool },
-        { role: "workflow-agent", status: "running", tool, result: "Working on the workflow map update...", changed: false }
+        { role: "owner", text, tool, createdAt },
+        { role: "workflow-agent", status: "running", tool, result: "Working on the workflow map update...", changed: false, createdAt, spawnedAt: createdAt }
       ];
       renderBoard(currentBoard, currentSourceLabel);
       try {
         const data = await postJson("/viewer/workflow-chat-send", { message: text, tool });
         currentWorkflowMap = normalizeWorkflowMapPayload(data.workflowMap || currentWorkflowMap);
         workflowMapLoaded = true;
+        await loadWorkflowHandoffFiles().catch(() => {});
         workflowAgentMessages = Array.isArray(data.messages) ? data.messages : workflowAgentMessages;
-        statusEl.textContent = `Workflow Agent started in ${agentToolLabel(data.tool || tool)}${data.processId ? ` (PID ${data.processId})` : ""}.`;
+        const terminalInfo = data.terminalInfo && typeof data.terminalInfo === "object" ? data.terminalInfo : null;
+        const terminalNote = terminalInfo?.terminal
+          ? " An interactive CLI window is open in Terminal."
+          : terminalInfo?.error
+            ? ` Interactive Terminal launch failed: ${terminalInfo.error}`
+            : "";
+        statusEl.textContent = `Workflow Agent started in ${agentToolLabel(data.tool || tool)}${data.processId ? ` (PID ${data.processId})` : ""}.` + terminalNote;
         startWorkflowAgentPolling();
         pollWorkflowAgentChat({ silent: true }).catch(() => {});
       } catch (error) {
@@ -5713,7 +6222,8 @@
           tool,
           result: `Workflow agent failed: ${error.message}`,
           isError: true,
-          changed: false
+          changed: false,
+          createdAt: new Date().toISOString()
         });
         statusEl.textContent = `Workflow agent failed: ${error.message}`;
       } finally {
@@ -5731,6 +6241,7 @@
       const data = await loadJson("/viewer/workflow-chat?agentName=Task%20board%20viewer", { timeoutMs: 2500 });
       workflowAgentMessages = Array.isArray(data?.messages) ? data.messages : [];
       await loadWorkflowMap().catch(() => {});
+      await loadWorkflowHandoffFiles().catch(() => {});
       const stillRunning = workflowAgentHasRunning();
       renderBoard(currentBoard, currentSourceLabel);
       if (!stillRunning) {
@@ -5767,6 +6278,7 @@
         const data = await postJson("/viewer/workflow-map-reset", {});
         currentWorkflowMap = normalizeWorkflowMapPayload(data.workflowMap || fallbackWorkflowMap);
         workflowMapLoaded = true;
+        await loadWorkflowHandoffFiles().catch(() => {});
         statusEl.textContent = "Workflow map reset.";
       } catch (error) {
         statusEl.textContent = `Workflow map reset failed: ${error.message}`;
@@ -5776,7 +6288,12 @@
 
     function workflowGraphMarkup(normalized) {
       var graph = buildWorkflowGraph(normalized);
-      var activeCount = ["todo", "claimed", "review", "reviewing"].reduce(function(total, key) { return total + workflowCount(normalized, key); }, 0);
+      var activeKeys = new Set();
+      taskBoardVisualColumns(currentWorkflowMap).forEach(function(column) {
+        if (column.key === "done" || column.key === "archived") return;
+        (column.sourceKeys || []).forEach(function(key) { activeKeys.add(key); });
+      });
+      var activeCount = Array.from(activeKeys).reduce(function(total, key) { return total + workflowCount(normalized, key); }, 0);
       var doneCount = workflowCount(normalized, "done");
       var archivedCount = workflowCount(normalized, "archived");
 
@@ -5805,7 +6322,7 @@
 
       canvasHtml += '</div>';
 
-      return '\n        <section class="workflow-panel" id="workflow-panel" aria-hidden="' + (workflowPanelOpen ? "false" : "true") + '">\n          <div class="workflow-panel-header">\n            <div>\n              <h2>Agent Workflow Map</h2>\n              <p>Each clickable block is an agent. Open one to see its context, goal, behavior, permissions, and hard rules.</p>\n            </div>\n            ' + workflowCloseButton() + '\n          </div>\n          <div class="workflow-workspace">\n            <div class="workflow-map-area">\n              <div class="workflow-graph">\n                ' + canvasHtml + '\n              </div>\n              <div class="workflow-stats">\n                <div class="workflow-stat"><strong>' + activeCount + '</strong><span>todo / claimed / review</span></div>\n                <div class="workflow-stat"><strong>' + doneCount + '</strong><span>done visible</span></div>\n                <div class="workflow-stat"><strong>' + archivedCount + '</strong><span>archived</span></div>\n              </div>\n            </div>\n            ' + workflowAgentChatMarkup() + '\n          </div>\n        </section>\n      ';
+      return '\n        <section class="workflow-panel" id="workflow-panel" aria-hidden="' + (workflowPanelOpen ? "false" : "true") + '">\n          <div class="workflow-panel-header">\n            <div>\n              <h2>Agent Workflow Map</h2>\n              <p>Each clickable block is an agent. Open one to see its context, goal, behavior, permissions, and hard rules.</p>\n            </div>\n            ' + workflowCloseButton() + '\n          </div>\n          <div class="workflow-workspace">\n            <div class="workflow-map-area">\n              <div class="workflow-graph">\n                ' + canvasHtml + '\n              </div>\n              <div class="workflow-stats">\n                <div class="workflow-stat"><strong>' + activeCount + '</strong><span>active workflow outputs</span></div>\n                <div class="workflow-stat"><strong>' + doneCount + '</strong><span>done visible</span></div>\n                <div class="workflow-stat"><strong>' + archivedCount + '</strong><span>archived</span></div>\n              </div>\n            </div>\n            ' + workflowAgentChatMarkup() + '\n          </div>\n        </section>\n      ';
     }
 
     function workflowDetailSection(title, items) {
@@ -5865,6 +6382,10 @@
       if (nodeRuleItems.length) {
         detail.sections["Workflow Agent Rules"] = nodeRuleItems;
       }
+      const nodeOutputItems = workflowNodeOutputItems(workflowDetailKey);
+      if (nodeOutputItems.length) {
+        detail.sections["Workflow Map Outputs"] = nodeOutputItems;
+      }
       const sections = Object.entries(detail.sections || {})
         .map(([title, items]) => workflowDetailSection(title, items))
         .join("");
@@ -5886,6 +6407,7 @@
     }
 
     function renderWorkflowPanel(normalized) {
+      const workflowChatScrollState = workflowAgentScrollState();
       workflowEl.classList.toggle("is-open", workflowPanelOpen);
       workflowEl.innerHTML = `
         <button class="workflow-tab" type="button" data-workflow-toggle aria-expanded="${workflowPanelOpen ? "true" : "false"}" aria-controls="workflow-panel">
@@ -5897,6 +6419,7 @@
         </div>
         ${workflowDetailModalMarkup(normalized)}
       `;
+      scheduleWorkflowAgentScrollRestore(workflowChatScrollState);
     }
 
     function normalizeBoard(board) {
@@ -6089,6 +6612,132 @@
       };
     }
 
+    function workflowStringList(value) {
+      const values = Array.isArray(value) ? value : [value];
+      const result = [];
+      values.forEach((item) => {
+        const text = String(item || "").trim();
+        if (text && !result.includes(text)) result.push(text);
+      });
+      return result;
+    }
+
+    function normalizeWorkflowOutputType(value, fallback = "handoff") {
+      const type = slugWorkflowId(value || fallback, fallback);
+      const aliases = {
+        board: "task-board-ticket",
+        "board-column": "task-board-ticket",
+        task: "task-board-ticket",
+        "task-board": "task-board-ticket",
+        "task-board-column": "task-board-ticket",
+        "task-board-ticket": "task-board-ticket",
+        ticket: "task-board-ticket",
+        tickets: "task-board-ticket",
+        "todo-ticket": "task-board-ticket",
+        "review-ticket": "task-board-ticket",
+        "handoff-file": "handoff-markdown",
+        "handoff-files": "handoff-markdown",
+        "handoff-markdown-file": "handoff-markdown",
+        markdown: "handoff-markdown",
+        "markdown-file": "handoff-markdown",
+        human: "human-readable-output",
+        "human-output": "human-readable-output",
+        "human-readable": "human-readable-output",
+        "human-readable-output": "human-readable-output",
+        "owner-output": "human-readable-output"
+      };
+      return aliases[type] || type;
+    }
+
+    function normalizeWorkflowRenderAs(value, outputType) {
+      const renderAs = slugWorkflowId(value, "");
+      const aliases = {
+        board: "board-column",
+        "board-column": "board-column",
+        column: "board-column",
+        "task-board": "board-column",
+        "task-board-column": "board-column",
+        handoff: "handoff-files",
+        "handoff-file": "handoff-files",
+        "handoff-files": "handoff-files",
+        markdown: "handoff-files",
+        "markdown-files": "handoff-files",
+        file: "handoff-files",
+        files: "handoff-files"
+      };
+      if (aliases[renderAs]) return aliases[renderAs];
+      if (outputType === "handoff-markdown") return "handoff-files";
+      if (outputType === "task-board-ticket" || outputType === "human-readable-output") return "board-column";
+      return renderAs || "detail";
+    }
+
+    function defaultWorkflowHandoffPatterns(fromId = "", toId = "") {
+      const source = slugWorkflowId(fromId, "handoff-source");
+      const target = slugWorkflowId(toId, "handoff-target");
+      return [
+        `workflow/handoffs/${source}-to-${target}.md`,
+        `workflow/handoffs/${source}-to-${target}-*.md`
+      ];
+    }
+
+    function fallbackNodeOutputs(nodeId) {
+      const fallbackNode = fallbackWorkflowMap.nodes.find((node) => node.id === nodeId);
+      return Array.isArray(fallbackNode?.outputs) ? fallbackNode.outputs : [];
+    }
+
+    function fallbackEdgeOutputs(fromId, toId) {
+      const fallbackEdge = fallbackWorkflowMap.edges.find((edge) => edge.from === fromId && edge.to === toId);
+      return Array.isArray(fallbackEdge?.outputs) ? fallbackEdge.outputs : [];
+    }
+
+    function normalizeWorkflowOutput(output, index = 0, context = {}) {
+      const rawOutput = typeof output === "string" ? { label: output } : output;
+      if (!rawOutput || typeof rawOutput !== "object") return null;
+      const label = String(rawOutput.label || rawOutput.title || rawOutput.name || "Output").trim();
+      if (!label) return null;
+      const inferredType = /\b(markdown|file|handoff)\b/i.test(label) ? "handoff-markdown" : "handoff";
+      const type = normalizeWorkflowOutputType(rawOutput.type || rawOutput.outputType || rawOutput.kind || rawOutput.channel, inferredType);
+      const renderAs = normalizeWorkflowRenderAs(rawOutput.renderAs || rawOutput.render || rawOutput.view, type);
+      const id = slugWorkflowId(
+        rawOutput.id || `${context.from || context.nodeId || "output"}-${context.to || label}-${index + 1}`,
+        `output-${index + 1}`
+      );
+      const normalized = {
+        id,
+        type,
+        renderAs,
+        label,
+        description: String(rawOutput.description || rawOutput.summary || "").trim(),
+        color: String(rawOutput.color || "").trim()
+      };
+
+      const sourceKeys = workflowStringList(
+        rawOutput.sourceKeys || rawOutput.columnKeys || rawOutput.columns || rawOutput.sourceColumnKeys
+      ).map((key) => slugWorkflowId(key, "")).filter(Boolean);
+      let columnKey = slugWorkflowId(rawOutput.columnKey || rawOutput.column || rawOutput.status, "");
+      let visualColumnKey = slugWorkflowId(rawOutput.visualColumnKey || rawOutput.visualKey || rawOutput.laneKey || columnKey, "");
+      if (renderAs === "board-column") {
+        if (columnKey && !sourceKeys.includes(columnKey)) sourceKeys.push(columnKey);
+        if (!visualColumnKey) visualColumnKey = columnKey || slugWorkflowId(label, `output-${index + 1}`);
+        if (!columnKey) columnKey = sourceKeys[sourceKeys.length - 1] || visualColumnKey;
+        normalized.visualColumnKey = visualColumnKey;
+        normalized.columnKey = columnKey;
+        normalized.sourceKeys = sourceKeys;
+        normalized.agentRole = slugWorkflowId(rawOutput.agentRole || rawOutput.role || "", "");
+        normalized.agentLabel = String(rawOutput.agentLabel || "").trim();
+      }
+
+      let filePatterns = workflowStringList(
+        rawOutput.filePatterns || rawOutput.patterns || rawOutput.paths || rawOutput.files || rawOutput.path || rawOutput.file
+      );
+      if (renderAs === "handoff-files") {
+        if (!filePatterns.length) filePatterns = defaultWorkflowHandoffPatterns(context.from || "", context.to || "");
+        normalized.filePatterns = filePatterns;
+      }
+
+      return normalized;
+    }
+
     function normalizeWorkflowMapPayload(payload) {
       const source = payload && typeof payload === "object" ? payload : fallbackWorkflowMap;
       const fallbackNodeIds = new Set(fallbackWorkflowMap.nodes.map((node) => node.id));
@@ -6110,6 +6759,13 @@
         const rules = Array.isArray(rawNode.rules)
           ? rawNode.rules.map(normalizeWorkflowRule).filter(Boolean)
           : [];
+        let rawOutputs = Array.isArray(rawNode.outputs) ? rawNode.outputs : [];
+        if (!rawOutputs.length && fallbackNodeIds.has(id)) {
+          rawOutputs = fallbackNodeOutputs(id);
+        }
+        const outputs = rawOutputs
+          .map((rawOutput, outputIndex) => normalizeWorkflowOutput(rawOutput, outputIndex, { nodeId: id }))
+          .filter(Boolean);
         nodes.push({
           id,
           detailKey: String(rawNode.detailKey || id).trim() || id,
@@ -6119,13 +6775,20 @@
           meta: String(rawNode.meta || rawNode.summary || `Custom ${kind.toLowerCase()} in the workflow.`).trim(),
           acceptsHumanInput: Boolean(rawNode.acceptsHumanInput),
           locked: Boolean(rawNode.locked || fallbackNodeIds.has(id)),
-          rules
+          rules,
+          outputs
         });
       });
 
       fallbackWorkflowMap.nodes.forEach((fallbackNode) => {
         if (!nodeIds.has(fallbackNode.id)) {
-          nodes.push({ ...fallbackNode, rules: [] });
+          nodes.push({
+            ...fallbackNode,
+            rules: [],
+            outputs: Array.isArray(fallbackNode.outputs)
+              ? fallbackNode.outputs.map((rawOutput, outputIndex) => normalizeWorkflowOutput(rawOutput, outputIndex, { nodeId: fallbackNode.id })).filter(Boolean)
+              : []
+          });
           nodeIds.add(fallbackNode.id);
         }
       });
@@ -6155,11 +6818,19 @@
         const key = `${from}->${to}`;
         if (!nodeIds.has(from) || !nodeIds.has(to) || from === to || edgeKeys.has(key)) return;
         edgeKeys.add(key);
+        let rawOutputs = Array.isArray(edge.outputs) ? edge.outputs : [];
+        if (!rawOutputs.length) rawOutputs = fallbackEdgeOutputs(from, to);
+        if (!rawOutputs.length && /\b(handoff\s+(markdown\s+)?files?|handoff\s+brief|research\s+brief)\b/i.test(String(edge.label || ""))) {
+          rawOutputs = [{ type: "handoff-markdown", renderAs: "handoff-files", label: edge.label || "Handoff Markdown" }];
+        }
         edges.push({
           from,
           to,
           label: String(edge.label || "handoff").trim() || "handoff",
-          rules: Array.isArray(edge.rules) ? edge.rules.map(normalizeWorkflowRule).filter(Boolean) : []
+          rules: Array.isArray(edge.rules) ? edge.rules.map(normalizeWorkflowRule).filter(Boolean) : [],
+          outputs: rawOutputs
+            .map((rawOutput, outputIndex) => normalizeWorkflowOutput(rawOutput, outputIndex, { from, to }))
+            .filter(Boolean)
         });
       });
 
@@ -6187,6 +6858,166 @@
         currentWorkflowMap = normalizeWorkflowMapPayload(currentWorkflowMap || fallbackWorkflowMap);
         return currentWorkflowMap;
       }
+    }
+
+    function workflowMapHandoffOutputs(map = currentWorkflowMap) {
+      const normalizedMap = normalizeWorkflowMapPayload(map);
+      const lookup = {};
+      normalizedMap.nodes.forEach((node) => { lookup[node.id] = node; });
+      const outputs = [];
+      normalizedMap.edges.forEach((edge) => {
+        const edgeOutputs = Array.isArray(edge.outputs) ? edge.outputs : [];
+        edgeOutputs.forEach((output) => {
+          if (output?.renderAs !== "handoff-files" && output?.type !== "handoff-markdown") return;
+          outputs.push({
+            ...output,
+            from: edge.from,
+            to: edge.to,
+            fromLabel: lookup[edge.from]?.label || edge.from,
+            toLabel: lookup[edge.to]?.label || edge.to
+          });
+        });
+      });
+      normalizedMap.nodes.forEach((node) => {
+        const nodeOutputs = Array.isArray(node.outputs) ? node.outputs : [];
+        nodeOutputs.forEach((output) => {
+          if (output?.renderAs !== "handoff-files" && output?.type !== "handoff-markdown") return;
+          outputs.push({
+            ...output,
+            from: node.id,
+            to: "",
+            fromLabel: node.label || node.id,
+            toLabel: ""
+          });
+        });
+      });
+      return outputs;
+    }
+
+    function normalizeWorkflowHandoffsPayload(payload) {
+      const source = payload && typeof payload === "object" ? payload : fallbackWorkflowHandoffs;
+      const outputs = Array.isArray(source.outputs) ? source.outputs : [];
+      return {
+        updatedAt: String(source.updatedAt || ""),
+        projectRoot: String(source.projectRoot || ""),
+        outputs: outputs.map((output) => ({
+          id: String(output?.id || "").trim(),
+          type: normalizeWorkflowOutputType(output?.type || "handoff-markdown", "handoff-markdown"),
+          renderAs: normalizeWorkflowRenderAs(output?.renderAs || "handoff-files", "handoff-markdown"),
+          label: String(output?.label || "Handoff Markdown").trim(),
+          description: String(output?.description || "").trim(),
+          from: String(output?.from || "").trim(),
+          to: String(output?.to || "").trim(),
+          fromLabel: String(output?.fromLabel || output?.from || "").trim(),
+          toLabel: String(output?.toLabel || output?.to || "").trim(),
+          filePatterns: workflowStringList(output?.filePatterns),
+          files: Array.isArray(output?.files)
+            ? output.files.map((file) => ({
+                path: String(file?.path || "").trim(),
+                name: String(file?.name || "").trim(),
+                size: Number(file?.size || 0),
+                modifiedAt: String(file?.modifiedAt || "").trim(),
+                preview: String(file?.preview || "").trim()
+              })).filter((file) => file.path)
+            : []
+        })).filter((output) => output.id || output.label)
+      };
+    }
+
+    async function loadWorkflowHandoffFiles() {
+      try {
+        currentWorkflowHandoffs = normalizeWorkflowHandoffsPayload(
+          await loadJson("/viewer/workflow-handoff-files", { timeoutMs: 1500 })
+        );
+        workflowHandoffsLoaded = true;
+        return currentWorkflowHandoffs;
+      } catch (error) {
+        logOptionalLoadFailure("workflow handoff files", error);
+        currentWorkflowHandoffs = normalizeWorkflowHandoffsPayload(currentWorkflowHandoffs || fallbackWorkflowHandoffs);
+        return currentWorkflowHandoffs;
+      }
+    }
+
+    function workflowHandoffRecordForOutput(output) {
+      const serverOutputs = Array.isArray(currentWorkflowHandoffs.outputs) ? currentWorkflowHandoffs.outputs : [];
+      return serverOutputs.find((record) =>
+        (record.id && output.id && record.id === output.id) ||
+        (record.from === output.from && record.to === output.to && record.label === output.label)
+      ) || null;
+    }
+
+    function handoffFileMarkup(file) {
+      const meta = [
+        file.modifiedAt ? `Modified ${formatDateTime(file.modifiedAt)}` : "",
+        file.size ? `${file.size} bytes` : ""
+      ].filter(Boolean).join(" | ");
+      return `
+        <article class="handoff-file">
+          <code>${escapeText(file.path || file.name || "handoff.md")}</code>
+          ${meta ? `<div class="handoff-file-meta">${escapeText(meta)}</div>` : ""}
+          ${file.preview ? `<div class="handoff-file-preview">${escapeText(file.preview)}</div>` : ""}
+        </article>
+      `;
+    }
+
+    function handoffOutputMarkup(output) {
+      const record = workflowHandoffRecordForOutput(output);
+      const files = Array.isArray(record?.files) ? record.files : [];
+      const patterns = workflowStringList(record?.filePatterns?.length ? record.filePatterns : output.filePatterns);
+      const route = output.toLabel
+        ? `${output.fromLabel || output.from} -> ${output.toLabel || output.to}`
+        : `${output.fromLabel || output.from}`;
+      const filesHtml = files.length
+        ? `<div class="handoff-files">${files.map(handoffFileMarkup).join("")}</div>`
+        : `<div class="empty">No generated Markdown files matched this output yet.</div>`;
+      const patternHtml = patterns.length
+        ? `<div class="handoff-patterns">Patterns: ${patterns.map((pattern) => `<code>${escapeText(pattern)}</code>`).join(", ")}</div>`
+        : "";
+      return `
+        <section class="handoff-output" aria-label="${escapeText(output.label || "Handoff output")}">
+          <div class="handoff-output-title">
+            <strong>${escapeText(output.label || "Handoff Markdown")}</strong>
+            <span class="handoff-output-type">${escapeText(workflowOutputTypeLabel(output.type, output.renderAs))}</span>
+          </div>
+          <div class="handoff-output-meta">${escapeText(route)}</div>
+          ${output.description ? `<div class="handoff-output-meta">${escapeText(output.description)}</div>` : ""}
+          ${filesHtml}
+          ${patternHtml}
+        </section>
+      `;
+    }
+
+    function renderHandoffBoard() {
+      if (!handoffBoardEl) return;
+      const outputs = workflowMapHandoffOutputs(currentWorkflowMap);
+      handoffBoardEl.hidden = outputs.length === 0;
+      if (!outputs.length) {
+        handoffBoardEl.innerHTML = "";
+        return;
+      }
+      const count = outputs.reduce((total, output) => {
+        const record = workflowHandoffRecordForOutput(output);
+        return total + (Array.isArray(record?.files) ? record.files.length : 0);
+      }, 0);
+      const rootLabel = currentWorkflowHandoffs.projectRoot
+        ? `Project root: ${currentWorkflowHandoffs.projectRoot}`
+        : workflowHandoffsLoaded
+          ? "No project root reported"
+          : "File listing unavailable";
+      handoffBoardEl.innerHTML = `
+        <section class="handoff-panel">
+          <div class="handoff-panel-header">
+            <div class="handoff-panel-title">
+              <h2>Workflow Handoff Files</h2>
+              <span>${escapeText(rootLabel)}</span>
+            </div>
+            <span class="count">${count}</span>
+          </div>
+          <div class="handoff-output-grid">
+            ${outputs.map(handoffOutputMarkup).join("")}
+          </div>
+        </section>
+      `;
     }
 
     async function loadWorkflowChat() {
@@ -6743,8 +7574,7 @@
         const phrase = result?.startPhrase || "";
         const processText = result?.processId ? ` PID: ${result.processId}.` : "";
         const logText = result?.logPath ? ` Log: ${result.logPath}.` : "";
-        const modeText = result?.mode === "interactive" ? "interactively" : "non-interactively";
-        statusEl.textContent = `Spawned ${roleLabel} in ${toolLabel} ${modeText}.${processText}${logText} Start phrase: "${phrase}"`;
+        statusEl.textContent = `Spawned ${roleLabel} in ${toolLabel} interactively.${processText}${logText} Start phrase: "${phrase}"`;
         await Promise.allSettled([
           refreshAgentLogs(),
           refreshSystemStatus({ silent: true })
@@ -6877,9 +7707,10 @@
       const addlClass = options.extraClass ? ` ${options.extraClass}` : "";
       const agentClass = options.agentRole ? " has-agent-controls" : "";
       const agentStrip = options.showAgentStrip === false ? "" : laneAgentStripMarkup(options.agentRole || "");
+      const laneStyle = options.color ? ` style="--lane-color: ${escapeText(options.color)}"` : "";
 
       return `
-        <section class="lane ${key}${addlClass}${agentClass}" aria-label="${escapeText(label)}">
+        <section class="lane ${key}${addlClass}${agentClass}" aria-label="${escapeText(label)}"${laneStyle}>
           ${agentStrip}
           <div class="lane-header">
             <div class="lane-title"><span class="dot"></span><span>${escapeText(label)}</span></div>
@@ -6936,19 +7767,21 @@
       renderSystemOverview(currentSystemStatus);
 
       boardEl.classList.toggle("is-done-focus", doneFocusOpen);
+      const visualColumns = taskBoardVisualColumns(currentWorkflowMap);
       if (doneFocusOpen) {
         const foldedLanes = visualColumns
           .filter((column) => column.key !== "done")
           .map((column) => laneMarkup(column.key, column.label, visualColumnTasks(normalized, column), {
             agentRole: column.agentRole,
-            agentLabel: column.agentLabel
+            agentLabel: column.agentLabel,
+            color: column.color
           }))
           .join("");
         const doneColumn = visualColumns.find((column) => column.key === "done");
-        const doneTasks = visualColumnTasks(normalized, doneColumn);
+        const doneTasks = doneColumn ? visualColumnTasks(normalized, doneColumn) : [];
         boardEl.innerHTML = `
           <div class="folded-stack" aria-label="Folded task columns">${foldedLanes}</div>
-          ${laneMarkup("done", "Done", doneTasks, { extraActions: doneFocusButton() })}
+          ${laneMarkup("done", doneColumn?.label || "Done", doneTasks, { extraActions: doneFocusButton(), color: doneColumn?.color || "" })}
         `;
       } else {
         boardEl.innerHTML = visualColumns.map((column) => {
@@ -6956,12 +7789,14 @@
           return laneMarkup(column.key, column.label, tasks, {
             extraActions: column.key === "done" ? doneFocusButton() : "",
             agentRole: column.agentRole,
-            agentLabel: column.agentLabel
+            agentLabel: column.agentLabel,
+            color: column.color
           });
         }).join("");
       }
 
       const archivedTasks = columnTasks(normalized.columns.archived, "archived");
+      renderHandoffBoard();
       renderWorkflowPanel(normalized);
       archiveEl.classList.toggle("is-open", archiveTrayOpen);
       archiveEl.innerHTML = `
@@ -7236,6 +8071,7 @@
       if (!laneButton) return;
 
       const columnKey = laneButton.dataset.laneToggle;
+      const visualColumns = taskBoardVisualColumns(currentWorkflowMap);
       const visualColumn = visualColumns.find((column) => column.key === columnKey);
       const tasks = visualColumn
         ? visualColumnTasks(currentBoard, visualColumn)
@@ -7610,7 +8446,7 @@
           return `<div class="planner-msg owner">${escapeText(msg.text || "")}</div>`;
         }
         const running = msg.status === "running";
-        const statusText = running ? "Planner is thinking" : (msg.isError ? "Planner — error" : "Planner");
+        const statusText = running ? "Planner CLI open" : (msg.isError ? "Planner — error" : "Planner");
         let latencyHtml = "";
         if (!running && msg.spawnedAt && msg.finishedAt) {
           const elapsed = (Date.parse(msg.finishedAt) - Date.parse(msg.spawnedAt)) / 1000;
@@ -7621,7 +8457,7 @@
         }
         const metaHtml = `<span class="planner-msg-meta"><span class="planner-msg-status ${running ? "running" : ""}">${escapeText(statusText)}${msg.tool ? " &middot; " + escapeText(msg.tool) : ""}</span>${latencyHtml}</span>`;
         if (running) {
-          return `<div class="planner-msg planner">${metaHtml}<span class="planner-result">Thinking&hellip;</span></div>`;
+          return `<div class="planner-msg planner">${metaHtml}<span class="planner-result">Interactive CLI is open in Terminal. Watch or take over there, then exit the CLI when it is done.</span></div>`;
         }
         const resultText = msg.result || "";
         const rawOutput = msg.output || "";
@@ -7693,7 +8529,7 @@
       plannerChat.bodyEl.appendChild(ownerBubble);
       const pendingBubble = document.createElement("div");
       pendingBubble.className = "planner-msg planner";
-      pendingBubble.innerHTML = `<span class="planner-msg-meta"><span class="planner-msg-status running">Planner is thinking &middot; ${escapeText(tool)}</span></span><span class="planner-result">Thinking&hellip;</span>`;
+      pendingBubble.innerHTML = `<span class="planner-msg-meta"><span class="planner-msg-status running">Planner CLI open &middot; ${escapeText(tool)}</span></span><span class="planner-result">Opening interactive CLI in Terminal&hellip;</span>`;
       plannerChat.bodyEl.appendChild(pendingBubble);
       plannerChat.bodyEl.scrollTop = plannerChat.bodyEl.scrollHeight;
 
@@ -7701,6 +8537,10 @@
         const data = await postJson("/viewer/planner-chat-send", { message, tool });
         plannerChat.lastSignature = "";
         renderPlannerMessages(data.messages);
+        const terminalInfo = data.terminalInfo && typeof data.terminalInfo === "object" ? data.terminalInfo : null;
+        if (terminalInfo?.terminal) {
+          statusEl.textContent = `Planner chat opened an interactive ${agentToolLabel(data.tool || tool)} CLI in Terminal.`;
+        }
         pollPlannerChat();
       } catch (error) {
         ownerBubble.remove();
@@ -7750,8 +8590,10 @@
       if (workflowDiagnosticsToggle) {
         const diagEl = workflowDiagnosticsToggle.parentElement.querySelector(".workflow-agent-diagnostics");
         if (diagEl) {
+          const workflowChatScrollState = workflowAgentScrollState();
           const isOpen = diagEl.classList.toggle("is-open");
           workflowDiagnosticsToggle.textContent = isOpen ? "Hide diagnostics" : "Show diagnostics";
+          if (isOpen) scheduleWorkflowAgentScrollRestore(workflowChatScrollState);
         }
         return;
       }
@@ -7939,12 +8781,13 @@
           statusEl.textContent = "Loaded board.json. Loading viewer metadata...";
         }
 
-        const [agentsResult, , , , , pauseResult, systemResult] = await Promise.allSettled([
+        const [agentsResult, , , , , , pauseResult, systemResult] = await Promise.allSettled([
           loadAgents(),
           loadAgentSchema(),
           loadDispatchSettings(),
           loadWorkflowMap(),
           loadWorkflowChat(),
+          loadWorkflowHandoffFiles(),
           loadPauseStatus(),
           loadSystemStatus()
         ]);

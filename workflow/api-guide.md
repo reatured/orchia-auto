@@ -264,7 +264,7 @@ curl -s -X POST "$BASE/api/agent-health-check" -H "Content-Type: application/jso
   -d '{"agentId":"'$agentId'","tool":"qwen","command":"qwen"}'
 ```
 
-Health checks return JSON with `ok`, `status`, `tool`, `command`, `durationMs`, and, when useful, `error`, `outputPreview`, and `suggestion`. Codex checks run `codex exec --skip-git-repo-check "Reply exactly: OK"`; Claude Code checks run `claude -p "Reply exactly: OK"`; Qwen checks run `qwen -p "Reply exactly: OK" -y`. Plain `codex`, `claude`, and `qwen` command names are resolved from `PATH` plus common install locations including Homebrew, `/usr/local/bin`, user-local bins, npm, and Windows Node/npm paths. When `CODEX_SQLITE_HOME` is not already set, Codex health checks and spawned Codex agents use `task-board/codex-sqlite-state/` as a writable state folder.
+Health checks return JSON with `ok`, `status`, `tool`, `command`, `durationMs`, and, when useful, `error`, `outputPreview`, and `suggestion`. Codex checks run `codex exec --skip-git-repo-check "Reply exactly: OK"`; Claude Code checks run `claude -p "Reply exactly: OK"`; Qwen checks run `qwen -p "Reply exactly: OK" -y`. Plain `codex`, `claude`, and `qwen` command names are resolved from `PATH` plus common install locations including Homebrew, `/usr/local/bin`, user-local bins, npm, and Windows Node/npm paths. When `CODEX_SQLITE_HOME` is not already set, Codex health checks and interactive spawned Codex agents use `task-board/codex-sqlite-state/` as a writable state folder.
 
 ## Pause, Hard Stop, Resume APIs
 

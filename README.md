@@ -17,6 +17,7 @@ It gives you a clear separation between **planning**, **doing**, and **reviewing
 - **Planner** — turns your requirements into small, deduplicated `todo` tasks on the board. Never writes product code.
 - **Worker** — claims exactly one task at a time, implements it, and moves it to `review`. Never reviews or marks its own work done.
 - **Reviewer** — reviews completed work and either approves it to `done` or opens a follow-up `todo`. Never implements fixes.
+- **Site Auditor** — optional upstream role that uses BrowserOS to inspect site functions, features, design, style, responsive behavior, and accessibility, then writes Markdown handoffs for Planner. Never creates or moves board tasks.
 
 Each agent runs in its own chat and never switches roles. Because every claim and status change goes through the board, you (the owner) always have one place to see what is planned, in progress, under review, and finished — and a full audit log of who did what.
 
@@ -123,7 +124,7 @@ Edit the files in [`roles/`](roles/) to fit your project:
 ### 4. (Optional) Tweak appearance and extend
 
 - Edit [`task-board/agent-color-schema.json`](task-board/agent-color-schema.json) to change the `personalNamePool` (the short names agents pick from) or the chip colors.
-- If you need research/audit agents that feed the Planner, follow the **"Extending the workflow"** section in [`workflow/workflow-overview.md`](workflow/workflow-overview.md). Upstream agents write Markdown input files; only the Planner ever creates tasks.
+- If you need research/audit agents that feed the Planner, follow the **"Extending the workflow"** section in [`workflow/workflow-overview.md`](workflow/workflow-overview.md). Upstream agents write Markdown input files under [`workflow/handoffs/`](workflow/handoffs/); only the Planner ever creates tasks. This starter includes a BrowserOS-backed Site Auditor role at [`roles/site-auditor.md`](roles/site-auditor.md).
 
 ### 5. Start the backend
 
@@ -165,7 +166,7 @@ Get-NetTCPConnection -LocalPort $port -State Listen |
 
 Replace `4177` if `task-board/config.json` uses a different port.
 
-Before using Spawn or auto-dispatch on a new laptop, open the viewer's **Settings** tab and click **Test Codex**, **Test Claude**, and/or **Test Qwen**. The tests run the same command shape used for hidden agents (`codex exec --skip-git-repo-check`, `claude -p`, or `qwen -p -y`) and report the remaining human step, such as signing in or trusting the project directory. If a test reports that the health-check route is missing, restart `task-board/server.py`, refresh the viewer, and test again so the running backend matches the current files.
+Before using Spawn or auto-dispatch on a new laptop, open the viewer's **Settings** tab and click **Test Codex**, **Test Claude**, and/or **Test Qwen**. The tests run a quick non-interactive command check (`codex exec --skip-git-repo-check`, `claude -p`, or `qwen -p -y`) and report the remaining human step, such as signing in or trusting the project directory. Actual spawned agents open visible interactive CLI terminal windows. If a test reports that the health-check route is missing, restart `task-board/server.py`, refresh the viewer, and test again so the running backend matches the current files.
 
 ### 6. Start agents
 
@@ -173,11 +174,12 @@ Open a **separate chat per agent** and load a role with its start phrase:
 
 | Start phrase | Role | What it does |
 | --- | --- | --- |
+| `load as site auditor` | Site Auditor | Uses BrowserOS to audit a site and writes a Planner handoff. |
 | `load as planner` | Planner | Reads your requirements, creates `todo` tasks. |
 | `load as worker` | Worker | Claims a task, implements it, moves it to `review`. |
 | `load as reviewer` | Reviewer | Reviews completed work; approves or sends back. |
 
-A typical run: start a **Planner** chat with your requirements → start one or more **Worker** chats to claim and build → start a **Reviewer** chat to approve. Watch board-moving work on the viewer.
+A typical run: optionally start a **Site Auditor** chat with a URL to inspect → start a **Planner** chat with your requirements and any handoff files → start one or more **Worker** chats to claim and build → start a **Reviewer** chat to approve. Watch board-moving work on the viewer.
 
 > The viewer also has **Spawn** buttons and optional **auto-dispatch** to launch Workers/Reviewers as hidden CLI processes. Use **Pause +1h** to add one hour from `max(now, pausedUntil)`; repeated clicks accumulate time. While paused, the server rejects new Worker claims, Reviewer claims, viewer Spawn clicks, and auto-dispatch spawns. **Resume now** clears the pause, after which auto-dispatch resumes eligible paused hidden runs before starting normal new work. Hard stop applies only to backend-spawned hidden Worker/Reviewer processes and records `pausedRuns`; it does not kill manual terminal/chat agents. Use the bottom-left **Settings** tab to test and customize the local Codex, Claude Code, and Qwen command names used for spawning. Plain `codex`, `claude`, and `qwen` commands are resolved from `PATH` plus common install locations such as Homebrew, `/usr/local/bin`, user-local bins, npm, and Windows Node/npm paths. Spawned output is written to `task-board/spawned-agent-logs/`, and the viewer uses PID checks plus log previews to show whether a spawned process is still running.
 
@@ -193,10 +195,11 @@ agent-workflow-starter/
   AGENTS.md                     # entry point both Claude and Codex read first
   CLAUDE.md                     # one-line pointer to AGENTS.md
   roles/
-    planner.md  worker.md  reviewer.md
+    planner.md  worker.md  reviewer.md  site-auditor.md
   workflow/
     workflow-overview.md        # the three-role model, columns, rules
     api-guide.md                # REST API contract + curl/PowerShell examples
+    handoffs/                   # upstream Markdown handoffs for Planner
   task-board/
     config.json                 # EDIT THIS for your project
     server.py                   # task-board backend (reads config.json)

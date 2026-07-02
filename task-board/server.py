@@ -131,6 +131,7 @@ GET_ACTIONS = {
     "/api/pause-status": "get_pause_status",
     "/api/planner-chat": "planner_chat_poll",
     "/api/workflow-map": "get_workflow_map",
+    "/api/workflow-handoff-files": "get_workflow_handoff_files",
     "/api/next-worker-task": "next_worker_task",
     "/api/next-review-task": "next_review_task",
     "/api/system-status": "get_system_status",
@@ -151,6 +152,7 @@ VIEWER_GET_ACTIONS = {
     "/viewer/pause-status": "get_pause_status",
     "/viewer/planner-chat": "planner_chat_poll",
     "/viewer/workflow-map": "get_workflow_map",
+    "/viewer/workflow-handoff-files": "get_workflow_handoff_files",
     "/viewer/workflow-chat": "workflow_chat_poll",
     "/viewer/system-status": "get_system_status",
 }
@@ -179,6 +181,7 @@ POST_ACTIONS = {
     "/api/resume-now": "resume_now",
     "/api/planner-chat-send": "planner_chat_send",
     "/api/planner-chat-clear": "planner_chat_clear",
+    "/api/workflow-map-replace": "workflow_map_replace",
     "/api/claim-next-worker": "claim_next_worker",
     "/api/claim-next-review": "claim_next_review",
 }
@@ -215,6 +218,7 @@ VIEWER_POST_ACTIONS = {
     "/viewer/planner-chat-clear": "planner_chat_clear",
     "/viewer/workflow-chat-send": "workflow_chat_send",
     "/viewer/workflow-chat-clear": "workflow_chat_clear",
+    "/viewer/workflow-map-replace": "workflow_map_replace",
     "/viewer/workflow-map-reset": "workflow_map_reset",
 }
 SPAWNABLE_AGENT_ROLES = {"worker", "review"}
@@ -313,6 +317,50 @@ def parse_optional_int(value: object) -> int | None:
     return parsed if parsed >= 0 else None
 
 
+def parse_count_int(value: object) -> int | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    normalized = re.sub(r"[\s,._]+", "", text)
+    if not normalized.isdigit():
+        return None
+    parsed = int(normalized)
+    return parsed if parsed >= 0 else None
+
+
+def strip_terminal_control_sequences(text: str) -> str:
+    clean = re.sub(r"\x1b\][^\x07]*(?:\x07|\x1b\\)", "", str(text or ""))
+    clean = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", clean)
+    clean = clean.replace("\r\n", "\n").replace("\r", "\n")
+    return re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", clean)
+
+
+class TerminalSessionMonitor:
+    def __init__(self, pid: int, done_path: str, exit_path: str, spawned_at: str):
+        self.pid = pid
+        self.done_path = str(done_path or "")
+        self.exit_path = str(exit_path or "")
+        self.spawned_at = str(spawned_at or "")
+
+    def wait(self) -> int:
+        while True:
+            if self.done_path and Path(self.done_path).exists():
+                exit_text = ""
+                try:
+                    exit_text = Path(self.exit_path).read_text(encoding="utf-8").strip()
+                except (FileNotFoundError, OSError):
+                    exit_text = ""
+                return parse_optional_int(exit_text) or 0
+            if self.pid:
+                status = spawned_process_status({
+                    "processId": self.pid,
+                    "spawnedAt": self.spawned_at,
+                })
+                if not status.get("isRunning"):
+                    return 1
+            time.sleep(0.5)
+
+
 def default_dispatch_settings() -> dict:
     return {
         "version": 1,
@@ -384,6 +432,19 @@ def default_workflow_map() -> dict:
                 "meta": "Claims review work, validates it, and decides outcome.",
                 "locked": True,
                 "rules": [],
+                "outputs": [
+                    {
+                        "id": "reviewer-done-output",
+                        "type": "human-readable-output",
+                        "renderAs": "board-column",
+                        "label": "Done",
+                        "description": "Accepted work and failed reviewed attempts that the owner can read and archive.",
+                        "visualColumnKey": "done",
+                        "columnKey": "done",
+                        "sourceKeys": ["done"],
+                        "color": "var(--done)",
+                    }
+                ],
             },
         ],
         "rows": [
@@ -392,14 +453,52 @@ def default_workflow_map() -> dict:
             ["reviewer"],
         ],
         "edges": [
-            {"from": "planner", "to": "worker", "label": "todo tickets"},
-            {"from": "worker", "to": "reviewer", "label": "inspection targets + review request"},
+            {
+                "from": "planner",
+                "to": "worker",
+                "label": "todo tickets",
+                "outputs": [
+                    {
+                        "id": "planner-worker-todo-tickets",
+                        "type": "task-board-ticket",
+                        "renderAs": "board-column",
+                        "label": "To Do",
+                        "description": "Planner-created tickets ready for Workers to claim.",
+                        "visualColumnKey": "todo",
+                        "columnKey": "todo",
+                        "sourceKeys": ["claimed", "todo"],
+                        "agentRole": "worker",
+                        "agentLabel": "Workers",
+                        "color": "var(--todo)",
+                    }
+                ],
+            },
+            {
+                "from": "worker",
+                "to": "reviewer",
+                "label": "inspection targets + review request",
+                "outputs": [
+                    {
+                        "id": "worker-reviewer-review-tickets",
+                        "type": "task-board-ticket",
+                        "renderAs": "board-column",
+                        "label": "Review",
+                        "description": "Worker-completed tickets waiting for reviewer inspection.",
+                        "visualColumnKey": "review",
+                        "columnKey": "review",
+                        "sourceKeys": ["reviewing", "review"],
+                        "agentRole": "review",
+                        "agentLabel": "Reviewers",
+                        "color": "var(--review)",
+                    }
+                ],
+            },
         ],
         "globalRules": [
             {
                 "id": "core-source-of-truth",
                 "title": "Source of truth",
-                "text": "Workflow map edits describe the coordination model. Task movement still happens through board.json and the task-board API.",
+                "text": "Workflow map outputs describe agent coordination and drive viewer rendering for task-board lanes and handoff-file sections. Task movement still happens through board.json and the task-board API.",
             }
         ],
     }
@@ -2227,6 +2326,143 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "text": text,
         }
 
+    def normalize_workflow_string_list(self, value: object, limit: int = 140) -> list[str]:
+        raw_values = value if isinstance(value, list) else [value]
+        result: list[str] = []
+        for raw_value in raw_values:
+            text = compact_workflow_text(raw_value, limit=limit)
+            if text and text not in result:
+                result.append(text)
+        return result
+
+    def normalize_workflow_output_type(self, value: object, fallback: str = "handoff") -> str:
+        text = workflow_slug(value or fallback, fallback)
+        aliases = {
+            "board": "task-board-ticket",
+            "board-column": "task-board-ticket",
+            "task": "task-board-ticket",
+            "task-board": "task-board-ticket",
+            "task-board-column": "task-board-ticket",
+            "task-board-ticket": "task-board-ticket",
+            "ticket": "task-board-ticket",
+            "tickets": "task-board-ticket",
+            "todo-ticket": "task-board-ticket",
+            "review-ticket": "task-board-ticket",
+            "handoff-file": "handoff-markdown",
+            "handoff-files": "handoff-markdown",
+            "handoff-markdown-file": "handoff-markdown",
+            "markdown": "handoff-markdown",
+            "markdown-file": "handoff-markdown",
+            "human": "human-readable-output",
+            "human-output": "human-readable-output",
+            "human-readable": "human-readable-output",
+            "human-readable-output": "human-readable-output",
+            "owner-output": "human-readable-output",
+        }
+        return aliases.get(text, text)
+
+    def normalize_workflow_render_as(self, value: object, output_type: str) -> str:
+        text = workflow_slug(value, "")
+        aliases = {
+            "board": "board-column",
+            "board-column": "board-column",
+            "column": "board-column",
+            "task-board": "board-column",
+            "task-board-column": "board-column",
+            "handoff": "handoff-files",
+            "handoff-file": "handoff-files",
+            "handoff-files": "handoff-files",
+            "markdown": "handoff-files",
+            "markdown-files": "handoff-files",
+            "file": "handoff-files",
+            "files": "handoff-files",
+        }
+        if text in aliases:
+            return aliases[text]
+        if output_type == "handoff-markdown":
+            return "handoff-files"
+        if output_type in {"task-board-ticket", "human-readable-output"}:
+            return "board-column"
+        return text or "detail"
+
+    def default_workflow_handoff_patterns(self, from_id: str = "", to_id: str = "") -> list[str]:
+        source = workflow_slug(from_id, "handoff-source")
+        target = workflow_slug(to_id, "handoff-target")
+        return [
+            f"workflow/handoffs/{source}-to-{target}.md",
+            f"workflow/handoffs/{source}-to-{target}-*.md",
+        ]
+
+    def normalize_workflow_output(self, output: object, index: int = 0, context: dict | None = None) -> dict | None:
+        context = context or {}
+        if isinstance(output, str):
+            label = compact_workflow_text(output, limit=90)
+            if not label:
+                return None
+            output = {"label": label}
+        if not isinstance(output, dict):
+            return None
+
+        label = compact_workflow_text(output.get("label") or output.get("title") or output.get("name") or "Output", limit=90)
+        if not label:
+            return None
+        inferred_type = "handoff-markdown" if re.search(r"\b(?:markdown|file|handoff)\b", label, re.IGNORECASE) else "handoff"
+        output_type = self.normalize_workflow_output_type(
+            output.get("type") or output.get("outputType") or output.get("kind") or output.get("channel"),
+            inferred_type,
+        )
+        render_as = self.normalize_workflow_render_as(output.get("renderAs") or output.get("render") or output.get("view"), output_type)
+        output_id = workflow_slug(
+            output.get("id") or f"{context.get('from') or context.get('nodeId') or 'output'}-{context.get('to') or label}-{index + 1}",
+            f"output-{index + 1}",
+        )
+
+        normalized = {
+            "id": output_id,
+            "type": output_type,
+            "renderAs": render_as,
+            "label": label,
+            "description": compact_workflow_text(output.get("description") or output.get("summary") or "", limit=220),
+            "color": compact_workflow_text(output.get("color") or "", limit=40),
+        }
+
+        source_keys = self.normalize_workflow_string_list(
+            output.get("sourceKeys") or output.get("columnKeys") or output.get("columns") or output.get("sourceColumnKeys"),
+            limit=60,
+        )
+        column_key = workflow_slug(output.get("columnKey") or output.get("column") or output.get("status"), "")
+        visual_column_key = workflow_slug(output.get("visualColumnKey") or output.get("visualKey") or output.get("laneKey") or column_key, "")
+        if render_as == "board-column":
+            if column_key and column_key not in source_keys:
+                source_keys.append(column_key)
+            if not visual_column_key:
+                visual_column_key = column_key or workflow_slug(label, f"output-{index + 1}")
+            if not column_key:
+                column_key = source_keys[-1] if source_keys else visual_column_key
+            normalized.update({
+                "visualColumnKey": visual_column_key,
+                "columnKey": column_key,
+                "sourceKeys": [workflow_slug(key, "") for key in source_keys if workflow_slug(key, "")],
+                "agentRole": workflow_slug(output.get("agentRole") or output.get("role") or "", ""),
+                "agentLabel": compact_workflow_text(output.get("agentLabel") or "", limit=60),
+            })
+
+        file_patterns = self.normalize_workflow_string_list(
+            output.get("filePatterns")
+            or output.get("patterns")
+            or output.get("paths")
+            or output.get("files")
+            or output.get("path")
+            or output.get("file"),
+            limit=220,
+        )
+        if render_as == "handoff-files":
+            if not file_patterns:
+                file_patterns = self.default_workflow_handoff_patterns(str(context.get("from") or ""), str(context.get("to") or ""))
+            normalized["filePatterns"] = file_patterns
+
+        return normalized
+
     def normalize_workflow_node(self, node: object, index: int = 0) -> dict | None:
         if not isinstance(node, dict):
             return None
@@ -2243,6 +2479,13 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 rule = self.normalize_workflow_rule(raw_rule, rule_index)
                 if rule:
                     rules.append(rule)
+        outputs = []
+        raw_outputs = node.get("outputs")
+        if isinstance(raw_outputs, list):
+            for output_index, raw_output in enumerate(raw_outputs):
+                output = self.normalize_workflow_output(raw_output, output_index, {"nodeId": node_id})
+                if output:
+                    outputs.append(output)
         return {
             "id": node_id,
             "detailKey": compact_workflow_text(node.get("detailKey") or node_id, limit=80),
@@ -2253,6 +2496,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "acceptsHumanInput": bool(node.get("acceptsHumanInput")),
             "locked": bool(node.get("locked")),
             "rules": rules,
+            "outputs": outputs,
         }
 
     def unique_workflow_node_id(self, workflow_map: dict, desired: str) -> str:
@@ -2302,6 +2546,12 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 normalized["nodes"].insert(len([n for n in normalized["nodes"] if n.get("locked")]), default_node_by_id[default_id])
                 node_by_id[default_id] = default_node_by_id[default_id]
 
+        for node in normalized["nodes"]:
+            node_id = str(node.get("id") or "").strip()
+            default_node = default_node_by_id.get(node_id)
+            if default_node and not node.get("outputs") and default_node.get("outputs"):
+                node["outputs"] = copy.deepcopy(default_node["outputs"])
+
         raw_rows = source.get("rows") if isinstance(source.get("rows"), list) else defaults["rows"]
         seen_in_rows: set[str] = set()
         for raw_row in raw_rows:
@@ -2332,6 +2582,33 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             if edge_key in seen_edges:
                 continue
             seen_edges.add(edge_key)
+            outputs = []
+            raw_outputs = raw_edge.get("outputs") if isinstance(raw_edge.get("outputs"), list) else []
+            for output_index, raw_output in enumerate(raw_outputs):
+                output = self.normalize_workflow_output(raw_output, output_index, {"from": from_id, "to": to_id})
+                if output:
+                    outputs.append(output)
+            if not outputs:
+                for default_edge in defaults["edges"]:
+                    if default_edge.get("from") == from_id and default_edge.get("to") == to_id:
+                        default_outputs = default_edge.get("outputs") if isinstance(default_edge.get("outputs"), list) else []
+                        for output_index, raw_output in enumerate(default_outputs):
+                            output = self.normalize_workflow_output(raw_output, output_index, {"from": from_id, "to": to_id})
+                            if output:
+                                outputs.append(output)
+                        break
+            if not outputs and re.search(r"\b(?:handoff\s+(?:markdown\s+)?files?|handoff\s+brief|research\s+brief)\b", str(raw_edge.get("label") or ""), re.IGNORECASE):
+                output = self.normalize_workflow_output(
+                    {
+                        "type": "handoff-markdown",
+                        "renderAs": "handoff-files",
+                        "label": compact_workflow_text(raw_edge.get("label") or "Handoff Markdown", limit=90),
+                    },
+                    0,
+                    {"from": from_id, "to": to_id},
+                )
+                if output:
+                    outputs.append(output)
             normalized["edges"].append({
                 "from": from_id,
                 "to": to_id,
@@ -2342,6 +2619,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                         for idx, raw_rule in enumerate(raw_edge.get("rules") if isinstance(raw_edge.get("rules"), list) else [])
                     ) if rule
                 ],
+                "outputs": outputs,
             })
         if not normalized["edges"]:
             normalized["edges"] = copy.deepcopy(defaults["edges"])
@@ -2376,6 +2654,129 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         del board, payload
         with WORKFLOW_MAP_LOCK:
             return self.load_workflow_map()
+
+    def workflow_handoff_output_refs(self, workflow_map: dict) -> list[dict]:
+        lookup = self.workflow_node_by_id(workflow_map)
+        refs: list[dict] = []
+        for edge in workflow_map.get("edges", []):
+            if not isinstance(edge, dict):
+                continue
+            from_id = str(edge.get("from") or "").strip()
+            to_id = str(edge.get("to") or "").strip()
+            source_label = str(lookup.get(from_id, {}).get("label") or from_id).strip()
+            target_label = str(lookup.get(to_id, {}).get("label") or to_id).strip()
+            outputs = edge.get("outputs") if isinstance(edge.get("outputs"), list) else []
+            for output in outputs:
+                if not isinstance(output, dict):
+                    continue
+                output_type = self.normalize_workflow_output_type(output.get("type") or output.get("kind"), "")
+                render_as = self.normalize_workflow_render_as(output.get("renderAs") or output.get("render"), output_type)
+                if output_type != "handoff-markdown" and render_as != "handoff-files":
+                    continue
+                refs.append({
+                    "id": str(output.get("id") or f"{from_id}-{to_id}-handoff").strip(),
+                    "type": output_type or "handoff-markdown",
+                    "renderAs": "handoff-files",
+                    "label": str(output.get("label") or edge.get("label") or "Handoff Markdown").strip(),
+                    "description": str(output.get("description") or "").strip(),
+                    "from": from_id,
+                    "to": to_id,
+                    "fromLabel": source_label,
+                    "toLabel": target_label,
+                    "filePatterns": output.get("filePatterns") if isinstance(output.get("filePatterns"), list) else [],
+                })
+        for node in workflow_map.get("nodes", []):
+            if not isinstance(node, dict):
+                continue
+            node_id = str(node.get("id") or "").strip()
+            outputs = node.get("outputs") if isinstance(node.get("outputs"), list) else []
+            for output in outputs:
+                if not isinstance(output, dict):
+                    continue
+                output_type = self.normalize_workflow_output_type(output.get("type") or output.get("kind"), "")
+                render_as = self.normalize_workflow_render_as(output.get("renderAs") or output.get("render"), output_type)
+                if output_type != "handoff-markdown" and render_as != "handoff-files":
+                    continue
+                refs.append({
+                    "id": str(output.get("id") or f"{node_id}-handoff").strip(),
+                    "type": output_type or "handoff-markdown",
+                    "renderAs": "handoff-files",
+                    "label": str(output.get("label") or "Handoff Markdown").strip(),
+                    "description": str(output.get("description") or "").strip(),
+                    "from": node_id,
+                    "to": "",
+                    "fromLabel": str(node.get("label") or node_id).strip(),
+                    "toLabel": "",
+                    "filePatterns": output.get("filePatterns") if isinstance(output.get("filePatterns"), list) else [],
+                })
+        return refs
+
+    def safe_workflow_handoff_matches(self, pattern: object, limit: int = 25) -> list[Path]:
+        pattern_text = str(pattern or "").strip().replace("\\", "/")
+        if not pattern_text or pattern_text.startswith("/") or re.match(r"^[A-Za-z]:", pattern_text):
+            return []
+        if ".." in Path(pattern_text).parts:
+            return []
+        try:
+            matches = sorted(PROJECT_ROOT.glob(pattern_text), key=lambda item: str(item).lower())
+        except (OSError, ValueError):
+            return []
+        safe_matches: list[Path] = []
+        for path in matches:
+            if len(safe_matches) >= limit:
+                break
+            try:
+                resolved = path.resolve()
+                resolved.relative_to(PROJECT_ROOT)
+            except (OSError, ValueError):
+                continue
+            if not resolved.is_file() or resolved.suffix.lower() not in {".md", ".markdown"}:
+                continue
+            safe_matches.append(resolved)
+        return safe_matches
+
+    def workflow_handoff_file_info(self, path: Path) -> dict | None:
+        try:
+            stat = path.stat()
+            text = path.read_text(encoding="utf-8-sig", errors="replace")
+            relative = path.relative_to(PROJECT_ROOT).as_posix()
+        except (OSError, UnicodeError, ValueError):
+            return None
+        preview = re.sub(r"\s+", " ", text).strip()
+        if len(preview) > 700:
+            preview = preview[:700].rstrip() + "..."
+        modified_at = datetime.fromtimestamp(stat.st_mtime, timezone.utc).astimezone().isoformat(timespec="seconds")
+        return {
+            "path": relative,
+            "name": path.name,
+            "size": stat.st_size,
+            "modifiedAt": modified_at,
+            "preview": preview,
+        }
+
+    def get_workflow_handoff_files(self, board: dict, payload: dict) -> dict:
+        del board, payload
+        with WORKFLOW_MAP_LOCK:
+            workflow_map = self.load_workflow_map()
+        outputs = []
+        for output in self.workflow_handoff_output_refs(workflow_map):
+            files_by_path: dict[str, dict] = {}
+            patterns = output.get("filePatterns") if isinstance(output.get("filePatterns"), list) else []
+            for pattern in patterns:
+                for path in self.safe_workflow_handoff_matches(pattern):
+                    info = self.workflow_handoff_file_info(path)
+                    if info:
+                        files_by_path[info["path"]] = info
+            files = sorted(files_by_path.values(), key=lambda item: (item.get("modifiedAt") or "", item.get("path") or ""), reverse=True)
+            outputs.append({
+                **output,
+                "files": files,
+            })
+        return {
+            "updatedAt": now_iso(),
+            "projectRoot": str(PROJECT_ROOT),
+            "outputs": outputs,
+        }
 
     def workflow_node_by_id(self, workflow_map: dict) -> dict[str, dict]:
         return {
@@ -2443,6 +2844,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "to": to_id,
             "label": next_label,
             "rules": [],
+            "outputs": [],
         })
         return True
 
@@ -2451,6 +2853,35 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             if isinstance(edge, dict) and edge.get("from") == from_id and edge.get("to") == to_id:
                 return edge
         return None
+
+    def workflow_ensure_handoff_file_output(self, workflow_map: dict, from_id: str, to_id: str, label: str = "Handoff Markdown") -> bool:
+        edge = self.workflow_find_edge(workflow_map, from_id, to_id)
+        if not edge:
+            return False
+        outputs = edge.setdefault("outputs", [])
+        if not isinstance(outputs, list):
+            outputs = []
+            edge["outputs"] = outputs
+        for output in outputs:
+            if not isinstance(output, dict):
+                continue
+            output_type = self.normalize_workflow_output_type(output.get("type") or output.get("kind"), "")
+            render_as = self.normalize_workflow_render_as(output.get("renderAs") or output.get("render"), output_type)
+            if output_type == "handoff-markdown" or render_as == "handoff-files":
+                return False
+        output = self.normalize_workflow_output(
+            {
+                "type": "handoff-markdown",
+                "renderAs": "handoff-files",
+                "label": label or "Handoff Markdown",
+            },
+            len(outputs),
+            {"from": from_id, "to": to_id},
+        )
+        if not output:
+            return False
+        outputs.append(output)
+        return True
 
     def workflow_remove_edges(self, workflow_map: dict, predicate) -> list[dict]:
         removed = []
@@ -2546,7 +2977,9 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 rule_text = "Planner reads the handoff file and turns useful findings into small claimable todo tasks."
         else:
             rule_text = "The receiving agent reads the handoff file before acting on downstream work."
-        return self.workflow_add_edge_rule(workflow_map, from_id, to_id, rule_text)
+        rule_changed = self.workflow_add_edge_rule(workflow_map, from_id, to_id, rule_text)
+        output_changed = self.workflow_ensure_handoff_file_output(workflow_map, from_id, to_id, "Handoff Markdown")
+        return rule_changed or output_changed
 
     def workflow_extract_rule_text(self, message: str) -> str:
         if ":" in message:
@@ -2574,6 +3007,8 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             return False, "I could not find both ends of that handoff. Use existing node names like Planner, Worker, Reviewer, or a custom node name."
         label = self.workflow_infer_handoff_label(message)
         changed = self.workflow_add_edge(workflow_map, source["id"], target["id"], label)
+        if re.search(r"\b(?:handoff\s+(?:markdown\s+)?files?|handoff\s+brief|research\s+brief)\b", message, re.IGNORECASE):
+            changed = self.workflow_maybe_add_handoff_file_rule(workflow_map, source["id"], target["id"], message) or changed
         verb = "Added" if changed else "Updated"
         return changed, f"{verb} handoff from {source['label']} to {target['label']} labeled \"{label}\"."
 
@@ -2844,14 +3279,14 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         marker = self.WORKFLOW_AGENT_OUTPUT_MARKER
         if marker in text:
             text = text.split(marker, 1)[1]
+        text = strip_terminal_control_sequences(text)
         text = text.strip()
         if truncate and len(text) > PLANNER_CHAT_OUTPUT_LIMIT:
             text = "...(truncated)...\n" + text[-PLANNER_CHAT_OUTPUT_LIMIT:]
         return text
 
-    def workflow_agent_clean_model_reply(self, message: dict) -> str:
-        raw = self.read_workflow_agent_output(str(message.get("logPath") or ""), truncate=False)
-        tool = str(message.get("tool") or "").strip().lower()
+    def workflow_clean_tool_reply(self, tool: str, raw: str, limit: int = PLANNER_CHAT_OUTPUT_LIMIT) -> str:
+        tool = str(tool or "").strip().lower()
         if tool == "claude" and raw:
             try:
                 parsed = json.loads(raw)
@@ -2860,18 +3295,266 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             if isinstance(parsed, dict):
                 reply = str(parsed.get("result") or "").strip()
                 if reply:
-                    return self._extract_clean_reply(reply) or reply[:3000]
+                    clean_reply = self._extract_clean_reply(reply) or reply
+                    return clean_reply[:limit]
         if tool == "codex" and raw:
             codex_matches = list(re.finditer(r"(?:^|\n)codex\s*\n", raw, re.IGNORECASE))
             if codex_matches:
                 tail = raw[codex_matches[-1].end():].strip()
                 tail = re.split(r"\ntokens used\b", tail, maxsplit=1, flags=re.IGNORECASE)[0].strip()
                 if tail:
-                    return tail[:3000]
+                    return tail[:limit]
         clean = self._extract_clean_reply(raw)
         if clean:
-            return clean[:3000]
-        return raw[:3000]
+            return clean[:limit]
+        return raw[:limit]
+
+    def workflow_agent_token_usage_from_text(self, text: str) -> dict:
+        raw = str(text or "")
+        usage: dict = {}
+        if not raw:
+            return usage
+
+        codex_counts = [
+            parsed
+            for parsed in (
+                parse_count_int(match.group(1))
+                for match in re.finditer(
+                    r"(?im)^\s*tokens used\s*(?::\s*|\s+|\r?\n\s*)([0-9][0-9,._ ]*)\s*$",
+                    raw,
+                )
+            )
+            if parsed is not None
+        ]
+        if codex_counts:
+            usage["total"] = sum(codex_counts)
+            usage["source"] = "tokens used"
+            usage["turns"] = len(codex_counts)
+            return usage
+
+        total_counts = [
+            parsed
+            for parsed in (
+                parse_count_int(match.group(1))
+                for match in re.finditer(r'(?i)"?total_tokens"?\s*[:=]\s*([0-9][0-9,._ ]*)', raw)
+            )
+            if parsed is not None
+        ]
+        if total_counts:
+            usage["total"] = sum(total_counts)
+            usage["source"] = "total_tokens"
+            usage["turns"] = len(total_counts)
+            return usage
+
+        input_counts = [
+            parsed
+            for parsed in (
+                parse_count_int(match.group(1))
+                for match in re.finditer(r'(?i)"?input_tokens"?\s*[:=]\s*([0-9][0-9,._ ]*)', raw)
+            )
+            if parsed is not None
+        ]
+        output_counts = [
+            parsed
+            for parsed in (
+                parse_count_int(match.group(1))
+                for match in re.finditer(r'(?i)"?output_tokens"?\s*[:=]\s*([0-9][0-9,._ ]*)', raw)
+            )
+            if parsed is not None
+        ]
+        input_total = sum(input_counts)
+        output_total = sum(output_counts)
+        if input_total or output_total:
+            usage["input"] = input_total
+            usage["output"] = output_total
+            usage["total"] = input_total + output_total
+            usage["source"] = "input/output tokens"
+            usage["turns"] = max(len(input_counts), len(output_counts))
+        return usage
+
+    def workflow_agent_token_usage(self, message: dict) -> dict:
+        stored = message.get("tokenUsage")
+        if isinstance(stored, dict) and parse_count_int(stored.get("total")) is not None:
+            return stored
+        raw = self.read_workflow_agent_output(str(message.get("logPath") or ""), truncate=False)
+        return self.workflow_agent_token_usage_from_text(raw)
+
+    def workflow_agent_clean_model_reply(self, message: dict) -> str:
+        raw = self.read_workflow_agent_output(str(message.get("logPath") or ""), truncate=False)
+        tool = str(message.get("tool") or "").strip().lower()
+        try:
+            proposal = self.workflow_extract_json_object(raw)
+            return json.dumps(proposal, indent=2)
+        except ValueError:
+            pass
+        return self.workflow_clean_tool_reply(tool, raw)
+
+    def workflow_extract_json_object(self, text: str) -> dict:
+        raw = strip_terminal_control_sequences(str(text or "")).strip()
+        if not raw:
+            raise ValueError("Workflow Agent returned an empty proposal.")
+        fence_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", raw, re.IGNORECASE | re.DOTALL)
+        candidates = [fence_match.group(1)] if fence_match else []
+        candidates.append(raw)
+        decoder = json.JSONDecoder()
+        matches: list[dict] = []
+        for candidate in candidates:
+            candidate = candidate.strip()
+            try:
+                parsed = json.loads(candidate)
+                if isinstance(parsed, dict):
+                    matches.append(parsed)
+            except json.JSONDecodeError:
+                pass
+            for index, char in enumerate(candidate):
+                if char != "{":
+                    continue
+                try:
+                    parsed, _ = decoder.raw_decode(candidate[index:])
+                except json.JSONDecodeError:
+                    continue
+                if isinstance(parsed, dict):
+                    matches.append(parsed)
+        for parsed in reversed(matches):
+            source = parsed
+            for envelope_key in ("workflowMap", "workflow_map", "map"):
+                if isinstance(source.get(envelope_key), dict):
+                    source = source[envelope_key]
+                    break
+            if all(key in source for key in ("nodes", "rows", "edges", "globalRules")):
+                return parsed
+        if matches:
+            return matches[-1]
+        raise ValueError("Workflow Agent proposal did not contain a valid JSON object.")
+
+    def workflow_validate_full_map_proposal(self, proposal: object) -> dict:
+        if not isinstance(proposal, dict):
+            raise ValueError("Workflow map proposal must be a JSON object.")
+        source = proposal
+        for envelope_key in ("workflowMap", "workflow_map", "map"):
+            if isinstance(source.get(envelope_key), dict):
+                source = source[envelope_key]
+                break
+        if not isinstance(source, dict):
+            raise ValueError("Workflow map proposal must contain a workflow map object.")
+        for key in ("nodes", "rows", "edges", "globalRules"):
+            if key not in source:
+                raise ValueError(f"Workflow map proposal is missing '{key}'.")
+            if not isinstance(source.get(key), list):
+                raise ValueError(f"Workflow map field '{key}' must be a list.")
+
+        raw_node_ids: set[str] = set()
+        required_node_fields = ("id", "detailKey", "kind", "label", "color", "meta", "acceptsHumanInput", "locked", "rules", "outputs")
+        for index, raw_node in enumerate(source.get("nodes", [])):
+            if not isinstance(raw_node, dict):
+                raise ValueError(f"nodes[{index}] must be an object.")
+            for field in required_node_fields:
+                if field not in raw_node:
+                    raise ValueError(f"nodes[{index}] is missing '{field}'.")
+            if not isinstance(raw_node.get("rules"), list):
+                raise ValueError(f"nodes[{index}].rules must be a list.")
+            if not isinstance(raw_node.get("outputs"), list):
+                raise ValueError(f"nodes[{index}].outputs must be a list.")
+            node_id = workflow_slug(raw_node.get("id") or raw_node.get("label"), "")
+            if not node_id:
+                raise ValueError(f"nodes[{index}] is missing id/label.")
+            if node_id in raw_node_ids:
+                raise ValueError(f"Duplicate node id '{node_id}'.")
+            raw_node_ids.add(node_id)
+
+        for row_index, raw_row in enumerate(source.get("rows", [])):
+            if not isinstance(raw_row, list):
+                raise ValueError(f"rows[{row_index}] must be a list of node ids.")
+            if not raw_row:
+                raise ValueError(f"rows[{row_index}] must not be empty.")
+            for raw_id in raw_row:
+                node_id = workflow_slug(raw_id)
+                if node_id not in raw_node_ids:
+                    raise ValueError(f"rows[{row_index}] references unknown node id '{node_id}'.")
+
+        required_edge_fields = ("from", "to", "label", "rules", "outputs")
+        for edge_index, raw_edge in enumerate(source.get("edges", [])):
+            if not isinstance(raw_edge, dict):
+                raise ValueError(f"edges[{edge_index}] must be an object.")
+            for field in required_edge_fields:
+                if field not in raw_edge:
+                    raise ValueError(f"edges[{edge_index}] is missing '{field}'.")
+            if not isinstance(raw_edge.get("rules"), list):
+                raise ValueError(f"edges[{edge_index}].rules must be a list.")
+            if not isinstance(raw_edge.get("outputs"), list):
+                raise ValueError(f"edges[{edge_index}].outputs must be a list.")
+            from_id = workflow_slug(raw_edge.get("from"))
+            to_id = workflow_slug(raw_edge.get("to"))
+            if from_id not in raw_node_ids:
+                raise ValueError(f"edges[{edge_index}].from references unknown node id '{from_id}'.")
+            if to_id not in raw_node_ids:
+                raise ValueError(f"edges[{edge_index}].to references unknown node id '{to_id}'.")
+            if from_id == to_id:
+                raise ValueError(f"edges[{edge_index}] cannot connect a node to itself.")
+
+        for rule_index, raw_rule in enumerate(source.get("globalRules", [])):
+            if not isinstance(raw_rule, (dict, str)):
+                raise ValueError(f"globalRules[{rule_index}] must be a string or object.")
+
+        normalized = self.normalize_workflow_map(source)
+        normalized_nodes = self.workflow_node_by_id(normalized)
+        defaults = self.clone_default_workflow_map()
+        default_nodes = {
+            str(node.get("id") or ""): node
+            for node in defaults.get("nodes", [])
+            if isinstance(node, dict)
+        }
+        for core_id in ("planner", "worker", "reviewer"):
+            node = normalized_nodes.get(core_id)
+            if not node:
+                raise ValueError(f"Locked core node '{core_id}' is missing.")
+            if not node.get("locked"):
+                raise ValueError(f"Locked core node '{core_id}' must keep locked=true.")
+            default_node = default_nodes.get(core_id, {})
+            default_label = str(default_node.get("label") or "").strip()
+            if default_label and str(node.get("label") or "").strip() != default_label:
+                raise ValueError(f"Locked core node '{core_id}' must keep label '{default_label}'.")
+
+        seen_row_ids: set[str] = set()
+        for row_index, row in enumerate(normalized.get("rows", [])):
+            if not isinstance(row, list) or not row:
+                raise ValueError(f"Normalized rows[{row_index}] is invalid.")
+            for node_id in row:
+                if node_id in seen_row_ids:
+                    raise ValueError(f"Node id '{node_id}' appears in more than one row.")
+                if node_id not in normalized_nodes:
+                    raise ValueError(f"Row references unknown node id '{node_id}'.")
+                seen_row_ids.add(node_id)
+        missing_from_rows = set(normalized_nodes) - seen_row_ids
+        if missing_from_rows:
+            missing = ", ".join(sorted(missing_from_rows))
+            raise ValueError(f"Rows are missing node id(s): {missing}.")
+        return normalized
+
+    def workflow_parse_full_map_proposal(self, text: str) -> dict:
+        return self.workflow_validate_full_map_proposal(self.workflow_extract_json_object(text))
+
+    def workflow_canonical_map_for_compare(self, workflow_map: dict) -> dict:
+        canonical = self.normalize_workflow_map(workflow_map)
+        canonical["updatedAt"] = ""
+        return canonical
+
+    def workflow_maps_equal(self, left: dict, right: dict) -> bool:
+        return json.dumps(self.workflow_canonical_map_for_compare(left), sort_keys=True) == json.dumps(
+            self.workflow_canonical_map_for_compare(right),
+            sort_keys=True,
+        )
+
+    def workflow_apply_full_map_proposal_once(self, proposal_text: str) -> tuple[bool, str, str, list[dict]]:
+        proposed_map = self.workflow_parse_full_map_proposal(proposal_text)
+        current_map = self.load_workflow_map()
+        changed = not self.workflow_maps_equal(current_map, proposed_map)
+        if changed:
+            self.persist_workflow_map(proposed_map)
+            node_count = len(proposed_map.get("nodes", []))
+            edge_count = len(proposed_map.get("edges", []))
+            return True, f"Workflow map updated from JSON proposal ({node_count} nodes, {edge_count} handoffs).", proposal_text, []
+        return False, "No workflow-map update is needed.", proposal_text, []
 
     def public_workflow_agent_messages(self, messages: list) -> list[dict]:
         public_messages = []
@@ -2903,111 +3586,105 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 "result": message.get("result", ""),
                 "modelReply": message.get("modelReply", ""),
                 "diagnostics": diagnostics,
+                "proposalAttempts": message.get("proposalAttempts", []),
+                "tokenUsage": self.workflow_agent_token_usage(message),
                 "createdAt": message.get("createdAt", ""),
                 "spawnedAt": message.get("spawnedAt", ""),
                 "finishedAt": message.get("finishedAt", ""),
                 "processId": message.get("processId", ""),
                 "processState": message.get("processState", ""),
                 "exitCode": message.get("exitCode", ""),
+                "terminalInfo": message.get("terminalInfo", {}),
                 "isError": bool(message.get("isError")),
             }
             public_messages.append(public)
         return public_messages
 
-    def workflow_agent_phrase(self, message: str, workflow_map: dict) -> str:
+    def workflow_compact_map_for_prompt(self, workflow_map: dict) -> str:
         compact_map = json.dumps({
+            "version": workflow_map.get("version", 1),
             "nodes": workflow_map.get("nodes", []),
             "rows": workflow_map.get("rows", []),
             "edges": workflow_map.get("edges", []),
             "globalRules": workflow_map.get("globalRules", []),
         }, indent=2)
-        if len(compact_map) > 6000:
-            compact_map = compact_map[:6000] + "\n...(truncated)..."
+        if len(compact_map) > 10000:
+            compact_map = compact_map[:10000] + "\n...(truncated)..."
+        return compact_map
+
+    def workflow_agent_phrase(self, message: str, workflow_map: dict) -> str:
+        compact_map = self.workflow_compact_map_for_prompt(workflow_map)
         return (
             "You are the Workflow Agent for this local task-board viewer. "
-            "Your job is to interpret the owner's requested workflow-map change and give a concise confirmation. "
+            "Your job is to propose the entire workflow-map JSON after applying the owner's requested change. "
             "Do not edit files, run tools, create task-board cards, claim work, implement code, or review work. "
-            "The backend will apply the workflow-map update after your turn exits, using its workflow-map mutation API. "
+            "The backend will validate and persist your JSON after your turn exits. "
+            "You are running in a visible interactive CLI; print the final JSON in the terminal, then the owner can inspect it and exit the CLI so the backend can apply it. "
+            "Return ONLY one valid JSON object and no markdown, no prose, and no code fence. "
+            "The JSON object must be the full workflow map with keys: version, nodes, rows, edges, globalRules. "
+            "Every node needs id, detailKey, kind, label, color, meta, acceptsHumanInput, locked, rules, and outputs. "
+            "Every edge needs from, to, label, rules, and outputs. "
+            "Preserve the locked core nodes planner, worker, and reviewer with locked=true. "
+            "Rows must reference existing node ids, and edges must connect existing node ids. "
+            "If the owner supplies a complete workflow spec, convert it into suitable agent nodes, rows, handoff edges, node rules, edge rules, outputs, and global rules. "
+            "Use type=handoff-markdown and renderAs=handoff-files for handoff file outputs. "
+            "If no workflow-map change is needed, return the current map unchanged. "
             "Current workflow map:\n"
             f"{compact_map}\n\n"
             "Owner request:\n"
-            f"{message}\n\n"
-            "Reply with the intended update in one or two short sentences."
+            f"{message}\n"
         )
 
-    def launch_workflow_agent_process(self, tool: str, phrase: str, message_id: str, spawned_at: str) -> tuple[subprocess.Popen, str, str]:
-        args = self.spawn_command_args(tool)
-        if tool == "codex":
-            args.extend(["exec", "--skip-git-repo-check", phrase])
-        elif tool == "qwen":
-            args.extend(["-p", phrase, "-y", "-o", "stream-json"])
-        else:
-            args.extend(["-p", phrase, "--output-format", "json"])
+    def workflow_agent_terminal_done_path(self, message_id: str, tool: str) -> Path:
+        safe_tool = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(tool or "agent")).strip("-") or "agent"
+        return WORKFLOW_AGENT_CHAT_DIR / f"{message_id}-{safe_tool}.done"
+
+    def mark_workflow_agent_terminal_done(self, message_id: str, tool: str) -> None:
+        try:
+            WORKFLOW_AGENT_CHAT_DIR.mkdir(parents=True, exist_ok=True)
+            self.workflow_agent_terminal_done_path(message_id, tool).write_text(
+                f"{now_iso()}\n",
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
+
+    def launch_workflow_agent_process(
+        self,
+        tool: str,
+        phrase: str,
+        message_id: str,
+        spawned_at: str,
+    ) -> tuple[TerminalSessionMonitor, str, str, dict, str]:
+        args = self.interactive_spawn_command_args(tool, phrase)
 
         WORKFLOW_AGENT_CHAT_DIR.mkdir(parents=True, exist_ok=True)
         log_path = WORKFLOW_AGENT_CHAT_DIR / f"{message_id}-{tool}.log"
+        done_path = self.workflow_agent_terminal_done_path(message_id, tool)
+        try:
+            done_path.unlink()
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
         err_path = ""
-        popen_flags = 0
-        if hasattr(subprocess, "CREATE_NO_WINDOW"):
-            popen_flags |= subprocess.CREATE_NO_WINDOW
-        env = agent_subprocess_env(tool)
         working_dir = str(PROJECT_ROOT)
         log_file = log_path.open("a", encoding="utf-8")
         log_file.write(f"Workflow Agent ({tool}) at {spawned_at}\n")
         log_file.write(f"Working directory: {working_dir}\n")
         log_file.write(f"{self.WORKFLOW_AGENT_OUTPUT_MARKER}\n")
         log_file.flush()
-
-        if tool == "qwen":
-            formatter_script = str(Path(__file__).parent / "format_qwen_log.py")
-            process = subprocess.Popen(
-                args,
-                cwd=working_dir,
-                env=env,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=log_file,
-                creationflags=popen_flags,
-                close_fds=True,
-                **_qwen_process_isolation_kwargs(),
-            )
-            threading.Thread(
-                target=_run_qwen_formatter_pipe,
-                args=(process, log_file, formatter_script),
-                daemon=True,
-            ).start()
-            return process, str(log_path), err_path
-
-        if tool == "claude":
-            err_file_path = WORKFLOW_AGENT_CHAT_DIR / f"{message_id}-{tool}.err.log"
-            err_path = str(err_file_path)
-            err_file = err_file_path.open("a", encoding="utf-8")
-            process = subprocess.Popen(
-                args,
-                cwd=working_dir,
-                env=env,
-                stdin=subprocess.DEVNULL,
-                stdout=log_file,
-                stderr=err_file,
-                creationflags=popen_flags,
-                close_fds=True,
-            )
-            log_file.close()
-            err_file.close()
-            return process, str(log_path), err_path
-
-        process = subprocess.Popen(
-            args,
-            cwd=working_dir,
-            env=env,
-            stdin=subprocess.DEVNULL,
-            stdout=log_file,
-            stderr=subprocess.STDOUT,
-            creationflags=popen_flags,
-            close_fds=True,
-        )
         log_file.close()
-        return process, str(log_path), err_path
+
+        process, terminal_info, _, _ = self.launch_recorded_interactive_terminal(
+            args,
+            working_dir,
+            tool,
+            str(log_path),
+            str(done_path),
+            f"Workflow Agent {tool}",
+        )
+        return process, str(log_path), err_path, terminal_info, str(done_path)
 
     def finalize_workflow_agent_message(
         self,
@@ -3028,12 +3705,14 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             if str(target.get("tool") or "").strip().lower() == "qwen":
                 time.sleep(0.5)
             model_reply = self.workflow_agent_clean_model_reply(target)
+            token_usage = self.workflow_agent_token_usage(target)
             err_tail = ""
             if target.get("errPath"):
                 err_tail = self.read_text_tail(str(target.get("errPath") or ""), limit=3000)
             owner_message = str(target.get("ownerMessage") or "").strip()
             target["finishedAt"] = now_iso()
             target["processState"] = process_state or target.get("processState", "")
+            target["tokenUsage"] = token_usage
             if return_code is not None:
                 target["exitCode"] = return_code
 
@@ -3045,18 +3724,16 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 stderr_detail = f" {err_tail}" if err_tail else ""
                 target["result"] = f"Workflow Agent terminated before applying the map update.{detail}{stderr_detail}".strip()
                 self.save_workflow_agent_chat(data)
+                self.mark_workflow_agent_terminal_done(message_id, str(target.get("tool") or ""))
                 return True
 
             try:
-                with WORKFLOW_MAP_LOCK:
-                    workflow_map = self.load_workflow_map()
-                    changed, reply = self.workflow_apply_interpreted_message(workflow_map, owner_message, model_reply)
-                    if changed:
-                        self.persist_workflow_map(workflow_map)
+                changed, reply, model_reply, proposal_attempts = self.workflow_apply_full_map_proposal_once(model_reply)
                 target["status"] = "done"
                 target["changed"] = changed
                 target["result"] = reply
                 target["modelReply"] = model_reply
+                target["proposalAttempts"] = proposal_attempts
                 target["isError"] = False
             except Exception as error:
                 target["status"] = "terminated"
@@ -3065,6 +3742,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 target["modelReply"] = model_reply
                 target["result"] = f"Workflow Agent terminated while applying the map update: {error}"
             self.save_workflow_agent_chat(data)
+            self.mark_workflow_agent_terminal_done(message_id, str(target.get("tool") or ""))
             return True
 
     def wait_for_workflow_agent_process(self, message_id: str, process: subprocess.Popen) -> None:
@@ -3083,36 +3761,45 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 continue
             if message.get("role") != "workflow-agent" or message.get("status") != "running":
                 continue
+            terminal_done_path = str(message.get("terminalDonePath") or "")
+            terminal_done = bool(terminal_done_path and Path(terminal_done_path).exists())
+            terminal_info = message.get("terminalInfo") if isinstance(message.get("terminalInfo"), dict) else {}
             status = spawned_process_status({
                 "processId": message.get("processId"),
                 "spawnedAt": message.get("spawnedAt"),
+                "mode": "interactive" if str(terminal_info.get("mode") or "") == "interactive-terminal" else "",
             })
             message["processState"] = status.get("state", "")
             changed = True
-            if not status.get("isRunning"):
+            if terminal_done or not status.get("isRunning"):
                 # Recovery path for backend restarts where the waiter thread is gone.
                 model_reply = self.workflow_agent_clean_model_reply(message)
                 message["finishedAt"] = now_iso()
                 message["modelReply"] = model_reply
+                message["tokenUsage"] = self.workflow_agent_token_usage(message)
                 if model_reply:
-                    with WORKFLOW_MAP_LOCK:
-                        workflow_map = self.load_workflow_map()
-                        applied, reply = self.workflow_apply_interpreted_message(
-                            workflow_map,
-                            str(message.get("ownerMessage") or ""),
-                            model_reply,
-                        )
-                        if applied:
-                            self.persist_workflow_map(workflow_map)
-                    message["status"] = "done"
-                    message["changed"] = applied
-                    message["result"] = reply
-                    message["isError"] = False
+                    try:
+                        applied, reply, final_reply, proposal_attempts = self.workflow_apply_full_map_proposal_once(model_reply)
+                        message["status"] = "done"
+                        message["changed"] = applied
+                        message["result"] = reply
+                        message["modelReply"] = final_reply
+                        message["proposalAttempts"] = proposal_attempts
+                        message["isError"] = False
+                    except Exception as error:
+                        message["status"] = "terminated"
+                        message["changed"] = False
+                        message["result"] = f"Workflow Agent terminated while applying the map update: {error}"
+                        message["isError"] = True
                 else:
                     message["status"] = "terminated"
                     message["changed"] = False
                     message["result"] = "Workflow Agent process is no longer running and produced no reply."
                     message["isError"] = True
+                self.mark_workflow_agent_terminal_done(
+                    str(message.get("id") or ""),
+                    str(message.get("tool") or ""),
+                )
         return changed
 
     def workflow_chat_poll(self, board: dict, payload: dict) -> dict:
@@ -3159,7 +3846,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
 
         message_id = f"wa_{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S')}_{os.urandom(3).hex()}"
         try:
-            process, log_path, err_path = self.launch_workflow_agent_process(tool, phrase, message_id, timestamp)
+            process, log_path, err_path, terminal_info, terminal_done_path = self.launch_workflow_agent_process(tool, phrase, message_id, timestamp)
         except FileNotFoundError as error:
             raise RuntimeError(f"Could not launch Workflow Agent ({tool}): {error}") from error
         except Exception as error:
@@ -3187,9 +3874,12 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 "ownerMessage": message,
                 "logPath": log_path,
                 "errPath": err_path,
+                "terminalInfo": terminal_info,
+                "terminalDonePath": terminal_done_path,
                 "result": "",
                 "modelReply": "",
                 "changed": False,
+                "proposalAttempts": [],
             })
             self.save_workflow_agent_chat(data)
             messages = data.get("messages", [])
@@ -3203,6 +3893,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "status": "running",
             "tool": tool,
             "processId": process.pid,
+            "terminalInfo": terminal_info,
             "messages": self.public_workflow_agent_messages(messages),
             "workflowMap": workflow_map,
         }
@@ -3214,6 +3905,21 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             self.persist_workflow_map(workflow_map)
             workflow_map = self.load_workflow_map()
         return {"workflowMap": workflow_map}
+
+    def workflow_map_replace(self, board: dict, columns: dict, payload: dict) -> dict:
+        del board, columns
+        proposal = payload.get("workflowMap") or payload.get("workflow_map") or payload.get("map") or payload
+        with WORKFLOW_MAP_LOCK:
+            current_map = self.load_workflow_map()
+            workflow_map = self.workflow_validate_full_map_proposal(proposal)
+            changed = not self.workflow_maps_equal(current_map, workflow_map)
+            if changed:
+                self.persist_workflow_map(workflow_map)
+                workflow_map = self.load_workflow_map()
+        return {
+            "changed": changed,
+            "workflowMap": workflow_map,
+        }
 
     def get_pause_status(self, board: dict, payload: dict) -> dict:
         del board, payload
@@ -3351,6 +4057,89 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "warnings": warnings,
         }
 
+    def stale_agent_status_summary(self, board: dict, stale_agents: list[dict]) -> dict:
+        columns = self.get_columns(board)
+        active_lock_columns = {
+            "worker": ("claimed", "claimedBy"),
+            "review": ("reviewing", "reviewClaimedBy"),
+        }
+        now = datetime.now(timezone.utc).astimezone()
+        records = []
+        lock_records = []
+
+        def agent_name_matches(left: str, right: str) -> bool:
+            return bool(left and right and left.strip().lower() == right.strip().lower())
+
+        for agent in stale_agents:
+            if not isinstance(agent, dict):
+                continue
+            role = self.normalize_agent_role(agent.get("role"))
+            personal_name = str(agent.get("personalName") or agent.get("agentName") or "").strip()
+            current_task_id = str(agent.get("currentTaskId") or "").strip()
+            last_heartbeat_at = str(agent.get("lastHeartbeatAt") or "").strip()
+            record = {
+                "agentId": str(agent.get("agentId") or "").strip(),
+                "personalName": personal_name,
+                "role": role,
+                "model": self.normalize_agent_model(agent.get("model")),
+                "lastHeartbeatAt": last_heartbeat_at,
+                "currentTaskId": current_task_id,
+                "currentColumn": "",
+                "lockOwner": "",
+                "lockMatchesAgent": False,
+                "requiresAction": False,
+                "reason": "No active task lock is recorded for this stale agent.",
+            }
+            last_seen = self.parse_iso_timestamp(last_heartbeat_at)
+            if last_seen:
+                record["lastSeenSecondsAgo"] = max(0, int((now - last_seen).total_seconds()))
+
+            expected_column, owner_field = active_lock_columns.get(role, ("", ""))
+            if current_task_id:
+                search_columns = [expected_column] if expected_column else []
+                for fallback_column in ("claimed", "reviewing"):
+                    if fallback_column not in search_columns:
+                        search_columns.append(fallback_column)
+                found_task = None
+                found_column = ""
+                for column_name in search_columns:
+                    column = columns.get(column_name) if isinstance(columns.get(column_name), list) else []
+                    for task in column:
+                        if isinstance(task, dict) and str(task.get("id") or "").strip() == current_task_id:
+                            found_task = task
+                            found_column = column_name
+                            break
+                    if found_task:
+                        break
+
+                if found_task:
+                    lock_owner = str(found_task.get(owner_field) or "").strip() if owner_field else ""
+                    matches_agent = agent_name_matches(personal_name, lock_owner)
+                    record.update({
+                        "currentColumn": found_column,
+                        "lockOwner": lock_owner,
+                        "lockMatchesAgent": matches_agent,
+                    })
+                    if expected_column and found_column == expected_column and matches_agent:
+                        record["requiresAction"] = True
+                        record["reason"] = f"Stale {role} still owns an active {found_column} lock."
+                    else:
+                        record["reason"] = "Task reference no longer matches an active lock owned by this stale agent."
+                else:
+                    record["reason"] = "Task reference is historical; the task is not in an active lock column."
+
+            records.append(record)
+            if record["requiresAction"]:
+                lock_records.append(record)
+
+        return {
+            "records": records[:12],
+            "lockRecords": lock_records[:12],
+            "lockCount": len(lock_records),
+            "historyCount": max(0, len(records) - len(lock_records)),
+            "policy": "Stale agent records are retained as history. Owner action is only needed when a stale record still owns a claimed or reviewing task lock.",
+        }
+
     def get_system_status(self, board: dict, payload: dict) -> dict:
         del payload
         checked_at = now_iso()
@@ -3380,12 +4169,25 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         ]
         board_health = self.board_health_summary(board)
         logs = self.recent_log_summary()
+        stale_summary = self.stale_agent_status_summary(board, stale_agents)
 
         warning_items = []
+        notice_items = []
         if board_health["warningCount"]:
             warning_items.extend(board_health["warnings"])
-        if stale_agents:
-            warning_items.append(f"{len(stale_agents)} stale agent record(s)")
+        if stale_summary["lockCount"]:
+            stale_names = [
+                str(record.get("personalName") or record.get("agentId") or "agent")
+                for record in stale_summary["lockRecords"][:4]
+            ]
+            warning_items.append(
+                f"{stale_summary['lockCount']} stale agent lock(s) need attention"
+                + (f": {', '.join(stale_names)}" if stale_names else "")
+            )
+        elif stale_agents:
+            notice_items.append(
+                f"{len(stale_agents)} stale agent record(s) retained as history; no active locks need action"
+            )
         if logs["errorCount"]:
             warning_items.append(f"{logs['errorCount']} recent API/viewer error(s)")
 
@@ -3433,12 +4235,17 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 "total": len(agents),
                 "active": len(active_agents),
                 "stale": len(stale_agents),
+                "staleWithLocks": stale_summary["lockCount"],
+                "staleHistory": stale_summary["historyCount"],
+                "staleRecords": stale_summary["records"],
+                "stalePolicy": stale_summary["policy"],
                 "pendingSpawns": len(pending_spawns),
                 "pausedRuns": len(paused_runs),
             },
             "dispatch": dispatch,
             "logs": logs,
             "warnings": warning_items[:12],
+            "notices": notice_items[:12],
         }
 
     def pause_plus_one_hour(self, board: dict, columns: dict, payload: dict) -> dict:
@@ -3753,9 +4560,11 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         )
         return prompt
 
-    def interactive_spawn_command_args(self, tool: str, start_phrase: str) -> list[str]:
-        args = self.spawn_command_args(tool)
-        if tool == "qwen":
+    def interactive_spawn_command_args(self, tool: str, start_phrase: str, command_override: object = None) -> list[str]:
+        args = self.spawn_command_args(tool, command_override=command_override)
+        if tool == "codex":
+            args.extend(["--no-alt-screen", start_phrase])
+        elif tool == "qwen":
             args.extend(["--prompt-interactive", start_phrase])
         else:
             args.append(start_phrase)
@@ -3788,6 +4597,100 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         else:
             command += f"exec {shlex.join(args)}"
         return command
+
+    def recorded_interactive_shell_command(
+        self,
+        args: list[str],
+        working_dir: str,
+        tool: str,
+        log_path: str,
+        done_path: str,
+        exit_path: str,
+        pid_path: str,
+        finished_label: str,
+    ) -> str:
+        env_overrides = self.terminal_env_overrides(tool)
+        command_args = []
+        if env_overrides:
+            command_args.extend(["env", *[f"{key}={value}" for key, value in env_overrides.items()]])
+        command_args.extend(args)
+
+        if os.name == "nt":
+            command = f"cd /d {subprocess.list2cmdline([working_dir])}"
+            command += f" && echo %PROCESSID% > {subprocess.list2cmdline([pid_path])}"
+            command += f" && {subprocess.list2cmdline(command_args)}"
+            command += f" && echo 0 > {subprocess.list2cmdline([exit_path])}"
+            command += f" && type nul > {subprocess.list2cmdline([done_path])}"
+            return command
+
+        script_args = ["script", "-a", "-q", "-F", log_path, *command_args]
+        return " ".join([
+            f"printf '%s\\n' \"$$\" > {shlex.quote(pid_path)};",
+            f"cd {shlex.quote(working_dir)} || exit 1;",
+            "if ! command -v script >/dev/null 2>&1; then",
+            f"  printf '%s\\n' {shlex.quote('The script command is required for interactive recorded agent sessions.')} | tee -a {shlex.quote(log_path)};",
+            f"  printf '%s\\n' 127 > {shlex.quote(exit_path)};",
+            f"  touch {shlex.quote(done_path)};",
+            "  exit 127;",
+            "fi;",
+            shlex.join(script_args) + ";",
+            "agent_rc=$?;",
+            f"printf '%s\\n' \"$agent_rc\" > {shlex.quote(exit_path)};",
+            f"touch {shlex.quote(done_path)};",
+            f"printf '\\n%s exited (code %s). You can close this terminal.\\n' {shlex.quote(finished_label)} \"$agent_rc\";",
+            "exec ${SHELL:-/bin/zsh} -l",
+        ])
+
+    def launch_recorded_interactive_terminal(
+        self,
+        args: list[str],
+        working_dir: str,
+        tool: str,
+        log_path: str,
+        done_path: str,
+        title: str,
+    ) -> tuple[TerminalSessionMonitor, dict, str, str]:
+        exit_path = str(Path(done_path).with_suffix(".exit"))
+        pid_path = str(Path(done_path).with_suffix(".pid"))
+        try:
+            Path(exit_path).unlink()
+        except (FileNotFoundError, OSError):
+            pass
+        try:
+            Path(pid_path).unlink()
+        except (FileNotFoundError, OSError):
+            pass
+        shell_command = self.recorded_interactive_shell_command(
+            args,
+            working_dir,
+            tool,
+            log_path,
+            done_path,
+            exit_path,
+            pid_path,
+            title,
+        )
+        terminal = self.launch_interactive_terminal(shell_command, title)
+        pid = 0
+        deadline = time.monotonic() + 2
+        while time.monotonic() < deadline:
+            try:
+                pid = parse_process_id(Path(pid_path).read_text(encoding="utf-8").strip())
+            except (FileNotFoundError, OSError):
+                pid = 0
+            if pid:
+                break
+            time.sleep(0.05)
+        monitor = TerminalSessionMonitor(pid, done_path, exit_path, now_iso())
+        terminal_info = {
+            "mode": "interactive-terminal",
+            "terminalCommand": shell_command,
+            "terminalDonePath": done_path,
+            "terminalExitPath": exit_path,
+            "terminalPidPath": pid_path,
+            **terminal,
+        }
+        return monitor, terminal_info, exit_path, pid_path
 
     def launch_interactive_terminal(self, shell_command: str, title: str) -> dict:
         if sys.platform == "darwin":
@@ -5425,74 +6328,9 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             log_file.close()
             return interactive_result
         except Exception as exc:
-            log_file.write(f"Interactive spawn failed: {exc}; falling back to non-interactive\n")
-            log_file.flush()
-
-        # Fallback: non-interactive subprocess (also the path on non-macOS)
-        if tool == "codex":
-            args = self.spawn_command_args(tool)
-            args.extend(["exec", "--skip-git-repo-check", start_phrase])
-        else:
-            args = self.spawn_command_args(tool)
-            args.extend(["-p", start_phrase])
-            if tool == "qwen":
-                args.extend(["-y", "-o", "stream-json"])
-
-        popen_flags = 0
-        if hasattr(subprocess, "CREATE_NO_WINDOW"):
-            popen_flags |= subprocess.CREATE_NO_WINDOW
-
-        try:
-            if tool == "qwen":
-                formatter_script = str(Path(__file__).parent / "format_qwen_log.py")
-                process = subprocess.Popen(
-                    args,
-                    cwd=working_dir,
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.PIPE,
-                    stderr=log_file,
-                    creationflags=popen_flags,
-                    close_fds=True,
-                    **_qwen_process_isolation_kwargs(),
-                )
-
-                threading.Thread(
-                    target=_run_qwen_formatter_pipe,
-                    args=(process, log_file, formatter_script),
-                    daemon=True,
-                ).start()
-            else:
-                process = subprocess.Popen(
-                    args,
-                    cwd=working_dir,
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    stdout=log_file,
-                    stderr=subprocess.STDOUT,
-                    creationflags=popen_flags,
-                    close_fds=True,
-                )
-                log_file.close()
-        except FileNotFoundError as error:
-            raise RuntimeError(f"Could not launch non-interactive {tool} agent: {error}") from error
-        except Exception as error:
-            raise RuntimeError(f"Spawn failed: {error}") from error
-
-        return {
-            "spawned": True,
-            "mode": "non-interactive",
-            "role": role,
-            "tool": tool,
-            "personalName": personal_name,
-            "cliCommand": cli_command_text,
-            "startPhrase": start_phrase,
-            "backendBaseUrl": backend_base_url,
-            "processId": process.pid,
-            "logPath": str(log_path),
-            "workingDirectory": working_dir,
-            "resumeOfProcessId": resume_run.get("processId", "") if resume_run else "",
-        }
+            log_file.write(f"Interactive spawn failed: {exc}\n")
+            log_file.close()
+            raise RuntimeError(f"Could not open interactive {tool} terminal: {exc}") from exc
 
     # --- Planner chat (interactive human input to the Planner agent) ---
 
@@ -5530,6 +6368,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
         marker = self.PLANNER_CHAT_OUTPUT_MARKER
         if marker in text:
             text = text.split(marker, 1)[1]
+        text = strip_terminal_control_sequences(text)
         text = text.strip()
         if truncate and len(text) > PLANNER_CHAT_OUTPUT_LIMIT:
             text = "...(truncated)...\n" + text[-PLANNER_CHAT_OUTPUT_LIMIT:]
@@ -5777,11 +6616,15 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 if output != message.get("output"):
                     message["output"] = output
                     changed = True
+            terminal_done_path = str(message.get("terminalDonePath") or "")
+            terminal_done = bool(terminal_done_path and Path(terminal_done_path).exists())
+            terminal_info = message.get("terminalInfo") if isinstance(message.get("terminalInfo"), dict) else {}
             status = spawned_process_status({
                 "processId": message.get("processId"),
                 "spawnedAt": message.get("spawnedAt"),
+                "mode": "interactive" if str(terminal_info.get("mode") or "") == "interactive-terminal" else "",
             })
-            if not status.get("isRunning"):
+            if terminal_done or not status.get("isRunning"):
                 self.extract_planner_reply(message, data)
                 message["status"] = "done"
                 message["finishedAt"] = now_iso()
@@ -5890,29 +6733,17 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 )
 
         command_override = payload.get("command") if "command" in payload else None
-        args = self.spawn_command_args(tool, command_override=command_override)
+        args = self.interactive_spawn_command_args(tool, phrase, command_override=command_override)
         chat_format = "text"
-        if tool == "codex":
-            args.extend(["exec", "--skip-git-repo-check", phrase])
-        elif tool == "qwen":
-            args.extend(["-p", phrase, "-y", "-o", "stream-json"])
-        else:  # claude — conversational via --output-format json + --resume
-            chat_format = "json"
-            args.extend(["-p", phrase, "--output-format", "json"])
-            if continuing:
-                args.extend(["--resume", cli_session_id])
 
         message_id = self._new_chat_id()
         spawned_at = now_iso()
         working_dir = str(PROJECT_ROOT)
         err_path = ""
+        terminal_info: dict = {}
         try:
             PLANNER_CHAT_LOG_DIR.mkdir(parents=True, exist_ok=True)
             log_path = PLANNER_CHAT_LOG_DIR / f"{message_id}-{tool}.log"
-            popen_flags = 0
-            if hasattr(subprocess, "CREATE_NO_WINDOW"):
-                popen_flags |= subprocess.CREATE_NO_WINDOW
-            env = agent_subprocess_env(tool)
             log_file = log_path.open("a", encoding="utf-8")
             log_file.write(f"Planner chat ({tool}) at {spawned_at}\n")
             log_file.write(f"Working directory: {working_dir}\n")
@@ -5920,55 +6751,20 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             log_file.write(f"Resuming session: {cli_session_id or '(new conversation)'}\n")
             log_file.write(f"{self.PLANNER_CHAT_OUTPUT_MARKER}\n")
             log_file.flush()
-
-            if tool == "qwen":
-                formatter_script = str(Path(__file__).parent / "format_qwen_log.py")
-                process = subprocess.Popen(
-                    args,
-                    cwd=working_dir,
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    stdout=subprocess.PIPE,
-                    stderr=log_file,
-                    creationflags=popen_flags,
-                    close_fds=True,
-                    **_qwen_process_isolation_kwargs(),
-                )
-
-                threading.Thread(
-                    target=_run_qwen_formatter_pipe,
-                    args=(process, log_file, formatter_script),
-                    daemon=True,
-                ).start()
-            elif tool == "claude":
-                # Keep stderr out of the JSON stream so the result parses cleanly.
-                err_file_path = PLANNER_CHAT_LOG_DIR / f"{message_id}-{tool}.err.log"
-                err_path = str(err_file_path)
-                err_file = err_file_path.open("a", encoding="utf-8")
-                process = subprocess.Popen(
-                    args,
-                    cwd=working_dir,
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    stdout=log_file,
-                    stderr=err_file,
-                    creationflags=popen_flags,
-                    close_fds=True,
-                )
-                log_file.close()
-                err_file.close()
-            else:
-                process = subprocess.Popen(
-                    args,
-                    cwd=working_dir,
-                    env=env,
-                    stdin=subprocess.DEVNULL,
-                    stdout=log_file,
-                    stderr=subprocess.STDOUT,
-                    creationflags=popen_flags,
-                    close_fds=True,
-                )
-                log_file.close()
+            log_file.close()
+            done_path = str(PLANNER_CHAT_LOG_DIR / f"{message_id}-{tool}.done")
+            try:
+                Path(done_path).unlink()
+            except (FileNotFoundError, OSError):
+                pass
+            process, terminal_info, _, _ = self.launch_recorded_interactive_terminal(
+                args,
+                working_dir,
+                tool,
+                str(log_path),
+                done_path,
+                f"Planner Chat {tool}",
+            )
         except FileNotFoundError as error:
             raise RuntimeError(f"Could not launch planner chat ({tool}): {error}") from error
         except Exception as error:
@@ -5992,6 +6788,8 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
                 "spawnedAt": spawned_at,
                 "logPath": str(log_path),
                 "errPath": err_path,
+                "terminalInfo": terminal_info,
+                "terminalDonePath": done_path,
                 "resumedSession": cli_session_id if continuing else "",
                 "output": "",
                 "createdAt": spawned_at,
@@ -6007,6 +6805,7 @@ class TaskBoardHandler(SimpleHTTPRequestHandler):
             "continuing": continuing,
             "processId": process.pid,
             "logPath": str(log_path),
+            "terminalInfo": terminal_info,
             "backendBaseUrl": backend_base_url,
             "messages": messages,
         }

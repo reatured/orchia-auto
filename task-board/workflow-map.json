@@ -1,17 +1,75 @@
 {
   "version": 1,
-  "updatedAt": "2026-07-01T10:14:13-07:00",
+  "updatedAt": "2026-07-01T19:10:36-07:00",
   "nodes": [
+    {
+      "id": "researcher",
+      "detailKey": "research-agent",
+      "kind": "Agent",
+      "label": "Researcher",
+      "color": "#3f8f7f",
+      "meta": "Researches trending company websites and produces style guide markdown for Planner.",
+      "acceptsHumanInput": true,
+      "locked": false,
+      "rules": [
+        {
+          "id": "researcher-trending-company-websites",
+          "title": "Research trending company websites",
+          "text": "Search current, relevant company websites and identify visual, content, layout, interaction, and branding patterns that should inform the requested work."
+        },
+        {
+          "id": "researcher-style-guide-md",
+          "title": "Create planner style guide",
+          "text": "Produce a concise markdown style guide for Planner that summarizes findings into practical design direction, including typography, color, layout, components, imagery, tone, and implementation constraints."
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "id": "site-auditor",
+      "detailKey": "site-auditor-agent",
+      "kind": "Agent",
+      "label": "Site Auditor",
+      "color": "#8b6f47",
+      "meta": "Uses BrowserOS to audit site functions, features, design, style, responsive behavior, and accessibility before Planner creates tasks.",
+      "acceptsHumanInput": true,
+      "locked": false,
+      "rules": [
+        {
+          "id": "site-auditor-use-browseros",
+          "title": "Use BrowserOS",
+          "text": "Inspect the target site with BrowserOS: navigate pages, snapshot structure, exercise safe controls and feature flows, capture screenshots for visual evidence, and verify results after each interaction."
+        },
+        {
+          "id": "site-auditor-create-handoff",
+          "title": "Create planner handoff",
+          "text": "Write a markdown audit handoff for Planner with coverage, functional findings, design and style feedback, responsive and accessibility notes, evidence, and planner-ready task candidates."
+        }
+      ],
+      "outputs": []
+    },
     {
       "id": "planner",
       "detailKey": "planning-agent",
       "kind": "Agent",
       "label": "Planner",
       "color": "#476f8f",
-      "meta": "Turns requirements into todo cards.",
+      "meta": "Turns requirements, researcher style guidance, and site audit handoffs into todo cards.",
       "acceptsHumanInput": true,
       "locked": true,
-      "rules": []
+      "rules": [
+        {
+          "id": "planner-use-style-guide",
+          "title": "Use researcher style guide",
+          "text": "When a researcher handoff is present, incorporate the style guide markdown into the task breakdown and acceptance criteria for design-sensitive work."
+        },
+        {
+          "id": "planner-use-site-audit",
+          "title": "Use site audit handoff",
+          "text": "When a Site Auditor handoff is present, convert actionable functional, feature, design, style, responsive, and accessibility findings into small task-board tickets with clear acceptance criteria and inspection targets."
+        }
+      ],
+      "outputs": []
     },
     {
       "id": "worker",
@@ -22,7 +80,8 @@
       "meta": "Claims todo work, implements it, and requests review.",
       "acceptsHumanInput": false,
       "locked": true,
-      "rules": []
+      "rules": [],
+      "outputs": []
     },
     {
       "id": "reviewer",
@@ -33,10 +92,31 @@
       "meta": "Claims review work, validates it, and decides outcome.",
       "acceptsHumanInput": false,
       "locked": true,
-      "rules": []
+      "rules": [],
+      "outputs": [
+        {
+          "id": "reviewer-done-output",
+          "type": "human-readable-output",
+          "renderAs": "board-column",
+          "label": "Done",
+          "description": "Accepted work and failed reviewed attempts that the owner can read and archive.",
+          "color": "var(--done)",
+          "visualColumnKey": "done",
+          "columnKey": "done",
+          "sourceKeys": [
+            "done"
+          ],
+          "agentRole": "",
+          "agentLabel": ""
+        }
+      ]
     }
   ],
   "rows": [
+    [
+      "researcher",
+      "site-auditor"
+    ],
     [
       "planner"
     ],
@@ -49,23 +129,121 @@
   ],
   "edges": [
     {
+      "from": "researcher",
+      "to": "planner",
+      "label": "style guide markdown",
+      "rules": [
+        {
+          "id": "researcher-planner-style-guide-required",
+          "title": "Research handoff",
+          "text": "Researcher hands Planner a markdown style guide based on current trending company website research before planning design-sensitive implementation work."
+        }
+      ],
+      "outputs": [
+        {
+          "id": "researcher-planner-style-guide-md",
+          "type": "handoff-markdown",
+          "renderAs": "handoff-files",
+          "label": "Style Guide",
+          "description": "Markdown style guide distilled from trending company website research for Planner to use when creating implementation tickets.",
+          "color": "#3f8f7f",
+          "filePatterns": [
+            "workflow/handoffs/researcher-to-planner.md",
+            "workflow/handoffs/researcher-to-planner-*.md"
+          ]
+        }
+      ]
+    },
+    {
+      "from": "site-auditor",
+      "to": "planner",
+      "label": "site audit handoff",
+      "rules": [
+        {
+          "id": "site-auditor-planner-handoff-required",
+          "title": "Site audit handoff",
+          "text": "Site Auditor hands Planner a markdown audit report based on BrowserOS inspection before Planner scopes site quality, UX, or feature-fix tickets."
+        }
+      ],
+      "outputs": [
+        {
+          "id": "site-auditor-planner-audit-md",
+          "type": "handoff-markdown",
+          "renderAs": "handoff-files",
+          "label": "Site Audit",
+          "description": "Markdown audit report covering site functions, features, design, style, responsive behavior, accessibility notes, evidence, and planner-ready task candidates.",
+          "color": "#8b6f47",
+          "filePatterns": [
+            "workflow/handoffs/site-auditor-to-planner.md",
+            "workflow/handoffs/site-auditor-to-planner-*.md"
+          ]
+        }
+      ]
+    },
+    {
       "from": "planner",
       "to": "worker",
       "label": "todo tickets",
-      "rules": []
+      "rules": [],
+      "outputs": [
+        {
+          "id": "planner-worker-todo-tickets",
+          "type": "task-board-ticket",
+          "renderAs": "board-column",
+          "label": "To Do",
+          "description": "Planner-created tickets ready for Workers to claim.",
+          "color": "var(--todo)",
+          "visualColumnKey": "todo",
+          "columnKey": "todo",
+          "sourceKeys": [
+            "claimed",
+            "todo"
+          ],
+          "agentRole": "worker",
+          "agentLabel": "Workers"
+        }
+      ]
     },
     {
       "from": "worker",
       "to": "reviewer",
       "label": "inspection targets + review request",
-      "rules": []
+      "rules": [],
+      "outputs": [
+        {
+          "id": "worker-reviewer-review-tickets",
+          "type": "task-board-ticket",
+          "renderAs": "board-column",
+          "label": "Review",
+          "description": "Worker-completed tickets waiting for reviewer inspection.",
+          "color": "var(--review)",
+          "visualColumnKey": "review",
+          "columnKey": "review",
+          "sourceKeys": [
+            "reviewing",
+            "review"
+          ],
+          "agentRole": "review",
+          "agentLabel": "Reviewers"
+        }
+      ]
     }
   ],
   "globalRules": [
     {
       "id": "core-source-of-truth",
       "title": "Source of truth",
-      "text": "Workflow map edits describe the coordination model. Task movement still happens through board.json and the task-board API."
+      "text": "Workflow map outputs describe agent coordination and drive viewer rendering for task-board lanes and handoff-file sections. Task movement still happens through board.json and the task-board API."
+    },
+    {
+      "id": "research-before-planning",
+      "title": "Research before planning",
+      "text": "For website or brand-sensitive work, the Researcher should create a style guide markdown handoff before Planner creates todo tickets."
+    },
+    {
+      "id": "site-audit-before-planning",
+      "title": "Site audit before planning",
+      "text": "For existing site quality, UX, feature, or style work, the Site Auditor should create a BrowserOS-backed markdown handoff before Planner creates todo tickets."
     }
   ]
 }

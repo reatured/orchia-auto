@@ -1,12 +1,13 @@
 {
   "schemaVersion": "1.0",
   "boardName": "Project Task Board",
-  "updatedAt": "",
+  "updatedAt": "2026-07-01T20:13:00-07:00",
   "workflowDocs": {
     "overview": "../workflow/workflow-overview.md",
     "planner": "../roles/planner.md",
     "worker": "../roles/worker.md",
     "reviewer": "../roles/reviewer.md",
+    "siteAuditor": "../roles/site-auditor.md",
     "apiGuide": "../workflow/api-guide.md"
   },
   "readerView": {
@@ -29,12 +30,694 @@
     "hardRule": "Planner must not review completed work, claim tasks, edit product code, run implementation, or make code changes. Reviewer may update only board.json (plus reference images when recorded on a follow-up task). Reviewer must not plan general work, claim todo tasks, edit code, edit docs, edit the HTML viewer, run implementation, or make code changes."
   },
   "columns": {
-    "todo": [],
+    "todo": [
+      {
+        "id": "TASK-20260701-002",
+        "title": "Run BrowserOS click-through QA for viewer controls",
+        "project": "Task board viewer QA",
+        "priority": "normal",
+        "type": "qa",
+        "status": "todo",
+        "requestedBy": "owner",
+        "createdBy": "Planner",
+        "createdAt": "2026-07-01T19:39:06-07:00",
+        "agentName": "ben",
+        "claimedBy": "",
+        "claimedAt": "",
+        "reviewClaimedBy": "",
+        "reviewClaimedAt": "",
+        "reviewRequestedAt": "",
+        "doneAt": "",
+        "reviewedBy": "",
+        "reviewedAt": "",
+        "redoCount": 0,
+        "summary": "Use BrowserOS or equivalent in-app browser automation to exercise the task-board viewer controls that the audit could only statically confirm.",
+        "requirements": [
+          "Exercise reload JSON, auto refresh, file load, lane collapse, task collapse, logs tray, workflow panel, settings panel, planner chat, dispatch controls, pause controls, and archive tray controls where safe.",
+          "Verify hover and focus behavior for active/stale agent chips and log preview popovers.",
+          "Check keyboard behavior including Tab navigation, visible focus, Enter/Space activation where applicable, and Escape/close behavior for trays and chat.",
+          "Avoid unsafe mutations unless using a fixture or explicitly disposable temporary tasks. Record any skipped destructive actions and why."
+        ],
+        "acceptanceCriteria": [
+          "Browser QA covers the listed controls with screenshots, notes, or a concise evidence log.",
+          "No unsafe mutation is made to live coordination tasks during QA, or every temporary task is cleaned up afterward with evidence.",
+          "Any broken control, keyboard trap, missing focus state, clipped popover, or confusing state transition is documented with reproduction steps.",
+          "The QA result explicitly states whether BrowserOS/in-app browser access was available and what coverage remains if not."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [],
+        "files": [
+          "task-board/viewer.html",
+          "task-board/server.py"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Task-board viewer controls",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop and mobile if available",
+            "state": "Open the viewer against the local backend and interact with each control surface safely.",
+            "notes": "Use a sample fixture or disposable temporary tasks for card/review/archive flows if needed."
+          }
+        ],
+        "blockers": [
+          "BrowserOS or equivalent browser target must be available for real click, hover, keyboard, screenshot, and responsive validation.",
+          "Blocked in cleo/codex worker session on 2026-07-01: in-app browser runtime was unavailable (browser selection returned unavailable and agent.browsers.list() returned []).",
+          "Blocked in dane/codex worker session on 2026-07-01: in-app browser runtime was unavailable (browser selection returned Browser is not available: iab and agent.browsers.list() returned []).",
+          "Blocked in cleo/codex worker session on 2026-07-01: browser-control runtime could initialize, but agent.browsers.get(\"iab\") returned Browser is not available: iab and agent.browsers.list() returned [].",
+          "Blocked in echo/codex worker session on 2026-07-01: in-app browser runtime was unavailable (browser selection returned Browser is not available: iab and agent.browsers.list() returned []).",
+          "Blocked in echo/codex worker session on 2026-07-01: in-app browser runtime was unavailable (browser selection returned Browser is not available: iab and agent.browsers.list() returned [])."
+        ],
+        "sourceReviewTaskId": "",
+        "notes": "Source: workflow/handoffs/site-auditor-to-planner.md. Static audit confirmed controls and backing endpoints exist, but live interactions were not verified.\n\nBlocked during worker attempt: BrowserOS/in-app browser automation is unavailable in this session, so live click-through QA, hover/focus checks, keyboard navigation, screenshots, and responsive validation cannot be completed honestly. No viewer mutations were performed for this QA task.\n\nUnclaimed (2026-07-01T19:46:22-07:00) by cleo: BrowserOS/in-app browser automation is unavailable in this worker session, so the required live click-through QA cannot be completed. Releasing for a browser-capable session.\n\nBlocked during worker attempt: in-app browser automation is unavailable in this session, so live click-through QA, hover/focus checks, keyboard navigation, screenshots, and responsive validation cannot be completed honestly. Browser target selection returned Browser is not available: iab, and agent.browsers.list() returned []. No viewer mutations were performed for this QA task.\n\nUnclaimed (2026-07-01T19:49:27-07:00) by dane: In-app browser automation is unavailable in this worker session; browser target selection returned Browser is not available: iab and agent.browsers.list() returned []. Releasing for a browser-capable session.\n\nBlocked during worker attempt: the required in-app browser automation target is unavailable in this session. Browser-control setup initialized, but selecting iab returned \"Browser is not available: iab\" and the troubleshooting-mandated browser list returned []. Live click-through QA, hover/focus checks, keyboard navigation, screenshots, and responsive validation cannot be completed honestly. No viewer mutations were performed.\n\nUnclaimed (2026-07-01T20:02:44-07:00) by cleo: In-app browser automation is unavailable in this worker session; browser-control setup could not select iab and agent.browsers.list() returned []. Releasing for a browser-capable session.\n\nBlocked during worker attempt: the required in-app browser automation target is unavailable in this session. Browser-control setup initialized, but selecting iab returned \"Browser is not available: iab\" and agent.browsers.list() returned []. Live click-through QA, hover/focus checks, keyboard navigation, screenshots, and responsive validation cannot be completed honestly. No viewer mutations were performed.\n\nUnclaimed (2026-07-01T20:05:45-07:00) by echo: In-app browser automation is unavailable in this worker session; browser-control setup could not select iab and agent.browsers.list() returned []. Releasing for a browser-capable session.\n\nBlocked during worker attempt: the required in-app browser automation target is unavailable in this session. Browser-control setup initialized, selecting iab returned \"Browser is not available: iab\", and agent.browsers.list() returned []. Live click-through QA, hover/focus checks, keyboard navigation, screenshots, and responsive validation cannot be completed honestly. No viewer mutations were performed.\n\nUnclaimed (2026-07-01T20:09:11-07:00) by owner via task board viewer: Worker agent was killed before finishing.\n\nBlocked during worker attempt: the required in-app browser automation target is unavailable in this session. Browser-control setup initialized, selecting iab returned \"Browser is not available: iab\", and agent.browsers.list() returned []. Live click-through QA, hover/focus checks, keyboard navigation, screenshots, and responsive validation cannot be completed honestly. No viewer mutations were performed.\n\nUnclaimed (2026-07-01T20:11:39-07:00) by echo: In-app browser automation is unavailable in this worker session; browser-control setup could not select iab and agent.browsers.list() returned []. Releasing for a browser-capable session.\n\nUnclaimed (2026-07-01T20:12:49-07:00) by echo: Claim-next reselected this browser-blocked task after release. In-app browser automation is still unavailable in this session, so releasing without further mutation.",
+        "lastApiAction": "unclaim-task",
+        "lastApiActor": "echo",
+        "lastApiAt": "2026-07-01T20:12:49-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "ben",
+            "at": "2026-07-01T19:39:06-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "cleo",
+            "at": "2026-07-01T19:45:24-07:00"
+          },
+          {
+            "action": "update-task",
+            "agentName": "cleo",
+            "at": "2026-07-01T19:46:14-07:00"
+          },
+          {
+            "action": "unclaim-task",
+            "agentName": "cleo",
+            "at": "2026-07-01T19:46:22-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "dane",
+            "at": "2026-07-01T19:48:15-07:00"
+          },
+          {
+            "action": "update-task",
+            "agentName": "dane",
+            "at": "2026-07-01T19:49:20-07:00"
+          },
+          {
+            "action": "unclaim-task",
+            "agentName": "dane",
+            "at": "2026-07-01T19:49:27-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "cleo",
+            "at": "2026-07-01T20:01:19-07:00"
+          },
+          {
+            "action": "update-task",
+            "agentName": "cleo",
+            "at": "2026-07-01T20:02:32-07:00"
+          },
+          {
+            "action": "unclaim-task",
+            "agentName": "cleo",
+            "at": "2026-07-01T20:02:44-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "echo",
+            "at": "2026-07-01T20:04:19-07:00"
+          },
+          {
+            "action": "update-task",
+            "agentName": "echo",
+            "at": "2026-07-01T20:05:39-07:00"
+          },
+          {
+            "action": "unclaim-task",
+            "agentName": "echo",
+            "at": "2026-07-01T20:05:45-07:00"
+          },
+          {
+            "action": "update-task",
+            "agentName": "Task board API",
+            "at": "2026-07-01T20:06:20-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "cleo",
+            "at": "2026-07-01T20:07:21-07:00"
+          },
+          {
+            "action": "unclaim-task",
+            "agentName": "owner via task board viewer",
+            "at": "2026-07-01T20:09:11-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "echo",
+            "at": "2026-07-01T20:10:24-07:00"
+          },
+          {
+            "action": "update-task",
+            "agentName": "echo",
+            "at": "2026-07-01T20:11:39-07:00"
+          },
+          {
+            "action": "unclaim-task",
+            "agentName": "echo",
+            "at": "2026-07-01T20:11:39-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "echo",
+            "at": "2026-07-01T20:11:39-07:00"
+          },
+          {
+            "action": "unclaim-task",
+            "agentName": "echo",
+            "at": "2026-07-01T20:12:49-07:00"
+          }
+        ],
+        "lastEditedBy": "echo",
+        "lastEditedAt": "2026-07-01T20:11:39-07:00",
+        "unclaimedBy": "echo",
+        "unclaimedAt": "2026-07-01T20:12:49-07:00"
+      },
+      {
+        "id": "TASK-20260701-003",
+        "title": "Verify responsive layout of viewer trays and board lanes",
+        "project": "Task board viewer QA",
+        "priority": "normal",
+        "type": "qa",
+        "status": "todo",
+        "requestedBy": "owner",
+        "createdBy": "Planner",
+        "createdAt": "2026-07-01T19:39:06-07:00",
+        "agentName": "ben",
+        "claimedBy": "",
+        "claimedAt": "",
+        "reviewClaimedBy": "",
+        "reviewClaimedAt": "",
+        "reviewRequestedAt": "",
+        "doneAt": "",
+        "reviewedBy": "",
+        "reviewedAt": "",
+        "redoCount": 0,
+        "summary": "Perform desktop and mobile visual QA of the task-board viewer trays, board lanes, controls, and agent popovers.",
+        "requirements": [
+          "Inspect the viewer in representative desktop and mobile viewport sizes.",
+          "Check the topbar, board lanes, archive tray, workflow tray, settings tray, agent logs tray, planner chat, and agent popovers.",
+          "Verify text fit, side-tab usability, tray positioning, mobile overflow, visual hierarchy, and tap target sizes.",
+          "Record screenshots or clear evidence notes for each inspected viewport and surface."
+        ],
+        "acceptanceCriteria": [
+          "Desktop and mobile evidence shows no overlapping text, clipped controls, inaccessible side tabs, unreadable popovers, or broken tap targets.",
+          "Side trays and planner chat remain usable without blocking core board interaction unexpectedly.",
+          "Any responsive defects found are documented with viewport, reproduction steps, and suggested follow-up scope.",
+          "Keyboard-visible focus and Escape/close behavior are checked for responsive tray states where applicable."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [],
+        "files": [
+          "task-board/viewer.html"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Task-board viewer responsive layout",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop and mobile",
+            "state": "Open the viewer, then inspect board lanes and each side tray in both wide and narrow viewport widths.",
+            "notes": "Capture or record evidence for layout, text fit, and interaction reachability."
+          }
+        ],
+        "blockers": [
+          "BrowserOS or equivalent browser automation/visual inspection access must be available for screenshot-backed responsive validation."
+        ],
+        "sourceReviewTaskId": "",
+        "notes": "Source: workflow/handoffs/site-auditor-to-planner.md. Auditor could not capture visual layout evidence because BrowserOS/in-app browser access was unavailable.\n\nUnclaimed (2026-07-01T20:05:24-07:00) by echo: Releasing accidental extra claim; worker must hold exactly one task and active heartbeat is on TASK-20260701-002.\n\nUnclaimed (2026-07-01T20:07:59-07:00) by cleo: Releasing accidental second claim; worker must hold exactly one task. Continuing TASK-20260701-002.",
+        "lastApiAction": "unclaim-task",
+        "lastApiActor": "cleo",
+        "lastApiAt": "2026-07-01T20:07:59-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "ben",
+            "at": "2026-07-01T19:39:06-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "echo",
+            "at": "2026-07-01T20:04:35-07:00"
+          },
+          {
+            "action": "unclaim-task",
+            "agentName": "echo",
+            "at": "2026-07-01T20:05:24-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "cleo",
+            "at": "2026-07-01T20:07:22-07:00"
+          },
+          {
+            "action": "unclaim-task",
+            "agentName": "cleo",
+            "at": "2026-07-01T20:07:59-07:00"
+          }
+        ],
+        "unclaimedBy": "cleo",
+        "unclaimedAt": "2026-07-01T20:07:59-07:00"
+      }
+    ],
     "claimed": [],
     "review": [],
     "reviewing": [],
-    "done": [],
+    "done": [
+      {
+        "id": "TASK-20260701-004",
+        "title": "Add safe sample-board fixture for viewer QA",
+        "project": "Task board viewer QA",
+        "priority": "low",
+        "type": "implementation",
+        "status": "done",
+        "requestedBy": "owner",
+        "createdBy": "Planner",
+        "createdAt": "2026-07-01T19:39:06-07:00",
+        "agentName": "ben",
+        "claimedBy": "dane",
+        "claimedAt": "2026-07-01T19:49:54-07:00",
+        "reviewClaimedBy": "ada",
+        "reviewClaimedAt": "2026-07-01T20:11:09-07:00",
+        "reviewRequestedAt": "2026-07-01T19:53:18-07:00",
+        "doneAt": "2026-07-01T20:13:00-07:00",
+        "reviewedBy": "ada",
+        "reviewedAt": "2026-07-01T20:13:00-07:00",
+        "redoCount": 0,
+        "summary": "Create a non-production sample board fixture or equivalent safe QA path so viewer card states can be tested without mutating real coordination state.",
+        "requirements": [
+          "Provide a safe sample-board fixture or documented local sample-board path under task-board/ that is separate from the live coordination board.",
+          "Include representative cards for To Do, Review, Done, and Archived states.",
+          "Include card data that exercises long text, dependencies, related tasks, claimed agents, review feedback, inspection targets, and archived tasks.",
+          "Document how a QA worker should load or use the fixture without overwriting task-board/board.json."
+        ],
+        "acceptanceCriteria": [
+          "A QA worker can inspect populated To Do, Review, Done, and Archived card states without mutating the real board.",
+          "The sample data covers long content, dependency metadata, agent ownership fields, review feedback, and archived-card rendering.",
+          "The workflow for using the fixture is documented close to the fixture or in an existing task-board QA note.",
+          "The live task-board/board.json remains the source of truth and is not replaced by sample data."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [],
+        "files": [
+          "task-board/",
+          "task-board/board.json",
+          "task-board/viewer.html",
+          "task-board/sample-board.fixture.json",
+          "task-board/sample-board-fixture.md"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Sample viewer QA fixture",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/sample-board.fixture.json",
+            "viewport": "desktop and mobile",
+            "state": "Open the viewer, click Load JSON file, and select task-board/sample-board.fixture.json.",
+            "notes": "Confirm To Do, claimed, Review, reviewing, Done, and Archived sample cards render without replacing task-board/board.json."
+          },
+          {
+            "label": "Fixture usage note",
+            "url": "",
+            "path": "task-board/sample-board-fixture.md",
+            "viewport": "n/a",
+            "state": "Read the Safe Use and Mutation Controls sections.",
+            "notes": "Confirm the documentation tells QA workers to load the fixture client-side and not overwrite board.json."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Source: workflow/handoffs/site-auditor-to-planner.md. Auditor found the real board was empty, preventing end-to-end card layout and archive/review flow testing.\n\nClaiming safe non-browser implementation task after releasing browser-dependent QA task; this session has no in-app browser target available.\n\nCompleted safe sample-board fixture implementation. Added task-board/sample-board.fixture.json with representative todo, claimed, review, reviewing, done, and archived cards covering long text, dependencies, relatedTaskIds, blockers, claimed agents, review metadata, failure metadata, owner feedback, inspection targets, and archive metadata. Added task-board/sample-board-fixture.md documenting the safe Load JSON file workflow and warning not to overwrite task-board/board.json. Validation: jq empty task-board/sample-board.fixture.json passed; git diff --check for the new fixture and note passed. Browser visual verification was not run because this worker session has no in-app browser target available.\n\nReview approved (2026-07-01T20:13:00-07:00): Approved. Verified task-board/sample-board.fixture.json is separate from the live board, parses successfully, contains populated todo, claimed, review, reviewing, done, and archived columns, uses SAMPLE-QA IDs, and includes long text, dependencies, related tasks, blockers, ownership fields, review feedback, inspection targets, failure metadata, owner feedback, and archived metadata. Verified task-board/sample-board-fixture.md documents Safe Use, Coverage, and Mutation Controls, including loading through the viewer file input and not overwriting task-board/board.json. Verified viewer.html has a Load JSON file input that reads the selected file client-side, JSON.parse()s it, and renderBoard()s it without a task-board mutation API call; Reload JSON returns to the live board. Live browser click-through was not run because no in-app browser backend is available in this session.",
+        "lastApiAction": "approve-review",
+        "lastApiActor": "ada",
+        "lastApiAt": "2026-07-01T20:13:00-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "ben",
+            "at": "2026-07-01T19:39:06-07:00"
+          },
+          {
+            "action": "claim-task",
+            "agentName": "dane",
+            "at": "2026-07-01T19:49:54-07:00"
+          },
+          {
+            "action": "move-to-review",
+            "agentName": "dane",
+            "at": "2026-07-01T19:53:18-07:00"
+          },
+          {
+            "action": "claim-next-review",
+            "agentName": "ada",
+            "at": "2026-07-01T20:11:09-07:00"
+          },
+          {
+            "action": "approve-review",
+            "agentName": "ada",
+            "at": "2026-07-01T20:13:00-07:00"
+          }
+        ],
+        "completedBy": "dane",
+        "workerTimeSeconds": 204,
+        "workerTime": "3m 24s",
+        "reviewDecision": "approved",
+        "reviewerTimeSeconds": 111,
+        "reviewerTime": "1m 51s",
+        "reviewNotes": "Approved. Verified task-board/sample-board.fixture.json is separate from the live board, parses successfully, contains populated todo, claimed, review, reviewing, done, and archived columns, uses SAMPLE-QA IDs, and includes long text, dependencies, related tasks, blockers, ownership fields, review feedback, inspection targets, failure metadata, owner feedback, and archived metadata. Verified task-board/sample-board-fixture.md documents Safe Use, Coverage, and Mutation Controls, including loading through the viewer file input and not overwriting task-board/board.json. Verified viewer.html has a Load JSON file input that reads the selected file client-side, JSON.parse()s it, and renderBoard()s it without a task-board mutation API call; Reload JSON returns to the live board. Live browser click-through was not run because no in-app browser backend is available in this session."
+      },
+      {
+        "id": "TASK-20260701-001",
+        "title": "Verify stale-agent cleanup and messaging",
+        "project": "Task board viewer health",
+        "priority": "normal",
+        "type": "implementation",
+        "status": "done",
+        "requestedBy": "owner",
+        "createdBy": "Planner",
+        "createdAt": "2026-07-01T19:39:06-07:00",
+        "agentName": "ben",
+        "claimedBy": "cleo",
+        "claimedAt": "2026-07-01T19:39:39-07:00",
+        "reviewClaimedBy": "ben",
+        "reviewClaimedAt": "2026-07-01T19:45:52-07:00",
+        "reviewRequestedAt": "2026-07-01T19:45:16-07:00",
+        "doneAt": "2026-07-01T19:48:12-07:00",
+        "reviewedBy": "ben",
+        "reviewedAt": "2026-07-01T19:48:12-07:00",
+        "redoCount": 0,
+        "summary": "Improve or verify how the viewer and backend present stale agent records so owners can distinguish active work from stale historical state.",
+        "requirements": [
+          "Inspect how stale active-agent records are detected, reported, and displayed in system status and the viewer.",
+          "Clarify owner-facing messaging so stale records do not look like active work or unresolved board locks.",
+          "Determine whether stale records should be manually clearable, automatically aged out, or retained only as audit history, and implement the chosen behavior if code changes are needed.",
+          "Preserve useful audit/history information while avoiding misleading active-agent counts."
+        ],
+        "acceptanceCriteria": [
+          "The owner can identify stale agents and understand whether action is required from the viewer or system-status output.",
+          "Stale records do not create ambiguity about current board health, active work, or active locks.",
+          "If a clear/ignore/age-out action exists, it is safe, discoverable, and does not remove live active agents.",
+          "The behavior is verified against a stale-agent scenario like the auditor evidence: system status watch due to stale worker ada / agt_89de2a01."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [],
+        "files": [
+          "task-board/viewer.html",
+          "task-board/server.py"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "System status API stale-history scenario",
+            "url": "http://127.0.0.1:4177/api/system-status?agentId=agt_9bdebe27",
+            "path": "task-board/server.py",
+            "viewport": "n/a",
+            "state": "Request while stale ada / agt_89de2a01 and stale planner records exist, with no stale active task lock.",
+            "notes": "Confirm status is ok, warnings is empty, notices explains stale records are history, agents.staleWithLocks is 0, and agents.staleHistory is 2."
+          },
+          {
+            "label": "Viewer system overview stale messaging",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "desktop",
+            "state": "Open the viewer with stale history records present and the updated backend running on port 4177.",
+            "notes": "Confirm the Agents card separates Stale locks from Stale history, the notice is informational, and history-only stale records do not make active-agent counts look live. Browser surface was unavailable in this worker session, so use this as the visual review target."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Source: workflow/handoffs/site-auditor-to-planner.md. Auditor evidence: /api/system-status returned status watch with stale agent warnings, and /api/agents showed stale worker ada / agt_89de2a01 tied to TASK-20260630-001.\n\nImplemented stale-agent status classification. /api/system-status now distinguishes stale history from stale records that still own live claimed/reviewing locks, returns staleRecords/stalePolicy metadata, and only warns when a stale lock needs action. The viewer Agents card now shows Stale locks and Stale history separately and renders history-only stale records as a neutral notice instead of a health warning. Verified python3 -m py_compile task-board/server.py, inline viewer script parse, served viewer contains the new UI strings, and live /api/system-status reports ok with staleWithLocks 0 and staleHistory 2 for the ada scenario. In-app browser was unavailable, so rendered click-through remains the reviewer inspection target.\n\nReview approved (2026-07-01T19:48:12-07:00): Approved. Verified /api/system-status reports ok with warnings empty, notices explaining stale history, agents.staleWithLocks 0, and agents.staleHistory 2 for the ada/planner stale-history scenario. Inspected server stale-agent classification and confirmed an in-memory stale-lock spot check marks active claimed/reviewing locks as actionable while history-only records remain non-actionable. Verified task-board/server.py compiles, task-board/viewer.html inline script parses, served viewer contains the Stale locks/Stale history labels, and CSS renders notices separately from warnings. Rendered browser click-through was unavailable because the in-app browser backend list was empty.",
+        "lastApiAction": "approve-review",
+        "lastApiActor": "ben",
+        "lastApiAt": "2026-07-01T19:48:12-07:00",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "ben",
+            "at": "2026-07-01T19:39:06-07:00"
+          },
+          {
+            "action": "claim-next-worker",
+            "agentName": "cleo",
+            "at": "2026-07-01T19:39:39-07:00"
+          },
+          {
+            "action": "move-to-review",
+            "agentName": "cleo",
+            "at": "2026-07-01T19:45:16-07:00"
+          },
+          {
+            "action": "claim-next-review",
+            "agentName": "ben",
+            "at": "2026-07-01T19:45:52-07:00"
+          },
+          {
+            "action": "approve-review",
+            "agentName": "ben",
+            "at": "2026-07-01T19:48:12-07:00"
+          }
+        ],
+        "completedBy": "cleo",
+        "workerTimeSeconds": 337,
+        "workerTime": "5m 37s",
+        "reviewDecision": "approved",
+        "reviewerTimeSeconds": 140,
+        "reviewerTime": "2m 20s",
+        "reviewNotes": "Approved. Verified /api/system-status reports ok with warnings empty, notices explaining stale history, agents.staleWithLocks 0, and agents.staleHistory 2 for the ada/planner stale-history scenario. Inspected server stale-agent classification and confirmed an in-memory stale-lock spot check marks active claimed/reviewing locks as actionable while history-only records remain non-actionable. Verified task-board/server.py compiles, task-board/viewer.html inline script parses, served viewer contains the Stale locks/Stale history labels, and CSS renders notices separately from warnings. Rendered browser click-through was unavailable because the in-app browser backend list was empty."
+      }
+    ],
     "archived": []
   },
-  "apiAuditLog": []
+  "apiAuditLog": [
+    {
+      "action": "add-task",
+      "agentName": "ben",
+      "taskId": "TASK-20260701-004",
+      "at": "2026-07-01T19:39:06-07:00"
+    },
+    {
+      "action": "add-task",
+      "agentName": "ben",
+      "taskId": "TASK-20260701-003",
+      "at": "2026-07-01T19:39:06-07:00"
+    },
+    {
+      "action": "add-task",
+      "agentName": "ben",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T19:39:06-07:00"
+    },
+    {
+      "action": "add-task",
+      "agentName": "ben",
+      "taskId": "TASK-20260701-001",
+      "at": "2026-07-01T19:39:06-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "cleo",
+      "taskId": "TASK-20260701-001",
+      "at": "2026-07-01T19:39:39-07:00"
+    },
+    {
+      "action": "move-to-review",
+      "agentName": "cleo",
+      "taskId": "TASK-20260701-001",
+      "at": "2026-07-01T19:45:16-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "cleo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T19:45:24-07:00"
+    },
+    {
+      "action": "claim-next-review",
+      "agentName": "ben",
+      "taskId": "TASK-20260701-001",
+      "at": "2026-07-01T19:45:52-07:00"
+    },
+    {
+      "action": "update-task",
+      "agentName": "cleo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T19:46:14-07:00"
+    },
+    {
+      "action": "unclaim-task",
+      "agentName": "cleo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T19:46:22-07:00"
+    },
+    {
+      "action": "approve-review",
+      "agentName": "ben",
+      "taskId": "TASK-20260701-001",
+      "at": "2026-07-01T19:48:12-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "dane",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T19:48:15-07:00"
+    },
+    {
+      "action": "update-task",
+      "agentName": "dane",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T19:49:20-07:00"
+    },
+    {
+      "action": "unclaim-task",
+      "agentName": "dane",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T19:49:27-07:00"
+    },
+    {
+      "action": "claim-task",
+      "agentName": "dane",
+      "taskId": "TASK-20260701-004",
+      "at": "2026-07-01T19:49:54-07:00"
+    },
+    {
+      "action": "move-to-review",
+      "agentName": "dane",
+      "taskId": "TASK-20260701-004",
+      "at": "2026-07-01T19:53:18-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "cleo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:01:19-07:00"
+    },
+    {
+      "action": "update-task",
+      "agentName": "cleo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:02:32-07:00"
+    },
+    {
+      "action": "unclaim-task",
+      "agentName": "cleo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:02:44-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "echo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:04:19-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "echo",
+      "taskId": "TASK-20260701-003",
+      "at": "2026-07-01T20:04:35-07:00"
+    },
+    {
+      "action": "unclaim-task",
+      "agentName": "echo",
+      "taskId": "TASK-20260701-003",
+      "at": "2026-07-01T20:05:24-07:00"
+    },
+    {
+      "action": "update-task",
+      "agentName": "echo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:05:39-07:00"
+    },
+    {
+      "action": "unclaim-task",
+      "agentName": "echo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:05:45-07:00"
+    },
+    {
+      "action": "update-task",
+      "agentName": "Task board API",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:06:20-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "cleo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:07:21-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "cleo",
+      "taskId": "TASK-20260701-003",
+      "at": "2026-07-01T20:07:22-07:00"
+    },
+    {
+      "action": "unclaim-task",
+      "agentName": "cleo",
+      "taskId": "TASK-20260701-003",
+      "at": "2026-07-01T20:07:59-07:00"
+    },
+    {
+      "action": "unclaim-task",
+      "agentName": "owner via task board viewer",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:09:11-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "echo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:10:24-07:00"
+    },
+    {
+      "action": "claim-next-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260701-004",
+      "at": "2026-07-01T20:11:09-07:00"
+    },
+    {
+      "action": "update-task",
+      "agentName": "echo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:11:39-07:00"
+    },
+    {
+      "action": "unclaim-task",
+      "agentName": "echo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:11:39-07:00"
+    },
+    {
+      "action": "claim-next-worker",
+      "agentName": "echo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:11:39-07:00"
+    },
+    {
+      "action": "unclaim-task",
+      "agentName": "echo",
+      "taskId": "TASK-20260701-002",
+      "at": "2026-07-01T20:12:49-07:00"
+    },
+    {
+      "action": "approve-review",
+      "agentName": "ada",
+      "taskId": "TASK-20260701-004",
+      "at": "2026-07-01T20:13:00-07:00"
+    }
+  ]
 }

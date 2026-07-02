@@ -1,0 +1,542 @@
+{
+  "schemaVersion": "1.0",
+  "boardName": "Sample Viewer QA Board",
+  "updatedAt": "2026-07-01T12:00:00-07:00",
+  "fixture": {
+    "name": "sample-board.fixture.json",
+    "purpose": "Non-production viewer QA data for card rendering and layout checks.",
+    "safeUse": "Load through viewer.html with the Load JSON file control. Do not copy this file over board.json."
+  },
+  "columns": {
+    "todo": [
+      {
+        "id": "SAMPLE-QA-001",
+        "title": "Populate a long To Do card with dependency and scope metadata",
+        "project": "Viewer fixture",
+        "priority": "high",
+        "type": "implementation",
+        "status": "todo",
+        "requestedBy": "sample-owner",
+        "createdBy": "Sample Planner",
+        "createdAt": "2026-07-01T09:00:00-07:00",
+        "agentName": "mira",
+        "claimedBy": "",
+        "claimedAt": "",
+        "reviewClaimedBy": "",
+        "reviewClaimedAt": "",
+        "reviewRequestedAt": "",
+        "doneAt": "",
+        "reviewedBy": "",
+        "reviewedAt": "",
+        "redoCount": 0,
+        "summary": "This sample card intentionally contains a longer summary so QA can verify line wrapping, card height, expanded detail sections, and collapsed task behavior without relying on the real coordination board.",
+        "requirements": [
+          "Show a To Do task with long copy that wraps across multiple lines.",
+          "Expose related task metadata, dependency metadata, files, and inspection targets in one card.",
+          "Keep the ID in the SAMPLE-QA namespace so accidental API mutation attempts do not match live tasks."
+        ],
+        "acceptanceCriteria": [
+          "The To Do lane displays the title, priority, project, summary, and metadata without clipping.",
+          "Expanded details show long requirements and acceptance criteria in readable spacing.",
+          "The card can be collapsed and expanded without shifting unrelated lane controls unexpectedly."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [
+          "SAMPLE-QA-003",
+          "SAMPLE-QA-004"
+        ],
+        "files": [
+          "task-board/viewer.html",
+          "workflow/workflow-overview.md"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Expanded To Do card",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/sample-board.fixture.json",
+            "viewport": "desktop and mobile",
+            "state": "Load this fixture and expand SAMPLE-QA-001.",
+            "notes": "Check long text wrapping, metadata chips, and file list rendering."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Sample notes: this card is intentionally verbose to exercise wrapping and detail density. It is not real project work.",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "mira",
+            "at": "2026-07-01T09:00:00-07:00"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-QA-002",
+        "title": "Show a blocked dependent To Do card",
+        "project": "Viewer fixture",
+        "priority": "normal",
+        "type": "qa",
+        "status": "todo",
+        "requestedBy": "sample-owner",
+        "createdBy": "Sample Planner",
+        "createdAt": "2026-07-01T09:15:00-07:00",
+        "agentName": "mira",
+        "claimedBy": "",
+        "claimedAt": "",
+        "reviewClaimedBy": "",
+        "reviewClaimedAt": "",
+        "reviewRequestedAt": "",
+        "doneAt": "",
+        "reviewedBy": "",
+        "reviewedAt": "",
+        "redoCount": 1,
+        "summary": "Blocked sample task used to verify dependency and blocker display.",
+        "requirements": [
+          "Display an unresolved dependsOn value.",
+          "Display blocker text without overlapping metadata chips."
+        ],
+        "acceptanceCriteria": [
+          "Dependency and blocker sections are readable in the expanded card.",
+          "Redo count and normal priority remain visible."
+        ],
+        "dependsOn": [
+          "SAMPLE-QA-001"
+        ],
+        "relatedTaskIds": [
+          "SAMPLE-QA-005"
+        ],
+        "files": [
+          "task-board/viewer.html"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Blocked card metadata",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/sample-board.fixture.json",
+            "viewport": "desktop",
+            "state": "Load fixture and expand SAMPLE-QA-002.",
+            "notes": "Confirm blockers and dependencies are legible."
+          }
+        ],
+        "blockers": [
+          "Waiting on SAMPLE-QA-001 in this fixture to exercise blocked-task rendering."
+        ],
+        "sourceReviewTaskId": "",
+        "notes": "Sample blocked-task note.",
+        "apiHistory": [
+          {
+            "action": "add-task",
+            "agentName": "mira",
+            "at": "2026-07-01T09:15:00-07:00"
+          }
+        ]
+      }
+    ],
+    "claimed": [
+      {
+        "id": "SAMPLE-QA-003",
+        "title": "Show a claimed worker card with agent ownership",
+        "project": "Viewer fixture",
+        "priority": "normal",
+        "type": "implementation",
+        "status": "claimed",
+        "requestedBy": "sample-owner",
+        "createdBy": "Sample Planner",
+        "createdAt": "2026-07-01T09:30:00-07:00",
+        "agentName": "mira",
+        "claimedBy": "dane",
+        "claimedAt": "2026-07-01T09:45:00-07:00",
+        "reviewClaimedBy": "",
+        "reviewClaimedAt": "",
+        "reviewRequestedAt": "",
+        "doneAt": "",
+        "reviewedBy": "",
+        "reviewedAt": "",
+        "redoCount": 0,
+        "summary": "Claimed fixture task for validating active work highlighting, ownership fields, and safe visual differentiation from unclaimed To Do cards.",
+        "requirements": [
+          "Render claimed ownership fields.",
+          "Keep action buttons visually reachable while preserving the fixture as non-production data."
+        ],
+        "acceptanceCriteria": [
+          "Claimed styling is visually distinct from regular To Do cards.",
+          "ClaimedBy and claimedAt details are readable in the expanded card."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [
+          "SAMPLE-QA-001"
+        ],
+        "files": [
+          "task-board/server.py"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Claimed card state",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/sample-board.fixture.json",
+            "viewport": "desktop and mobile",
+            "state": "Load fixture and inspect the To Do lane with claimed cards shown above todo cards.",
+            "notes": "Confirm claimed ownership and column grouping are clear."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Sample claimed-card note.",
+        "apiHistory": [
+          {
+            "action": "claim-task",
+            "agentName": "dane",
+            "at": "2026-07-01T09:45:00-07:00"
+          }
+        ]
+      }
+    ],
+    "review": [
+      {
+        "id": "SAMPLE-QA-004",
+        "title": "Show a Review card with inspection targets",
+        "project": "Viewer fixture",
+        "priority": "high",
+        "type": "qa",
+        "status": "review",
+        "requestedBy": "sample-owner",
+        "createdBy": "Sample Planner",
+        "createdAt": "2026-07-01T10:00:00-07:00",
+        "agentName": "mira",
+        "claimedBy": "dane",
+        "claimedAt": "2026-07-01T10:05:00-07:00",
+        "completedBy": "dane",
+        "completedAt": "2026-07-01T10:35:00-07:00",
+        "reviewClaimedBy": "",
+        "reviewClaimedAt": "",
+        "reviewRequestedAt": "2026-07-01T10:35:00-07:00",
+        "doneAt": "",
+        "reviewedBy": "",
+        "reviewedAt": "",
+        "redoCount": 0,
+        "summary": "Review fixture task used to check reviewer-facing card presentation and the inspection target list.",
+        "requirements": [
+          "Render a task waiting for review.",
+          "Show multiple inspection targets with path, viewport, state, and notes."
+        ],
+        "acceptanceCriteria": [
+          "Review lane displays the card ahead of Done.",
+          "Inspection targets are scannable in the expanded card."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [
+          "SAMPLE-QA-001"
+        ],
+        "files": [
+          "task-board/sample-board.fixture.json",
+          "task-board/sample-board-fixture.md"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Fixture file load",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/sample-board.fixture.json",
+            "viewport": "desktop",
+            "state": "Use Load JSON file and select the fixture.",
+            "notes": "Confirm To Do, Review, Done, and Archived sample data render."
+          },
+          {
+            "label": "Mobile review card",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/viewer.html",
+            "viewport": "390x844",
+            "state": "Load fixture and expand this review card.",
+            "notes": "Check wrapping and tap target spacing."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "notes": "Sample worker completion note: fixture data created and ready for review.",
+        "apiHistory": [
+          {
+            "action": "move-to-review",
+            "agentName": "dane",
+            "at": "2026-07-01T10:35:00-07:00"
+          }
+        ]
+      }
+    ],
+    "reviewing": [
+      {
+        "id": "SAMPLE-QA-005",
+        "title": "Show an actively reviewing card with feedback draft",
+        "project": "Viewer fixture",
+        "priority": "normal",
+        "type": "review",
+        "status": "reviewing",
+        "requestedBy": "sample-owner",
+        "createdBy": "Sample Planner",
+        "createdAt": "2026-07-01T10:10:00-07:00",
+        "agentName": "mira",
+        "claimedBy": "dane",
+        "claimedAt": "2026-07-01T10:15:00-07:00",
+        "completedBy": "dane",
+        "completedAt": "2026-07-01T10:45:00-07:00",
+        "reviewClaimedBy": "ben",
+        "reviewClaimedAt": "2026-07-01T10:50:00-07:00",
+        "reviewRequestedAt": "2026-07-01T10:45:00-07:00",
+        "doneAt": "",
+        "reviewedBy": "",
+        "reviewedAt": "",
+        "redoCount": 0,
+        "summary": "Reviewing fixture task for checking active reviewer ownership and feedback controls.",
+        "requirements": [
+          "Display reviewer ownership details.",
+          "Show existing review notes and source review metadata."
+        ],
+        "acceptanceCriteria": [
+          "Reviewing styling is distinct from waiting Review cards.",
+          "Review controls remain visually understandable without forcing live board mutation."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [
+          "SAMPLE-QA-002"
+        ],
+        "files": [
+          "task-board/viewer.html"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Reviewing card state",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/sample-board.fixture.json",
+            "viewport": "desktop",
+            "state": "Load fixture and inspect the Review lane.",
+            "notes": "Confirm reviewClaimedBy and reviewClaimedAt are visible."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "SAMPLE-QA-002",
+        "reviewNotes": "Sample draft feedback: verify visible focus before approving.",
+        "notes": "Sample reviewing-card note.",
+        "apiHistory": [
+          {
+            "action": "claim-review",
+            "agentName": "ben",
+            "at": "2026-07-01T10:50:00-07:00"
+          }
+        ]
+      }
+    ],
+    "done": [
+      {
+        "id": "SAMPLE-QA-006",
+        "title": "Show an approved Done card with review notes",
+        "project": "Viewer fixture",
+        "priority": "normal",
+        "type": "implementation",
+        "status": "done",
+        "requestedBy": "sample-owner",
+        "createdBy": "Sample Planner",
+        "createdAt": "2026-07-01T08:00:00-07:00",
+        "agentName": "mira",
+        "claimedBy": "dane",
+        "claimedAt": "2026-07-01T08:05:00-07:00",
+        "completedBy": "dane",
+        "completedAt": "2026-07-01T08:45:00-07:00",
+        "reviewClaimedBy": "ben",
+        "reviewClaimedAt": "2026-07-01T08:50:00-07:00",
+        "reviewRequestedAt": "2026-07-01T08:45:00-07:00",
+        "reviewedBy": "ben",
+        "reviewedAt": "2026-07-01T09:05:00-07:00",
+        "doneAt": "2026-07-01T09:05:00-07:00",
+        "redoCount": 0,
+        "summary": "Approved sample task for validating Done lane card presentation, approval metadata, and archive affordances.",
+        "requirements": [
+          "Render an accepted task in Done.",
+          "Show reviewer decision metadata and review notes."
+        ],
+        "acceptanceCriteria": [
+          "Done card can be expanded and collapsed.",
+          "Review approval details remain readable."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [
+          "SAMPLE-QA-004"
+        ],
+        "files": [
+          "task-board/sample-board.fixture.json"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Done lane card",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/sample-board.fixture.json",
+            "viewport": "desktop",
+            "state": "Load fixture and expand SAMPLE-QA-006.",
+            "notes": "Confirm approval metadata and archive button layout."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "reviewDecision": "approved",
+        "reviewNotes": "Sample approved review note: fixture card renders as expected.",
+        "notes": "Sample approved Done card.",
+        "apiHistory": [
+          {
+            "action": "approve-review",
+            "agentName": "ben",
+            "at": "2026-07-01T09:05:00-07:00"
+          }
+        ]
+      },
+      {
+        "id": "SAMPLE-QA-007",
+        "title": "Show a replaced Done card with owner feedback",
+        "project": "Viewer fixture",
+        "priority": "low",
+        "type": "qa",
+        "status": "done",
+        "requestedBy": "sample-owner",
+        "createdBy": "Sample Planner",
+        "createdAt": "2026-07-01T07:00:00-07:00",
+        "agentName": "mira",
+        "claimedBy": "dane",
+        "claimedAt": "2026-07-01T07:05:00-07:00",
+        "completedBy": "dane",
+        "completedAt": "2026-07-01T07:35:00-07:00",
+        "reviewClaimedBy": "ben",
+        "reviewClaimedAt": "2026-07-01T07:40:00-07:00",
+        "reviewRequestedAt": "2026-07-01T07:35:00-07:00",
+        "reviewedBy": "ben",
+        "reviewedAt": "2026-07-01T07:55:00-07:00",
+        "doneAt": "2026-07-01T07:55:00-07:00",
+        "redoCount": 2,
+        "summary": "Closed sample task with failure metadata and owner feedback so QA can verify denser Done cards.",
+        "requirements": [
+          "Render failure expected, actual, and decision fields.",
+          "Render owner feedback entries without layout collisions."
+        ],
+        "acceptanceCriteria": [
+          "Failure brief and owner feedback are readable.",
+          "Redo count is visible."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [
+          "SAMPLE-QA-002"
+        ],
+        "files": [
+          "task-board/viewer.html",
+          "task-board/server.py"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Dense Done card",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/sample-board.fixture.json",
+            "viewport": "desktop and mobile",
+            "state": "Load fixture and expand SAMPLE-QA-007.",
+            "notes": "Check failure metadata, feedback text, and compact card spacing."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "SAMPLE-QA-005",
+        "replacedByTaskId": "SAMPLE-QA-002",
+        "latestFollowUpTaskId": "SAMPLE-QA-002",
+        "reviewDecision": "changes_requested",
+        "reviewNotes": "Sample rejected review note: follow-up card should cover the remaining issue.",
+        "failureExpected": "Fixture card should fit long review feedback.",
+        "failureActual": "Original sample text overflowed a compact card in the mock scenario.",
+        "failureDecision": "Closed as replaced by SAMPLE-QA-002 for fixture coverage.",
+        "failureBrief": {
+          "expected": "Long feedback remains readable.",
+          "actual": "Mock overflow case.",
+          "decision": "Create follow-up SAMPLE-QA-002."
+        },
+        "ownerFeedback": [
+          {
+            "feedback": "Sample owner feedback entry used to verify returned-review context rendering.",
+            "returnedBy": "sample-owner",
+            "returnedAt": "2026-07-01T07:58:00-07:00"
+          }
+        ],
+        "notes": "Sample replaced Done card.",
+        "apiHistory": [
+          {
+            "action": "request-changes",
+            "agentName": "ben",
+            "at": "2026-07-01T07:55:00-07:00"
+          }
+        ]
+      }
+    ],
+    "archived": [
+      {
+        "id": "SAMPLE-QA-008",
+        "title": "Show an archived card in the archive tray",
+        "project": "Viewer fixture",
+        "priority": "low",
+        "type": "documentation",
+        "status": "archived",
+        "requestedBy": "sample-owner",
+        "createdBy": "Sample Planner",
+        "createdAt": "2026-06-30T16:00:00-07:00",
+        "agentName": "mira",
+        "claimedBy": "dane",
+        "claimedAt": "2026-06-30T16:05:00-07:00",
+        "completedBy": "dane",
+        "completedAt": "2026-06-30T16:35:00-07:00",
+        "reviewClaimedBy": "ben",
+        "reviewClaimedAt": "2026-06-30T16:40:00-07:00",
+        "reviewRequestedAt": "2026-06-30T16:35:00-07:00",
+        "reviewedBy": "ben",
+        "reviewedAt": "2026-06-30T16:55:00-07:00",
+        "doneAt": "2026-06-30T16:55:00-07:00",
+        "archivedAt": "2026-06-30T17:10:00-07:00",
+        "archivedBy": "sample-owner",
+        "redoCount": 0,
+        "summary": "Archived fixture task for validating the archive tray count, open state, close button, and archived-card rendering.",
+        "requirements": [
+          "Render the archive side tab with a nonzero count.",
+          "Render an archived card when the tray is opened."
+        ],
+        "acceptanceCriteria": [
+          "Archive tray opens and closes.",
+          "Archived card text and metadata are readable."
+        ],
+        "dependsOn": [],
+        "relatedTaskIds": [
+          "SAMPLE-QA-006"
+        ],
+        "files": [
+          "task-board/sample-board.fixture.json"
+        ],
+        "referenceImages": [],
+        "inspectionTargets": [
+          {
+            "label": "Archive tray",
+            "url": "http://127.0.0.1:4177/viewer.html",
+            "path": "task-board/sample-board.fixture.json",
+            "viewport": "desktop and mobile",
+            "state": "Load fixture, open the Archived tab, and expand SAMPLE-QA-008.",
+            "notes": "Confirm tray position, count, close behavior, and archived-card layout."
+          }
+        ],
+        "blockers": [],
+        "sourceReviewTaskId": "",
+        "reviewDecision": "approved",
+        "reviewNotes": "Sample archived task approved before archive.",
+        "notes": "Sample archived card.",
+        "apiHistory": [
+          {
+            "action": "archive",
+            "agentName": "sample-owner",
+            "at": "2026-06-30T17:10:00-07:00"
+          }
+        ]
+      }
+    ]
+  }
+}

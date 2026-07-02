@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Added a BrowserOS-backed Site Auditor upstream role that writes planner-readable Markdown handoffs for functional, feature, design, style, responsive, and accessibility audits.
+- Added Site Auditor handoff patterns to the workflow map and `workflow/handoffs/`.
+
 ## 0.3.1 - 2026-06-27
 
 ### Added

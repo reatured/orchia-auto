@@ -28,6 +28,15 @@ Primary file:
 
 Normal planning work updates only this JSON file. The HTML viewer is the owner's reader view and is not part of agent task coordination.
 
+Upstream handoff inputs (read-only):
+
+- `workflow/handoffs/researcher-to-planner.md`
+- `workflow/handoffs/researcher-to-planner-*.md`
+- `workflow/handoffs/site-auditor-to-planner.md`
+- `workflow/handoffs/site-auditor-to-planner-*.md`
+
+When these files exist, read the relevant handoffs before planning related work. Treat them as input context, not as task-board state.
+
 Reference image folder (optional):
 
 - `reference-images/`
@@ -68,6 +77,8 @@ The Planner does not write implementation code. Do not edit application/source c
 12. If you already know where completed work should be inspected, add a starting point in `inspectionTargets`; Workers must update it when moving work to review.
 13. When a new task must wait for another incomplete, claimed, reviewing, or prerequisite task, put that task ID in `dependsOn`. This is the canonical blocked-by field that the next-work APIs (`claim-next-worker`, `claim-next-review`) use to skip blocked tasks during server-side selection. The server derives reverse blocking metadata (which tasks are blocked by a given task) by scanning all tasks' `dependsOn` arrays, so do not try to maintain mirrored `blocks` or `blockingTaskIds` fields on the blocking task.
 14. Use `relatedTaskIds` for non-blocking context or coupling only — tasks that share files or scope but do not need to wait for each other. The next-work API does not inspect `relatedTaskIds` when deciding eligibility. Do not use `relatedTaskIds` as a substitute for `dependsOn` when a task must wait for another to complete.
+15. When a Site Auditor handoff is present, convert actionable functional, feature, design, responsive, and accessibility findings into small implementation or QA tasks. Preserve evidence and inspection targets from the handoff in task notes and `inspectionTargets`.
+16. When a Researcher style-guide handoff is present, incorporate the design direction into requirements and acceptance criteria for design-sensitive work.
 
 ## Planning Conflict Rules
 

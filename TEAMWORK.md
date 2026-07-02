@@ -1,6 +1,6 @@
 # Agent Instructions
 
-This project uses a simple JSON-backed task board with three separate board roles: **Planner**, **Worker**, and **Reviewer**. The Planner turns requirements into tasks, Workers implement tasks, and Reviewers review completed work. The workflow is compatible with the Claude, Codex, and Qwen CLIs.
+This project uses a simple JSON-backed task board with three separate board roles: **Planner**, **Worker**, and **Reviewer**. The Planner turns requirements into tasks, Workers implement tasks, and Reviewers review completed work. Upstream roles such as **Site Auditor** can write Markdown handoffs for Planner without creating or moving board tasks. The workflow is compatible with the Claude, Codex, and Qwen CLIs.
 
 > **New to this repo?** This is a reusable starter. Edit `task-board/config.json` and the role files for your project — see `README.md` ("Adapt to your project").
 
@@ -12,6 +12,7 @@ This project uses a simple JSON-backed task board with three separate board role
 - Planner role: `roles/planner.md`
 - Worker role: `roles/worker.md`
 - Reviewer role: `roles/reviewer.md`
+- Site Auditor role: `roles/site-auditor.md`
 - Task board API guide: `workflow/api-guide.md`
 - Task board source of truth: `task-board/board.json`
 - Project config: `task-board/config.json`
@@ -26,6 +27,7 @@ Use these phrases at the start of a new chat to load the intended role:
 | `load as planner` | `roles/planner.md` |
 | `load as worker` | `roles/worker.md` |
 | `load as reviewer` | `roles/reviewer.md` |
+| `load as site auditor` | `roles/site-auditor.md` |
 
 ## Backend (Task Board Server)
 
@@ -85,4 +87,4 @@ If the backend is not running, agents coordinate by editing `task-board/board.js
 
 ## Hard Role Separation
 
-Planner, Worker, and Reviewer are separate agents. Agents do not switch roles inside the same chat. See `workflow/workflow-overview.md` for the full rules, the six board columns (`todo`, `claimed`, `review`, `reviewing`, `done`, `archived`), and the conflict rule.
+Planner, Worker, Reviewer, and upstream handoff roles are separate agents. Agents do not switch roles inside the same chat. See `workflow/workflow-overview.md` for the full rules, the six board columns (`todo`, `claimed`, `review`, `reviewing`, `done`, `archived`), and the conflict rule.

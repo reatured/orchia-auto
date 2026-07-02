@@ -24,7 +24,7 @@ Every agent that talks to the task board API registers at the start of the chat 
 
 The backend writes an append-only API audit log at `task-board/task-board-api.log` (JSON Lines: request time, method, endpoint, task ID, agent name, status, error). The viewer uses separate `/viewer/...` endpoints and writes to `task-board/task-board-viewer.log`, so viewer activity does not mix with agent activity. The backend terminal filters routine successful viewer polling and static reads; it stays focused on concise write-action and error lines while the JSONL files keep the detailed audit trail. These logs are for troubleshooting only; the source of truth remains `board.json`.
 
-The viewer's Spawn buttons launch Worker and Reviewer agents as hidden non-interactive CLI processes (they do not open terminal tabs). Each spawned process receives the current `backendBaseUrl` and writes output to `task-board/spawned-agent-logs/`. The backend exposes spawned processes through `GET /api/agents` with PID-backed status (`running`, `exited`, `pid-reused`, or `unknown`) and latest log previews. The viewer also has optional auto-dispatch controls per role (selected model, max active agents, Auto toggle) and CLI command settings stored in `task-board/agent-dispatch-settings.json`; when Auto is on, the backend spawns hidden agents only when matching work exists and active + still-running pending agents are below that role's maximum. Use the viewer Settings health checks on a new laptop before spawning: they call `/viewer/agent-health-check` with the same command shape as real hidden agents and report actionable setup steps. If that route returns 404, restart `task-board/server.py` so the running backend has the current health-check routes.
+The viewer's Spawn buttons launch Worker and Reviewer agents in visible interactive CLI terminal windows so the owner can watch progress and take over when needed. Each spawned process receives the current `backendBaseUrl` and writes output to `task-board/spawned-agent-logs/`. The backend exposes spawned processes through `GET /api/agents` with status such as `interactive-terminal`, `running`, `exited`, `pid-reused`, or `unknown` and latest log previews where available. The viewer also has optional auto-dispatch controls per role (selected model, max active agents, Auto toggle) and CLI command settings stored in `task-board/agent-dispatch-settings.json`; when Auto is on, the backend opens interactive agents only when matching work exists and active + still-running pending agents are below that role's maximum. Use the viewer Settings health checks on a new laptop before spawning: they call `/viewer/agent-health-check` with the same command shape as real agents and report actionable setup steps. If that route returns 404, restart `task-board/server.py` so the running backend has the current health-check routes.
 
 ## Global Pause and Resume
 
@@ -51,6 +51,9 @@ When a task depends on an image, the Planner or Reviewer saves the reference und
 ```mermaid
 flowchart LR
   Owner["Owner"] --> Planner["Planner"]
+  Owner --> SiteAuditor["Site Auditor"]
+  SiteAuditor --> AuditHandoff["workflow/handoffs/site-auditor-to-planner.md"]
+  AuditHandoff --> Planner
   Planner --> Todo["task-board columns.todo"]
   Todo --> Worker["Worker"]
   Worker --> Review["task-board columns.review"]
@@ -62,7 +65,7 @@ flowchart LR
 
 ### Human-input agents and the Planner chat
 
-Nodes in the viewer's Agent Workflow Map carry an `acceptsHumanInput` flag. Only the **Planner** is flagged today; Worker and Reviewer are not, because the owner directs work through planning rather than into in-flight implementation or review. A human-input node shows a "Human input" badge and, when clicked, opens a docked **chat window** beside the workflow graph instead of the read-only detail modal.
+Nodes in the viewer's Agent Workflow Map carry an `acceptsHumanInput` flag. The **Planner** is flagged for task planning, and upstream handoff roles such as **Site Auditor** can also be flagged for owner-directed intake. Worker and Reviewer are not flagged, because the owner directs work through planning and handoffs rather than into in-flight implementation or review. A human-input node shows a "Human input" badge and, when clicked, opens a docked **chat window** beside the workflow graph instead of the read-only detail modal.
 
 The chat is a real back-and-forth conversation, not a one-shot prompt. With Claude (the default model, selectable in the chat header along with Codex and Qwen), the first message starts the Planner with `load as planner and start` and runs it via `claude -p --output-format json`; the backend captures the returned `session_id` and passes `--resume <session_id>` on every later turn, so the Planner remembers the whole conversation. Continuing turns send only the new message — the resumed session already holds the planner context. The Planner replies conversationally and decomposes agreed work into deduplicated `todo` tasks per the normal planner rules; it does not implement or review. The clean reply (`result`) is shown in the panel rather than raw logs.
 
@@ -76,16 +79,17 @@ The viewer's Agent Workflow Map is backed by:
 
 - `task-board/workflow-map.json`
 
-The map starts with locked Planner, Worker, and Reviewer nodes, then can be extended with custom agents, steps, handoffs, node rules, global rules, and handoff-specific rules. The Workflow tray includes a separate **Workflow Agent** chat beside the graph. This chat is not the Planner chat: it changes only the workflow map model and does not create task-board todo cards, claim work, implement code, or review work.
+The map starts with locked Planner, Worker, and Reviewer nodes, then can be extended with custom agents, steps, handoffs, typed outputs, node rules, global rules, and handoff-specific rules. Output entries use a semantic `type` such as `task-board-ticket`, `handoff-markdown`, or `human-readable-output`, plus `renderAs` to tell the viewer whether to render a board lane or a handoff-file section. The Workflow tray includes a separate **Workflow Agent** chat beside the graph. This chat is not the Planner chat: it changes only the workflow map model and does not create task-board todo cards, claim work, implement code, or review work.
 
 The Workflow Agent has its own model selector (`workflow.model` in dispatch settings) with Codex, Claude, and Qwen options. A turn starts the selected CLI model as a tracked process and shows status in the chat (`Working`, `Done`, or `Terminated`) with model and PID metadata. When the model turn exits successfully, the backend applies the workflow-map update through its deterministic workflow-map mutation API, keeping map edits predictable while still making model choice and progress visible.
 
-Backend endpoints: `GET /viewer/workflow-map` loads the editable map, `POST /viewer/workflow-chat-send` starts a Workflow Agent turn for a map update, `GET /viewer/workflow-chat` polls Workflow Agent chat/progress, `POST /viewer/workflow-chat-clear` clears that chat history, and `POST /viewer/workflow-map-reset` restores the core Planner -> Worker -> Reviewer map. Workflow Agent chat history and per-turn logs live under `task-board/workflow-agent-chat/` (runtime-only, gitignored).
+Backend endpoints: `GET /viewer/workflow-map` loads the editable map, `GET /viewer/workflow-handoff-files` lists Markdown files for map-defined handoff outputs, `POST /viewer/workflow-chat-send` starts a Workflow Agent turn for a map update, `GET /viewer/workflow-chat` polls Workflow Agent chat/progress, `POST /viewer/workflow-chat-clear` clears that chat history, and `POST /viewer/workflow-map-reset` restores the core Planner -> Worker -> Reviewer map. Workflow Agent chat history and per-turn logs live under `task-board/workflow-agent-chat/` (runtime-only, gitignored).
 
 ## Roles
 
 Use one of these role files when starting a new agent:
 
+- `roles/site-auditor.md`
 - `roles/planner.md`
 - `roles/worker.md`
 - `roles/reviewer.md`
@@ -94,13 +98,16 @@ Use these start phrases in a new chat:
 
 | Start phrase | Agent role |
 | --- | --- |
+| `load as site auditor` | Site Auditor |
 | `load as planner` | Planner |
 | `load as worker` | Worker |
 | `load as reviewer` | Reviewer |
 
 ## Hard Role Separation
 
-Planner, Worker, and Reviewer are separate agents. Agents do not switch roles inside the same chat.
+Planner, Worker, Reviewer, and upstream handoff roles are separate agents. Agents do not switch roles inside the same chat.
+
+The Site Auditor is an upstream handoff role. It uses BrowserOS to inspect a live site or app, then writes Markdown findings under `workflow/handoffs/` for Planner to read. It does not create task-board tickets, claim tasks, move tasks, edit product code, or approve/reject reviewed work.
 
 If the owner gives requirements to a Planner, the Planner records them in `board.json` and does not continue into implementation or review. It does not claim tasks, edit product code, run implementation, or make code changes.
 
@@ -123,7 +130,7 @@ Tasks move through six columns:
 | `done` | Accepted work, or failed reviewed work closed as replaced by a follow-up task. | Reviewer or owner |
 | `archived` | Accepted work hidden from the main board. | owner or cleanup API |
 
-The HTML viewer keeps the six JSON columns for locking but displays the main interface as three visual columns: **To Do** combines `claimed` above `todo`, **Review** combines `reviewing` above `review`, and **Done** displays `done`. Claimed and Reviewing cards are highlighted. To Do and Review have top lane strips for active registered agents and pending spawned agents, with hoverable latest log previews. Column headers show active Worker/Reviewer counts and dispatch controls from `/api/agents` and `task-board/agent-dispatch-settings.json`.
+The HTML viewer keeps the six JSON columns for locking, but the workflow map is the source of truth for visible main-board lanes. The default map renders **To Do** from the Planner -> Worker `task-board-ticket` output (`claimed` above `todo`), **Review** from the Worker -> Reviewer `task-board-ticket` output (`reviewing` above `review`), and **Done** from the Reviewer's `human-readable-output` (`done`). Claimed and Reviewing cards are highlighted. To Do and Review have top lane strips for active registered agents and pending spawned agents, with hoverable latest log previews. Column headers show active Worker/Reviewer counts and dispatch controls from `/api/agents` and `task-board/agent-dispatch-settings.json`. Handoff Markdown outputs render as a separate main-page handoff-file section when the map defines them.
 
 ## Operating Rules
 
@@ -188,4 +195,4 @@ Tasks in `review` or `done` are closed to Workers unless the owner explicitly re
 
 ## Extending the workflow
 
-This core ships three board-moving roles: Planner, Worker, and Reviewer. Other projects can add upstream roles that feed better inputs into planning, for example a research agent that surveys references or an audit agent that inspects an existing system. The pattern: upstream agents write a Markdown input file (they never create or move tasks), and the Planner reads those inputs, compares them against the current state and board, and converts the useful, actionable findings into `todo` tasks (recording context in task notes). Add such roles only when your project needs them; keep upstream agents read-only with respect to the board.
+This core ships three board-moving roles: Planner, Worker, and Reviewer, plus an optional upstream Site Auditor role for BrowserOS-backed website/app audits. Other projects can add more upstream roles that feed better inputs into planning, for example a research agent that surveys references or a domain audit agent that inspects an existing system. The pattern: upstream agents write a Markdown input file under `workflow/handoffs/` (they never create or move tasks), and the Planner reads those inputs, compares them against the current state and board, and converts the useful, actionable findings into `todo` tasks (recording context in task notes). Add such roles only when your project needs them; keep upstream agents read-only with respect to the board.
